@@ -31,6 +31,20 @@ Schema design therefore avoids PostgreSQL-only domain features: no ENUM, no ARRA
 
 Closed vocabularies use `TEXT + CHECK`, not PostgreSQL ENUM.
 
+`factor_definitions.value_type` allows only:
+
+```text
+NUMBER
+PERCENT
+RATIO
+CURRENCY
+COUNT
+```
+
+String, date, and JSON factor types are not allowed. New types require a migration.
+
+`strategy_runs.run_type` currently allows `PAPER` only. `LIVE` is not pre-declared.
+
 ## Forward Test Unit
 
 `strategy_runs` is the independent execution unit.
@@ -157,6 +171,8 @@ Used later for cumulative return, MDD, volatility, monthly return, and benchmark
 
 Optional history. AI does not execute trades. Payloads are TEXT, never secrets.
 
+Request and result are 1:1. One request has at most one result. Additional opinions are additional request rows on the same evaluation.
+
 ## FK Delete Policy
 
 Default: `ON DELETE RESTRICT`.
@@ -181,5 +197,6 @@ UNIQUE `(instrument_id, trade_date)` and UNIQUE `(strategy_run_id, snapshot_date
 
 - `db/init/001_create_schema.sql` creates schema `bjstock` only
 - `db/migrations/0001_initial_business_schema.sql` creates business tables
+- `db/migrations/0002_phase1_schema_hardening.sql` closes `value_type` and makes AI request/result 1:1
 - `bjstock.schema_migrations` records applied migration versions
 - `scripts/db-migrate.ps1` applies pending files in order and will not re-run an applied version

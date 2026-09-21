@@ -24,7 +24,7 @@ INSERT INTO bjstock.factor_definitions (
     id, factor_code, factor_name, category, description, value_type, higher_is_better, is_active
 )
 VALUES (
-    8001, 'NF_MOMENTUM', 'Normal Flow Momentum', 'MOMENTUM', 'Flow test factor', 'SCORE', TRUE, TRUE
+    8001, 'NF_MOMENTUM', 'Normal Flow Momentum', 'MOMENTUM', 'Flow test factor', 'NUMBER', TRUE, TRUE
 );
 
 INSERT INTO bjstock.factor_values (

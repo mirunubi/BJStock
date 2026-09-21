@@ -67,3 +67,15 @@ FK delete default is RESTRICT. The only CASCADE is `stock_evaluation_details` wh
 ## D-017
 
 There is no `trading_accounts` table. Virtual cash and holdings belong to a `strategy_runs` row.
+
+## D-018
+
+`factor_definitions.value_type` is a closed TEXT + CHECK code list: NUMBER, PERCENT, RATIO, CURRENCY, COUNT.
+
+## D-019
+
+`strategy_runs.run_type` currently allows PAPER only. LIVE is not pre-declared.
+
+## D-020
+
+AI advice request and result are 1:1. Multiple opinions are recorded as multiple requests.

@@ -14,7 +14,7 @@ VALUES (9001, 'KRX', 'T00001', 'Constraint Test Instrument', 'KRW');
 INSERT INTO bjstock.factor_definitions (
     id, factor_code, factor_name, category, value_type, higher_is_better
 )
-VALUES (9001, 'TEST_FACTOR', 'Test Factor', 'OTHER', 'SCORE', TRUE);
+VALUES (9001, 'TEST_FACTOR', 'Test Factor', 'OTHER', 'NUMBER', TRUE);
 
 INSERT INTO bjstock.strategies (id, strategy_code, strategy_name)
 VALUES (9001, 'TEST_STRAT', 'Test Strategy');

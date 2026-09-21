@@ -120,7 +120,7 @@ Catalog of named factors.
 | factor_name | TEXT | display name |
 | category | TEXT | FINANCIAL, VALUATION, MOMENTUM, VOLUME, FLOW, MARKET, TECHNICAL, OTHER |
 | description | TEXT | nullable |
-| value_type | TEXT | non-empty open vocabulary in Phase 1 |
+| value_type | TEXT | NUMBER, PERCENT, RATIO, CURRENCY, COUNT |
 | higher_is_better | BOOLEAN | scoring direction |
 | is_active | BOOLEAN | default TRUE |
 | created_at / updated_at | TIMESTAMPTZ | |
@@ -128,7 +128,8 @@ Catalog of named factors.
 **Important Constraints**
 
 - category CHECK list above
-- codes/names/value_type non-empty
+- `value_type IN ('NUMBER', 'PERCENT', 'RATIO', 'CURRENCY', 'COUNT')`
+- codes/names non-empty
 
 **Lifecycle**
 
@@ -641,7 +642,7 @@ Optional AI output. Advisory only.
 
 **Unique**
 
-- none beyond PK. Multiple results per request are allowed.
+- `UNIQUE (request_id)` — one result per request
 
 **Main Columns**
 
@@ -663,7 +664,7 @@ Optional AI output. Advisory only.
 
 **Lifecycle**
 
-Store after a request returns. `used_in_decision` records whether advice was attached to the decision record. It does not authorize an order.
+Store at most one result per request. Additional opinions create additional `ai_advice_requests` rows on the same evaluation. `used_in_decision` records whether advice was attached to the decision record. It does not authorize an order.
 
 ---
 
