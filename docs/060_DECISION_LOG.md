@@ -144,4 +144,36 @@ Phase 3-A connection test succeeds when OAuth token issuance succeeds. No market
 
 Broker order APIs are not part of the current architecture.
 
-Phase 3-A spec numbered the eight decisions above as D-027–D-034. D-027 and D-028 were already assigned in Phase 2, so they are recorded as D-029–D-036.
+Phase 3-A spec numbered those eight decisions as D-027–D-034. D-027 and D-028 were already assigned in Phase 2, so they are recorded as D-029–D-036.
+
+## D-037
+
+Phase 3-B allows only KIS quotations APIs.
+
+## D-038
+
+`/trading/` endpoints are blocked by an architecture guard.
+
+## D-039
+
+Current-price lookup uses inquire-price.
+
+## D-040
+
+Daily bars use inquire-daily-itemchartprice.
+
+## D-041
+
+Phase 3-B does not persist market data to Room.
+
+## D-042
+
+KIS HTTP 200 is not treated as KIS business success.
+
+## D-043
+
+The market repository returns daily bars in trade-date ascending order.
+
+## D-044
+
+Long-range automatic backfill is deferred to Phase 3-D.

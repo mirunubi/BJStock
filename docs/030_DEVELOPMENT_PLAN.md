@@ -47,9 +47,17 @@ Status: complete for build / unit verification. Runtime (Keystore on device, liv
 
 ### Phase 3-B — KIS Read-Only Market Data
 
-Ingest market data from KIS Open API. Market data only. No live orders.
+Read-only KIS quotations: current price and daily bars. No Room persistence, no orders.
 
-Not started.
+Status: complete for build / unit verification. Runtime (actual KIS current price / daily price on device) is DEFERRED — physical device pending.
+
+### Phase 3-C — Market Data Persistence
+
+Persist verified KIS market data to Room. Not started.
+
+### Phase 3-D — Market Data Backfill
+
+Multi-call daily backfill and range paging. Not started.
 
 ### Phase 4 — Factor Engine
 
@@ -81,10 +89,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 3-A — KIS Authentication Foundation is build/unit complete.
+Phase 3-B — KIS Read-Only Market Data is build/unit complete.
 
-Next: Phase 3-B — KIS Read-Only Market Data.
+Next: Phase 3-C — Market Data Persistence.
 
-Do not start Phase 3-B until Phase 3-A is accepted.
+Do not start Phase 3-C until Phase 3-B is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

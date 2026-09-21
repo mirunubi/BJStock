@@ -38,12 +38,14 @@ Role:
 
 ### Market Data
 
-Collects and stores instrument metadata and market bars from KIS.
+Collects instrument metadata and market bars from KIS quotations APIs.
 
 Role:
 
 - Provide a local historical and daily market dataset
 - Remain read-only with respect to live brokerage orders
+
+Phase 3-B implements the network/domain layer only. Room persistence is Phase 3-C.
 
 ### Factor Engine
 
@@ -124,3 +126,4 @@ BJStock is a local-only Android application.
 - The APK does not connect to Docker PostgreSQL
 - KIS App Key, App Secret, and access tokens are not stored in Room
 - KIS secrets use Android Keystore encryption in app-private storage excluded from backup
+- Phase 3-B market data is not written to Room

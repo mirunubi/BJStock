@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun DashboardScreen(
     onOpenDatabaseInfo: () -> Unit,
     onOpenKisSettings: () -> Unit,
+    onOpenMarketData: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -38,6 +39,9 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("BJStock") },
                 actions = {
+                    TextButton(onClick = onOpenMarketData) {
+                        Text("Market Data")
+                    }
                     TextButton(onClick = onOpenKisSettings) {
                         Text("KIS Settings")
                     }

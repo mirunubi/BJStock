@@ -11,7 +11,11 @@ import com.mirunubi.bjstock.core.kis.KisEnvironment
 import com.mirunubi.bjstock.core.kis.KisEnvironmentConfig
 import com.mirunubi.bjstock.core.kis.KisSettingsStore
 import com.mirunubi.bjstock.core.kis.KisTokenStore
+import com.mirunubi.bjstock.core.kis.market.KisMarketRepository
+import com.mirunubi.bjstock.core.kis.market.KisMarketRepositoryImpl
 import com.mirunubi.bjstock.core.network.kis.KisAuthApi
+import com.mirunubi.bjstock.core.network.kis.KisMarketApi
+import com.mirunubi.bjstock.core.network.kis.KisReadOnlyInterceptor
 import com.mirunubi.bjstock.core.security.AesGcmSecretCipher
 import com.mirunubi.bjstock.core.security.SecretCipher
 import dagger.Module
@@ -65,6 +69,7 @@ object KisModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(KisReadOnlyInterceptor())
         .callTimeout(20, TimeUnit.SECONDS)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -72,15 +77,22 @@ object KisModule {
 
     @Provides
     @Singleton
-    fun provideKisAuthApi(okHttpClient: OkHttpClient, json: Json): KisAuthApi {
+    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         val contentType = "application/json".toMediaType()
         return Retrofit.Builder()
             .baseUrl(KisEnvironmentConfig.baseUrl(KisEnvironment.PRODUCTION) + "/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
-            .create(KisAuthApi::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideKisAuthApi(retrofit: Retrofit): KisAuthApi = retrofit.create(KisAuthApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideKisMarketApi(retrofit: Retrofit): KisMarketApi = retrofit.create(KisMarketApi::class.java)
 
     @Provides
     @Singleton
@@ -101,6 +113,20 @@ object KisModule {
         credentialStore = credentialStore,
         tokenStore = tokenStore,
         settingsStore = settingsStore,
+        logger = logger,
+    )
+
+    @Provides
+    @Singleton
+    fun provideKisMarketRepository(
+        api: KisMarketApi,
+        authRepository: KisAuthRepository,
+        credentialStore: KisCredentialStore,
+        logger: KisAuthLogger,
+    ): KisMarketRepository = KisMarketRepositoryImpl(
+        api = api,
+        authRepository = authRepository,
+        credentialStore = credentialStore,
         logger = logger,
     )
 }
