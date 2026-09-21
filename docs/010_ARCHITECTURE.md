@@ -1,0 +1,114 @@
+# BJStock Architecture
+
+This document records the target architecture. No runtime engines are implemented in Phase 0.
+
+## Target Pipeline
+
+```text
+KIS Market Data
+       ↓
+Market Data Storage
+       ↓
+Factor Engine
+       ↓
+Scoring Engine
+       ↓
+Strategy Engine
+       ↓
+Decision
+       ↓
+Virtual Trading Engine
+       ↓
+Virtual Account
+       ↓
+Performance Analytics
+```
+
+## Components
+
+### Market Data
+
+Collects and stores instrument metadata and market bars from KIS.
+
+Role:
+
+- Provide a local historical and daily market dataset
+- Remain read-only with respect to live brokerage orders
+
+### Factor Engine
+
+Computes factor values from stored market data.
+
+Role:
+
+- Apply factor definitions to instruments
+- Persist computed factor values for later scoring
+
+### Scoring Engine
+
+Converts factor values into comparable scores.
+
+Role:
+
+- Combine factor outputs into evaluation scores
+- Keep scoring deterministic and inspectable
+
+### Strategy Engine
+
+Applies strategy versions and factor weights to scores.
+
+Role:
+
+- Version strategy definitions
+- Produce a decision candidate from weighted scores
+
+### Virtual Trading
+
+Executes paper trades against the virtual account.
+
+Role:
+
+- Turn decisions into paper orders and executions
+- Never send live broker orders in MVP
+
+### Virtual Account
+
+Maintains BJStock-owned cash, positions, and fills.
+
+Role:
+
+- Track virtual cash and holdings
+- Remain independent from real brokerage accounts
+
+### Performance Analytics
+
+Records portfolio snapshots and strategy outcomes.
+
+Role:
+
+- Support forward-test review
+- Compare strategy versions over time
+
+### AI Advisory
+
+Optional side advisor. It is not on the execution path.
+
+```text
+Quant Decision ─┐
+                ├─ Decision Record
+AI Advice ──────┘
+```
+
+Rules:
+
+- Quant decision and AI advice are stored separately
+- AI does not buy or sell
+- The app remains usable with AI turned off
+
+## Runtime Boundary
+
+BJStock is a local-only Android application.
+
+- Android runtime data: Room / SQLite
+- Docker PostgreSQL: development / schema laboratory only
+- The APK does not connect to Docker PostgreSQL
