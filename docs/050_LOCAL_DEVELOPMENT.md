@@ -1,10 +1,10 @@
 # BJStock Local Development
 
-## What Phase 0 Provides
+## What Local Development Provides
 
-Phase 0 provides a local Git repository, foundation documents, and a Docker PostgreSQL laboratory.
+The repository contains foundation documents, a Docker PostgreSQL laboratory, and the Phase 1 business schema.
 
-It does not provide an Android project, KIS API client, or business tables.
+It does not provide an Android project, KIS API client, or strategy execution code.
 
 ## Prerequisites
 
@@ -78,4 +78,21 @@ Data persists in the named volume `bjstock_postgres_data` unless the volume is r
 
 `db/init` runs only on first volume initialization.
 
-Phase 0 creates schema `bjstock` only. Business tables are not created here.
+It creates schema `bjstock` only. Business tables are not defined there.
+
+## Migrations
+
+Apply pending files from `db/migrations` in name order:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\db-migrate.ps1
+```
+
+The runner records versions in `bjstock.schema_migrations` and skips already applied files.
+
+Verification:
+
+```powershell
+Get-Content -Raw .\db\scripts\verify_phase1.sql | docker compose exec -T bjstock-postgres psql -U bjstock -d bjstock_dev -f -
+Get-Content -Raw .\db\scripts\verify_strategy_weights.sql | docker compose exec -T bjstock-postgres psql -U bjstock -d bjstock_dev -f -
+```

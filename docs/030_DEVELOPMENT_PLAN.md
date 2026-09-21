@@ -6,9 +6,22 @@
 
 Git bootstrap, documentation, and Docker PostgreSQL laboratory.
 
+Status: complete.
+
 ### Phase 1 — DB Architecture
 
 Design and validate domain schema in Docker PostgreSQL.
+
+Includes:
+
+- 16 business tables in schema `bjstock`
+- `schema_migrations` tracking
+- TEXT + CHECK vocabularies
+- NUMERIC money/score types
+- constraint, index, and FK verification
+- ERD and data dictionary
+
+Status: current.
 
 ### Phase 2 — Android Foundation
 
@@ -28,7 +41,7 @@ Score instruments and apply strategy weights/versions.
 
 ### Phase 6 — Virtual Account / Paper Trading
 
-Implement BJStock-owned virtual account, paper orders, and executions.
+Implement BJStock-owned virtual account, paper orders, and executions against `strategy_runs`.
 
 ### Phase 7 — Performance Analytics
 
@@ -48,6 +61,6 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 0 — Project Foundation
+Phase 1 — DB Architecture
 
-Do not start the next phase until Phase 0 is complete and accepted.
+Do not start the next phase until Phase 1 is complete and accepted.

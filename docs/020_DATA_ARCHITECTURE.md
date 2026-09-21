@@ -1,33 +1,111 @@
 # BJStock Data Architecture
 
-Phase 0 records domain candidates only.
+Phase 1 defines the laboratory domain schema in Docker PostgreSQL.
 
-No business tables are created in this phase. SQL DDL for domain tables belongs to Phase 1.
+This is a long-lived domain model for paper trading and later expansion. It is not a throwaway MVP schema.
 
 ## Runtime vs Laboratory
 
 | Store | Technology | Role |
 | --- | --- | --- |
-| Android runtime DB | Room / SQLite | App data on device |
-| Development DB | Docker PostgreSQL | Schema, PK/FK, constraint, index, and SQL experiments |
+| Android runtime DB | Room / SQLite | Future on-device app data |
+| Development DB | Docker PostgreSQL 17 | Schema, PK/FK, constraint, index, and SQL experiments |
 
-Docker PostgreSQL is not the Android runtime database.
+PostgreSQL is not the Android runtime database. The APK must not connect to Docker PostgreSQL.
 
-## Domain Candidates
+Schema design therefore avoids PostgreSQL-only domain features: no ENUM, no ARRAY, no JSONB business columns, no generated columns, and no complex triggers.
+
+## Numeric and Time Rules
+
+- Financial prices and money: `NUMERIC`, never `FLOAT` / `REAL`
+- Prices: `NUMERIC(18, 4)`
+- Cash / notional / quantity money fields: `NUMERIC(20, 4)`
+- Scores: `NUMERIC(7, 4)` in `0 .. 100`
+- Weights / confidence: `NUMERIC(8, 6)` or `NUMERIC(6, 4)` in `0 .. 1`
+- Returns / drawdown: `NUMERIC(12, 8)`
+- Timestamps: `TIMESTAMPTZ`, stored in UTC
+- Trade / evaluation / snapshot days: `DATE`
+- Android display timezone: `Asia/Seoul`
+
+## Status Values
+
+Closed vocabularies use `TEXT + CHECK`, not PostgreSQL ENUM.
+
+## Forward Test Unit
+
+`strategy_runs` is the independent execution unit.
+
+Each run has:
+
+- one strategy version
+- a date range
+- initial virtual cash
+- its own evaluations, orders, positions, and snapshots
+
+Two runs can share the same market period and compare different strategies.
+
+Phase 0 candidate `trading_accounts` is not a table. The virtual book belongs to the run.
+
+## Domain Map
+
+```text
+instruments
+      │
+      ├──────── market_daily_bars
+      │
+      └──────── factor_values
+                     │
+factor_definitions ──┘
+
+
+strategies
+      │
+      ▼
+strategy_versions
+      │
+      ├──────── strategy_factor_weights
+      │                  │
+      │                  └── factor_definitions
+      │
+      ▼
+strategy_runs
+      │
+      ├──────── stock_evaluations
+      │                 │
+      │                 ▼
+      │       stock_evaluation_details
+      │
+      ├──────── positions
+      │
+      ├──────── orders
+      │             │
+      │             ▼
+      │         executions
+      │
+      └──────── portfolio_daily_snapshots
+
+
+stock_evaluations
+      │
+      └──────── ai_advice_requests
+                        │
+                        ▼
+                ai_advice_results
+```
+
+## Tables
 
 ### Market
 
 - `instruments`
 - `market_daily_bars`
 
-Purpose: listed instruments and daily market bars used by later factor calculation.
-
 ### Factor
 
 - `factor_definitions`
 - `factor_values`
 
-Purpose: named factor logic and computed values per instrument and date.
+Store `raw_value` and `normalized_score` together when both exist.
 
 ### Strategy
 
@@ -35,43 +113,73 @@ Purpose: named factor logic and computed values per instrument and date.
 - `strategy_versions`
 - `strategy_factor_weights`
 
-Purpose: strategy identity, versioned definitions, and factor weights.
+A version used in a live forward test is treated as immutable. Do not overwrite historical settings.
+
+Enabled weights should sum to `1.0` per version. This is checked by `db/scripts/verify_strategy_weights.sql`, not by a trigger.
+
+### Forward Test
+
+- `strategy_runs`
 
 ### Evaluation
 
 - `stock_evaluations`
 - `stock_evaluation_details`
 
-Purpose: scored evaluation results and per-factor contribution details.
+One official evaluation per run / instrument / date.
 
-### Paper Trading
+Decision replay path:
 
-- `trading_accounts`
-- `positions`
+```text
+Evaluation → Evaluation Detail → Decision → Virtual Order
+```
+
+### Paper Trading Ledger
+
 - `orders`
 - `executions`
+- `positions`
 
-Purpose: virtual account state, holdings, paper orders, and fills.
+`orders` / `executions` are the source of truth.
+
+`positions` is a current-state projection for fast lookup.
 
 ### Performance
 
 - `portfolio_daily_snapshots`
 
-Purpose: daily virtual portfolio snapshots for forward-test analytics.
+Used later for cumulative return, MDD, volatility, monthly return, and benchmark comparison.
 
-### AI
+### AI Advisory
 
 - `ai_advice_requests`
 - `ai_advice_results`
 
-Purpose: optional AI request/result history. These tables must not be required for trading.
+Optional history. AI does not execute trades. Payloads are TEXT, never secrets.
 
-## Phase 0 Schema
+## FK Delete Policy
 
-The development database may contain only:
+Default: `ON DELETE RESTRICT`.
 
-```sql
-CREATE SCHEMA IF NOT EXISTS bjstock;
-```
+Financial and audit history must not disappear because a parent row was deleted.
 
-Business tables are deferred to Phase 1.
+Exception:
+
+- `stock_evaluation_details.evaluation_id` uses `ON DELETE CASCADE`
+
+Details have no independent value without the parent evaluation.
+
+## Index Policy
+
+PK and UNIQUE already create indexes.
+
+Additional indexes exist only for lookup patterns not covered by UNIQUE, for example latest evaluations by run/date and orders by run/time.
+
+UNIQUE `(instrument_id, trade_date)` and UNIQUE `(strategy_run_id, snapshot_date)` are scanned in either direction, so extra DESC copies were not created.
+
+## Schema Location
+
+- `db/init/001_create_schema.sql` creates schema `bjstock` only
+- `db/migrations/0001_initial_business_schema.sql` creates business tables
+- `bjstock.schema_migrations` records applied migration versions
+- `scripts/db-migrate.ps1` applies pending files in order and will not re-run an applied version
