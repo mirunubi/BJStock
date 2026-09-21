@@ -111,3 +111,37 @@ Financial amounts do not use floating point at runtime. Room stores KRW as Long 
 ## D-028
 
 Android display timezone is Asia/Seoul. Storage is UTC.
+
+## D-029
+
+KIS App Key / App Secret are not stored in Room.
+
+## D-030
+
+KIS secrets are encrypted with an Android Keystore AES key and stored in app-private storage.
+
+## D-031
+
+Deprecated EncryptedSharedPreferences / MasterKey APIs are not used for new work.
+
+## D-032
+
+KIS access tokens are treated as secrets and stored encrypted.
+
+## D-033
+
+KIS tokens are reused until expiry minus a safety margin.
+
+## D-034
+
+Phase 3-A does not store brokerage account information.
+
+## D-035
+
+Phase 3-A connection test succeeds when OAuth token issuance succeeds. No market-data API is required.
+
+## D-036
+
+Broker order APIs are not part of the current architecture.
+
+Phase 3-A spec numbered the eight decisions above as D-027–D-034. D-027 and D-028 were already assigned in Phase 2, so they are recorded as D-029–D-036.

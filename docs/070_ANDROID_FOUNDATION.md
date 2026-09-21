@@ -46,6 +46,8 @@ app/src/main/java/com/mirunubi/bjstock/
   core/model/
   feature/dashboard/
   ui/theme/
+
+KIS authentication packages added in Phase 3-A are documented in `docs/080_KIS_AUTHENTICATION.md`.
 ```
 
 Single module `:app`. No extra Gradle modules in this phase.

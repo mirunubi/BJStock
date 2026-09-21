@@ -27,11 +27,29 @@ Status: complete.
 
 Create the Android app shell. No live trading. Runtime DB will be Room / SQLite.
 
-Status: current.
+Status: complete (build / unit verified).
 
-### Phase 3 — KIS Market Data
+### Phase 2.1 — Android Runtime Gate
+
+Install and smoke-test the debug APK on a physical Android device.
+
+Status: DEFERRED — physical device pending.
+
+This is not a FAIL. Build and unit tests passed. Runtime was not executed because no test device is connected.
+
+### Phase 3-A — KIS Authentication Foundation
+
+Manage KIS App Key / App Secret, Keystore encryption, OAuth token issuance, token cache, and connection status.
+
+No market-data API, account collection, or broker orders.
+
+Status: complete for build / unit verification. Runtime (Keystore on device, live KIS token, Settings UI) is DEFERRED — physical device pending.
+
+### Phase 3-B — KIS Read-Only Market Data
 
 Ingest market data from KIS Open API. Market data only. No live orders.
+
+Not started.
 
 ### Phase 4 — Factor Engine
 
@@ -63,6 +81,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 2 — Android Foundation
+Phase 3-A — KIS Authentication Foundation is build/unit complete.
 
-Do not start the next phase until Phase 2 is complete and accepted.
+Next: Phase 3-B — KIS Read-Only Market Data.
+
+Do not start Phase 3-B until Phase 3-A is accepted.
+
+Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun DashboardScreen(
     onOpenDatabaseInfo: () -> Unit,
+    onOpenKisSettings: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -37,6 +38,9 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("BJStock") },
                 actions = {
+                    TextButton(onClick = onOpenKisSettings) {
+                        Text("KIS Settings")
+                    }
                     TextButton(onClick = onOpenDatabaseInfo) {
                         Text("Database Info")
                     }
@@ -59,7 +63,7 @@ fun DashboardScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             StatusCard(title = "Trading Mode", value = "PAPER ONLY")
-            StatusCard(title = "KIS", value = "NOT CONNECTED")
+            StatusCard(title = "KIS", value = state.kisAuthState.name.replace('_', ' '))
             StatusCard(title = "AI Advisor", value = "OFF")
             StatusCard(
                 title = "Local Database",

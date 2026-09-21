@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mirunubi.bjstock.feature.dashboard.DashboardScreen
 import com.mirunubi.bjstock.feature.dashboard.DatabaseInfoScreen
+import com.mirunubi.bjstock.feature.kis.KisSettingsScreen
 import com.mirunubi.bjstock.ui.theme.BJStockTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -33,10 +34,14 @@ private fun BJStockNavHost() {
         composable("dashboard") {
             DashboardScreen(
                 onOpenDatabaseInfo = { navController.navigate("database_info") },
+                onOpenKisSettings = { navController.navigate("kis_settings") },
             )
         }
         composable("database_info") {
             DatabaseInfoScreen(onBack = { navController.popBackStack() })
+        }
+        composable("kis_settings") {
+            KisSettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }

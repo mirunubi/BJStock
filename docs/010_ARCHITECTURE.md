@@ -26,6 +26,16 @@ Performance Analytics
 
 ## Components
 
+### KIS Authentication
+
+Manages App Key / App Secret and OAuth access tokens for KIS Open API.
+
+Role:
+
+- Encrypt secrets with Android Keystore AES/GCM
+- Issue and cache OAuth tokens
+- Keep authentication separate from market-data calls and from broker orders
+
 ### Market Data
 
 Collects and stores instrument metadata and market bars from KIS.
@@ -112,3 +122,5 @@ BJStock is a local-only Android application.
 - Android runtime data: Room / SQLite
 - Docker PostgreSQL: development / schema laboratory only
 - The APK does not connect to Docker PostgreSQL
+- KIS App Key, App Secret, and access tokens are not stored in Room
+- KIS secrets use Android Keystore encryption in app-private storage excluded from backup
