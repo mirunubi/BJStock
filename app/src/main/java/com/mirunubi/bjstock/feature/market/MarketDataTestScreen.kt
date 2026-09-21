@@ -54,7 +54,7 @@ fun MarketDataTestScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Text("Read-only KIS quotations. No Room persistence.")
+                Text("Read-only KIS quotations. Daily bars can be saved to Room when an instrument already exists.")
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth(),
                     value = state.symbol,
@@ -86,6 +86,12 @@ fun MarketDataTestScreen(
                     onClick = viewModel::inquireDailyBars,
                     enabled = !state.loadingBars,
                 ) { Text(if (state.loadingBars) "조회 중..." else "일봉 조회") }
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = viewModel::persistDailyBars,
+                    enabled = !state.loadingPersist,
+                ) { Text(if (state.loadingPersist) "저장 중..." else "Room 저장") }
+                state.persistSummary?.let { Text(it) }
                 state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 state.quote?.let { QuoteCard(it) }
             }

@@ -6,6 +6,9 @@ import com.mirunubi.bjstock.core.kis.market.CurrentStockQuote
 import com.mirunubi.bjstock.core.kis.market.DailyStockBar
 import com.mirunubi.bjstock.core.kis.market.KisMarketException
 import com.mirunubi.bjstock.core.kis.market.KisMarketRepository
+import com.mirunubi.bjstock.core.marketdata.FetchAndPersistDailyBarsUseCase
+import com.mirunubi.bjstock.core.marketdata.MarketDataPersistStatus
+import com.mirunubi.bjstock.core.marketdata.MarketDataPersistenceException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import java.time.ZoneId
@@ -23,14 +26,17 @@ data class MarketDataUiState(
     val endDate: String = LocalDate.now(ZoneId.of("Asia/Seoul")).toString(),
     val loadingQuote: Boolean = false,
     val loadingBars: Boolean = false,
+    val loadingPersist: Boolean = false,
     val quote: CurrentStockQuote? = null,
     val bars: List<DailyStockBar> = emptyList(),
+    val persistSummary: String? = null,
     val message: String? = null,
 )
 
 @HiltViewModel
 class MarketDataTestViewModel @Inject constructor(
     private val repository: KisMarketRepository,
+    private val fetchAndPersistDailyBars: FetchAndPersistDailyBarsUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MarketDataUiState())
     val uiState: StateFlow<MarketDataUiState> = _uiState.asStateFlow()
@@ -86,10 +92,50 @@ class MarketDataTestViewModel @Inject constructor(
             _uiState.update { state ->
                 result.fold(
                     onSuccess = { bars ->
-                        state.copy(loadingBars = false, bars = bars, message = null)
+                        state.copy(
+                            loadingBars = false,
+                            bars = bars,
+                            persistSummary = "조회 결과: ${bars.size}건",
+                            message = null,
+                        )
                     },
                     onFailure = { error ->
                         state.copy(loadingBars = false, bars = emptyList(), message = publicMessage(error))
+                    },
+                )
+            }
+        }
+    }
+
+    fun persistDailyBars() {
+        if (_uiState.value.loadingPersist) {
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(loadingPersist = true, message = null) }
+            val dates = parseDates(_uiState.value.startDate, _uiState.value.endDate)
+            if (dates == null) {
+                _uiState.update {
+                    it.copy(loadingPersist = false, message = "잘못된 조회 기간")
+                }
+                return@launch
+            }
+            val result = runCatching {
+                fetchAndPersistDailyBars(_uiState.value.symbol, dates.first, dates.second)
+            }
+            _uiState.update { state ->
+                result.fold(
+                    onSuccess = { persist ->
+                        val summary = if (persist.status == MarketDataPersistStatus.SUCCESS_EMPTY) {
+                            "Room 저장: 0건"
+                        } else {
+                            "Room 저장: inserted ${persist.insertedCount}, " +
+                                "updated ${persist.updatedCount}, unchanged ${persist.unchangedCount}"
+                        }
+                        state.copy(loadingPersist = false, persistSummary = summary, message = null)
+                    },
+                    onFailure = { error ->
+                        state.copy(loadingPersist = false, message = publicMessage(error))
                     },
                 )
             }
@@ -105,10 +151,10 @@ class MarketDataTestViewModel @Inject constructor(
     }
 
     private fun publicMessage(error: Throwable): String {
-        return if (error is KisMarketException) {
-            error.publicMessage
-        } else {
-            "연결 실패"
+        return when (error) {
+            is MarketDataPersistenceException -> error.publicMessage
+            is KisMarketException -> error.publicMessage
+            else -> "연결 실패"
         }
     }
 }

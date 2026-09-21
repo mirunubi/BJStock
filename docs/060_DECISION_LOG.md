@@ -177,3 +177,35 @@ The market repository returns daily bars in trade-date ascending order.
 ## D-044
 
 Long-range automatic backfill is deferred to Phase 3-D.
+
+## D-045
+
+Market daily data is stored only for an existing instrument.
+
+## D-046
+
+Instruments are not auto-created from market-data lookups.
+
+## D-047
+
+Daily market history is stored as adjusted prices.
+
+## D-048
+
+Re-collected daily bars are UPSERTed.
+
+## D-049
+
+`INSERT OR REPLACE` is not used for daily bars, so existing row ids stay stable.
+
+## D-050
+
+One API daily-bar batch is persisted in a single Room transaction.
+
+## D-051
+
+Current-price snapshots are not stored in Phase 3-C.
+
+## D-052
+
+Instrument master download is deferred to Phase 3-D.

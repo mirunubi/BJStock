@@ -53,11 +53,13 @@ Status: complete for build / unit verification. Runtime (actual KIS current pric
 
 ### Phase 3-C — Market Data Persistence
 
-Persist verified KIS market data to Room. Not started.
+Persist verified KIS daily bars to Room. Current quotes stay UI-only.
 
-### Phase 3-D — Market Data Backfill
+Status: complete for build / unit verification. Runtime (actual KIS daily bars into device Room) is DEFERRED — physical device pending.
 
-Multi-call daily backfill and range paging. Not started.
+### Phase 3-D — Instrument Master & Historical Sync
+
+KOSPI/KOSDAQ instrument master and multi-call historical daily backfill. Not started.
 
 ### Phase 4 — Factor Engine
 
@@ -89,10 +91,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 3-B — KIS Read-Only Market Data is build/unit complete.
+Phase 3-C — Market Data Persistence is build/unit complete.
 
-Next: Phase 3-C — Market Data Persistence.
+Next: Phase 3-D — Instrument Master & Historical Sync.
 
-Do not start Phase 3-C until Phase 3-B is accepted.
+Do not start Phase 3-D until Phase 3-C is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

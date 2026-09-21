@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
+import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import dagger.Module
@@ -28,6 +29,10 @@ object DatabaseModule {
 
     @Provides
     fun provideInstrumentDao(database: BJStockDatabase): InstrumentDao = database.instrumentDao()
+
+    @Provides
+    fun provideMarketDailyBarDao(database: BJStockDatabase): MarketDailyBarDao =
+        database.marketDailyBarDao()
 
     @Provides
     fun provideStrategyDao(database: BJStockDatabase): StrategyDao = database.strategyDao()

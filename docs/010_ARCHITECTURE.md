@@ -127,3 +127,4 @@ BJStock is a local-only Android application.
 - KIS App Key, App Secret, and access tokens are not stored in Room
 - KIS secrets use Android Keystore encryption in app-private storage excluded from backup
 - Phase 3-B market data is not written to Room
+- Phase 3-C persists adjusted daily bars to Room for existing instruments only

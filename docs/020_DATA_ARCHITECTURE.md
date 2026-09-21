@@ -114,6 +114,8 @@ stock_evaluations
 - `instruments`
 - `market_daily_bars`
 
+Phase 3-C writes daily bars only for an existing instrument. Instruments are not auto-created from a quote. Current-price snapshots are not stored. PostgreSQL schema is unchanged.
+
 ### Factor
 
 - `factor_definitions`

@@ -54,7 +54,16 @@ Storage rules:
 
 **Date/Time Mapping:** `trade_date` LocalDate; `collected_at`/`created_at` Instant UTC
 
-**Constraint Difference:** price/volume CHECKs INTENTIONAL omission.
+**Constraint Difference:** price/volume CHECKs INTENTIONAL omission. Phase 3-C validates OHLC in application code before UPSERT. Schema version remains 1; DAO/repository were added without changing columns.
+
+Phase 3-C persistence rules:
+
+- Existing `instruments` row is required. No auto-create.
+- UPSERT by `(instrument_id, trade_date)` using INSERT or UPDATE, not `INSERT OR REPLACE`.
+- `source` = `KIS` (`MarketDataSource.KIS`).
+- `created_at` is kept on update; `collected_at` is refreshed.
+- Daily bars only. Current quotes are not stored.
+- Room schema version stays 1.
 
 ---
 
