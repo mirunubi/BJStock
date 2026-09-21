@@ -59,9 +59,11 @@ Status: complete for build / unit verification. Runtime (actual KIS daily bars i
 
 ### Phase 3-D — Instrument Master & Historical Sync
 
-KOSPI/KOSDAQ instrument master and multi-call historical daily backfill. Not started.
+KOSPI/KOSDAQ instrument master from official MST files, and selected-instrument historical daily backfill in 90-day chunks.
 
-### Phase 4 — Factor Engine
+Status: complete for build / unit verification. Runtime (actual MST download, live KIS history, Room v1→v2 on device) is DEFERRED — physical device pending.
+
+### Phase 4 — Factor Definition & Calculation Foundation
 
 Define factors and compute factor values from stored market data.
 
@@ -91,10 +93,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 3-C — Market Data Persistence is build/unit complete.
+Phase 3-D — Instrument Master & Historical Sync is build/unit complete.
 
-Next: Phase 3-D — Instrument Master & Historical Sync.
+Next: Phase 4 — Factor Definition & Calculation Foundation.
 
-Do not start Phase 3-D until Phase 3-C is accepted.
+Do not start Phase 4 until Phase 3-D is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

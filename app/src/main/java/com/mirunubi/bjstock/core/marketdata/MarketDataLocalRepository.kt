@@ -20,6 +20,8 @@ class MarketDataLocalRepository(
     suspend fun findInstrument(market: String, symbol: String): InstrumentEntity? =
         instrumentDao.findByMarketAndSymbol(market, symbol)
 
+    suspend fun findInstrumentById(id: Long): InstrumentEntity? = instrumentDao.findById(id)
+
     suspend fun requireInstrument(market: String, symbol: String): InstrumentEntity {
         return findInstrument(market, symbol)
             ?: throw MarketDataPersistenceException(

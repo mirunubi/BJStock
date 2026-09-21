@@ -2,8 +2,10 @@ package com.mirunubi.bjstock.core.database.converter
 
 import androidx.room.TypeConverter
 import com.mirunubi.bjstock.core.model.AiRecommendation
+import com.mirunubi.bjstock.core.model.Board
 import com.mirunubi.bjstock.core.model.FactorCategory
 import com.mirunubi.bjstock.core.model.FactorValueType
+import com.mirunubi.bjstock.core.model.InstrumentType
 import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
 import com.mirunubi.bjstock.core.model.OrderType
@@ -87,4 +89,16 @@ class BJStockConverters {
 
     @TypeConverter
     fun codeToAiRecommendation(value: String): AiRecommendation = AiRecommendation.valueOf(value)
+
+    @TypeConverter
+    fun boardToCode(value: Board): String = value.name
+
+    @TypeConverter
+    fun codeToBoard(value: String): Board = Board.valueOf(value)
+
+    @TypeConverter
+    fun instrumentTypeToCode(value: InstrumentType): String = value.name
+
+    @TypeConverter
+    fun codeToInstrumentType(value: String): InstrumentType = InstrumentType.valueOf(value)
 }

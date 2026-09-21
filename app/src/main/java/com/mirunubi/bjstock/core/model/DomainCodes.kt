@@ -68,3 +68,17 @@ enum class AiRecommendation {
     SELL,
     NO_OPINION,
 }
+
+enum class Board {
+    KOSPI,
+    KOSDAQ,
+    OTHER,
+}
+
+enum class InstrumentType {
+    COMMON_STOCK,
+    PREFERRED_STOCK,
+    ETP,
+    SPAC,
+    OTHER,
+}

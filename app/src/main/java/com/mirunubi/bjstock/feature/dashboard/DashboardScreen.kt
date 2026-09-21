@@ -30,6 +30,7 @@ fun DashboardScreen(
     onOpenDatabaseInfo: () -> Unit,
     onOpenKisSettings: () -> Unit,
     onOpenMarketData: () -> Unit,
+    onOpenInstrumentMaster: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -39,6 +40,9 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("BJStock") },
                 actions = {
+                    TextButton(onClick = onOpenInstrumentMaster) {
+                        Text("Instrument Master")
+                    }
                     TextButton(onClick = onOpenMarketData) {
                         Text("Market Data")
                     }

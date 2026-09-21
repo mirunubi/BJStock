@@ -38,14 +38,14 @@ Role:
 
 ### Market Data
 
-Collects instrument metadata and market bars from KIS quotations APIs.
+Collects instrument metadata and market bars from KIS quotations APIs and official MST files.
 
 Role:
 
 - Provide a local historical and daily market dataset
 - Remain read-only with respect to live brokerage orders
 
-Phase 3-B implements the network/domain layer only. Room persistence is Phase 3-C.
+`market` is the exchange hierarchy (`KRX`). `board` is KOSPI, KOSDAQ, or OTHER. Instrument master download does not use the OAuth token. Historical daily sync is per selected instrument, never the whole market.
 
 ### Factor Engine
 

@@ -34,7 +34,9 @@ Storage rules:
 
 **Date/Time Mapping:** `listed_date`/`delisted_date` LocalDate; `created_at`/`updated_at` Instant UTC
 
-**Constraint Difference:** CHECK non-empty and delisted>=listed are INTENTIONAL omissions. Application validation later.
+**Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
+
+Phase 3-D added `standard_code`, `board`, and `instrument_type`. Room version is 2. Migration(1, 2) adds the columns with `board`/`instrument_type` default `OTHER`. `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -63,7 +65,7 @@ Phase 3-C persistence rules:
 - `source` = `KIS` (`MarketDataSource.KIS`).
 - `created_at` is kept on update; `collected_at` is refreshed.
 - Daily bars only. Current quotes are not stored.
-- Room schema version stays 1.
+- Room schema version was 1 in Phase 3-C and became 2 in Phase 3-D for instrument master columns.
 
 ---
 

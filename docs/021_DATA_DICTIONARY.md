@@ -28,21 +28,26 @@ Listed instruments that later receive market bars, factors, evaluations, and pap
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| market | TEXT | e.g. KRX |
+| market | TEXT | Exchange hierarchy, e.g. KRX. Not KOSPI/KOSDAQ. |
 | symbol | TEXT | e.g. 005930 |
 | name | TEXT | display name |
+| standard_code | TEXT | KIS master 표준코드. Nullable. |
+| board | TEXT | KOSPI, KOSDAQ, OTHER. Default OTHER. |
+| instrument_type | TEXT | COMMON_STOCK, PREFERRED_STOCK, ETP, SPAC, OTHER. Default OTHER. |
 | sector | TEXT | nullable |
 | industry | TEXT | nullable |
 | currency | TEXT | default KRW |
 | is_active | BOOLEAN | default TRUE |
-| listed_date | DATE | nullable |
-| delisted_date | DATE | nullable |
+| listed_date | DATE | nullable; filled only when the master date is reliable |
+| delisted_date | DATE | nullable; not auto-set when a master row disappears |
 | created_at | TIMESTAMPTZ | |
 | updated_at | TIMESTAMPTZ | application-maintained |
 
 **Important Constraints**
 
 - `market`, `symbol`, `name`, `currency` are non-empty
+- `board` IN (KOSPI, KOSDAQ, OTHER)
+- `instrument_type` IN (COMMON_STOCK, PREFERRED_STOCK, ETP, SPAC, OTHER)
 - `delisted_date >= listed_date` when both are present
 
 **Lifecycle**

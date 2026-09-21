@@ -90,7 +90,7 @@ The Android runtime database is Room. The app does not connect to PostgreSQL.
 
 ## D-023
 
-Room database version 1 is based on the Phase 1 PostgreSQL business model.
+Room database version 1 is based on the Phase 1 PostgreSQL business model. Phase 3-D raises Room to version 2 for instrument master columns.
 
 ## D-024
 
@@ -209,3 +209,43 @@ Current-price snapshots are not stored in Phase 3-C.
 ## D-052
 
 Instrument master download is deferred to Phase 3-D.
+
+## D-053
+
+KRX and KOSPI/KOSDAQ boards are separate. `market` is not a listing board.
+
+## D-054
+
+Domestic listed instruments use `market=KRX`.
+
+## D-055
+
+`board` is KOSPI, KOSDAQ, or OTHER.
+
+## D-056
+
+Instrument master uses the official KIS MST zip files, not the OAuth market-data REST API.
+
+## D-057
+
+Master sync is UPSERT plus inactive. Rows are not deleted.
+
+## D-058
+
+An incomplete master must not deactivate existing instruments.
+
+## D-059
+
+Historical daily sync uses 90 calendar-day inclusive chunks.
+
+## D-060
+
+A long-range historical sync persists only after every network chunk succeeds.
+
+## D-061
+
+Historical daily sync stores ADJUSTED prices only.
+
+## D-062
+
+Whole-market historical backfill is forbidden in this phase.

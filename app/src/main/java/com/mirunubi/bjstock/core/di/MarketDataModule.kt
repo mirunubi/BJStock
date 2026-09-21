@@ -6,6 +6,8 @@ import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.kis.market.KisMarketRepository
 import com.mirunubi.bjstock.core.marketdata.FetchAndPersistDailyBarsUseCase
 import com.mirunubi.bjstock.core.marketdata.MarketDataLocalRepository
+import com.mirunubi.bjstock.core.marketdata.SyncDailyBarsFromLatestUseCase
+import com.mirunubi.bjstock.core.marketdata.SyncHistoricalDailyBarsUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -34,5 +36,23 @@ object MarketDataModule {
     ): FetchAndPersistDailyBarsUseCase = FetchAndPersistDailyBarsUseCase(
         marketRepository = marketRepository,
         localRepository = localRepository,
+    )
+
+    @Provides
+    fun provideSyncHistoricalDailyBarsUseCase(
+        marketRepository: KisMarketRepository,
+        localRepository: MarketDataLocalRepository,
+    ): SyncHistoricalDailyBarsUseCase = SyncHistoricalDailyBarsUseCase(
+        marketRepository = marketRepository,
+        localRepository = localRepository,
+    )
+
+    @Provides
+    fun provideSyncDailyBarsFromLatestUseCase(
+        localRepository: MarketDataLocalRepository,
+        historicalSync: SyncHistoricalDailyBarsUseCase,
+    ): SyncDailyBarsFromLatestUseCase = SyncDailyBarsFromLatestUseCase(
+        localRepository = localRepository,
+        historicalSync = historicalSync,
     )
 }

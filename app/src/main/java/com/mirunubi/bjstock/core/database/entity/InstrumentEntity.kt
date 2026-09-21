@@ -4,6 +4,8 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.mirunubi.bjstock.core.model.Board
+import com.mirunubi.bjstock.core.model.InstrumentType
 import java.time.Instant
 import java.time.LocalDate
 
@@ -32,4 +34,9 @@ data class InstrumentEntity(
     val createdAt: Instant = Instant.now(),
     @ColumnInfo(name = "updated_at")
     val updatedAt: Instant = Instant.now(),
+    @ColumnInfo(name = "standard_code")
+    val standardCode: String? = null,
+    val board: Board = Board.OTHER,
+    @ColumnInfo(name = "instrument_type")
+    val instrumentType: InstrumentType = InstrumentType.OTHER,
 )

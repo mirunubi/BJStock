@@ -3,6 +3,7 @@ package com.mirunubi.bjstock.core.di
 import android.content.Context
 import androidx.room.Room
 import com.mirunubi.bjstock.core.database.BJStockDatabase
+import com.mirunubi.bjstock.core.database.BJStockMigrations
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
@@ -24,7 +25,9 @@ object DatabaseModule {
             context,
             BJStockDatabase::class.java,
             BJStockDatabase.NAME,
-        ).build()
+        )
+            .addMigrations(BJStockMigrations.MIGRATION_1_2)
+            .build()
     }
 
     @Provides

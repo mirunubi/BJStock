@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mirunubi.bjstock.feature.dashboard.DashboardScreen
 import com.mirunubi.bjstock.feature.dashboard.DatabaseInfoScreen
+import com.mirunubi.bjstock.feature.instrument.InstrumentMasterScreen
 import com.mirunubi.bjstock.feature.kis.KisSettingsScreen
 import com.mirunubi.bjstock.feature.market.MarketDataTestScreen
 import com.mirunubi.bjstock.ui.theme.BJStockTheme
@@ -37,6 +38,7 @@ private fun BJStockNavHost() {
                 onOpenDatabaseInfo = { navController.navigate("database_info") },
                 onOpenKisSettings = { navController.navigate("kis_settings") },
                 onOpenMarketData = { navController.navigate("market_data_test") },
+                onOpenInstrumentMaster = { navController.navigate("instrument_master") },
             )
         }
         composable("database_info") {
@@ -47,6 +49,9 @@ private fun BJStockNavHost() {
         }
         composable("market_data_test") {
             MarketDataTestScreen(onBack = { navController.popBackStack() })
+        }
+        composable("instrument_master") {
+            InstrumentMasterScreen(onBack = { navController.popBackStack() })
         }
     }
 }

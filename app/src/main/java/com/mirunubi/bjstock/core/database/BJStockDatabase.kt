@@ -44,7 +44,7 @@ import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
         AiAdviceRequestEntity::class,
         AiAdviceResultEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(BJStockConverters::class)
@@ -56,7 +56,7 @@ abstract class BJStockDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "bjstock.db"
-        const val VERSION = 1
+        const val VERSION = 2
         const val ENTITY_COUNT = 16
     }
 }
