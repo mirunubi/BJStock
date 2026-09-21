@@ -79,3 +79,35 @@ There is no `trading_accounts` table. Virtual cash and holdings belong to a `str
 ## D-020
 
 AI advice request and result are 1:1. Multiple opinions are recorded as multiple requests.
+
+## D-021
+
+Android Application ID is `com.mirunubi.bjstock`.
+
+## D-022
+
+The Android runtime database is Room. The app does not connect to PostgreSQL.
+
+## D-023
+
+Room database version 1 is based on the Phase 1 PostgreSQL business model.
+
+## D-024
+
+Room schema export JSON is kept in Git.
+
+## D-025
+
+Room runtime does not include the laboratory `schema_migrations` table.
+
+## D-026
+
+Kotlin enums are stored as String codes, never ordinals.
+
+## D-027
+
+Financial amounts do not use floating point at runtime. Room stores KRW as Long won and scaled Long for ratios.
+
+## D-028
+
+Android display timezone is Asia/Seoul. Storage is UTC.

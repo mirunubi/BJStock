@@ -21,11 +21,13 @@ Includes:
 - constraint, index, and FK verification
 - ERD and data dictionary
 
-Status: current.
+Status: complete.
 
 ### Phase 2 — Android Foundation
 
 Create the Android app shell. No live trading. Runtime DB will be Room / SQLite.
+
+Status: current.
 
 ### Phase 3 — KIS Market Data
 
@@ -61,6 +63,6 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 1 — DB Architecture
+Phase 2 — Android Foundation
 
-Do not start the next phase until Phase 1 is complete and accepted.
+Do not start the next phase until Phase 2 is complete and accepted.

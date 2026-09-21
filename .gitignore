@@ -14,3 +14,6 @@ build/
 Thumbs.db
 
 *.log
+
+.cxx/
+captures/
