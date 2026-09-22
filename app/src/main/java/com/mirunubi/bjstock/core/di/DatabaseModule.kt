@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.BJStockMigrations
+import com.mirunubi.bjstock.core.database.dao.AiAdviceDao
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
@@ -82,4 +83,7 @@ object DatabaseModule {
     @Provides
     fun providePaperTradingPolicyDao(database: BJStockDatabase): PaperTradingPolicyDao =
         database.paperTradingPolicyDao()
+
+    @Provides
+    fun provideAiAdviceDao(database: BJStockDatabase): AiAdviceDao = database.aiAdviceDao()
 }

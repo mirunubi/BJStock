@@ -123,8 +123,8 @@ Optional side advisor. It is not on the execution path.
 
 ```text
 Quant Decision ─┐
-                ├─ Decision Record
-AI Advice ──────┘
+                ├─ Decision Record (final_decision = quant_decision)
+AI Advice ──────┘  (advisory only)
 ```
 
 Rules:
@@ -132,6 +132,8 @@ Rules:
 - Quant decision and AI advice are stored separately
 - AI does not buy or sell
 - The app remains usable with AI turned off
+- Phase 8 supports OFF and CHATGPT_MANUAL; OPENAI_API_FUTURE is a non-network placeholder
+- Future OpenAI access must use a backend gateway; no API secrets in the APK
 
 ## Runtime Boundary
 

@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.mirunubi.bjstock.core.database.converter.BJStockConverters
+import com.mirunubi.bjstock.core.database.dao.AiAdviceDao
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
@@ -73,6 +74,7 @@ abstract class BJStockDatabase : RoomDatabase() {
     abstract fun positionDao(): PositionDao
     abstract fun portfolioDailySnapshotDao(): PortfolioDailySnapshotDao
     abstract fun paperTradingPolicyDao(): PaperTradingPolicyDao
+    abstract fun aiAdviceDao(): AiAdviceDao
 
     companion object {
         const val NAME = "bjstock.db"

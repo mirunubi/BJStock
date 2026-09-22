@@ -429,3 +429,47 @@ Benchmark index comparison is deferred to a later phase.
 ## D-107
 
 Performance Analytics does not call network APIs.
+
+## D-108
+
+AI is advisory only and has no trade authority.
+
+## D-109
+
+AI must not mutate quant scores or quant/final decisions.
+
+## D-110
+
+AI must not create, cancel, or block paper trading orders.
+
+## D-111
+
+Phase 8 usable modes are OFF and CHATGPT_MANUAL. OPENAI_API_FUTURE is a placeholder only.
+
+## D-112
+
+OpenAI API secrets must never be stored in the Android APK.
+
+## D-113
+
+Future automated OpenAI access must go through a BJStock backend gateway, not a direct on-device secret.
+
+## D-114
+
+AI prompts must not include market data after the evaluation date.
+
+## D-115
+
+AI prompts are built from immutable evaluation snapshots, not live recalculated factors.
+
+## D-116
+
+AI prompts are versioned; V1 is never silently rewritten.
+
+## D-117
+
+AI results are append-only per request; revisions require a new request.
+
+## D-118
+
+AI confidence is not written to `stock_evaluations.ai_score`.

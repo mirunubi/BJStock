@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.mirunubi.bjstock.feature.ai.AiAdvisorScreen
 import com.mirunubi.bjstock.feature.dashboard.DashboardScreen
 import com.mirunubi.bjstock.feature.dashboard.DatabaseInfoScreen
 import com.mirunubi.bjstock.feature.factor.FactorTestScreen
@@ -48,6 +49,7 @@ private fun BJStockNavHost() {
                 onOpenStrategyLab = { navController.navigate("strategy_lab") },
                 onOpenPaperLab = { navController.navigate("paper_lab") },
                 onOpenForwardTest = { navController.navigate("forward_test") },
+                onOpenAiAdvisor = { navController.navigate("ai_advisor") },
             )
         }
         composable("database_info") {
@@ -79,6 +81,9 @@ private fun BJStockNavHost() {
         }
         composable("compare_runs") {
             CompareRunsScreen(onBack = { navController.popBackStack() })
+        }
+        composable("ai_advisor") {
+            AiAdvisorScreen(onBack = { navController.popBackStack() })
         }
     }
 }

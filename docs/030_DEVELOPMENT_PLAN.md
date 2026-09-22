@@ -97,6 +97,8 @@ Status: complete for build / JVM-Robolectric verification. Runtime (physical-dev
 
 Add optional AI advice. AI remains off-by-default capable and never executes trades.
 
+Status: complete for build / JVM-Robolectric verification. Clipboard/Share/Paste runtime is DEFERRED — physical device pending.
+
 ### Phase 9 — Long-Term Forward Test
 
 Run paper trading for one year or longer and review strategy quality.
@@ -107,10 +109,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 7 — Performance Analytics & Forward Test Dashboard is build/unit complete.
+Phase 8 — AI Advisory Foundation is build/unit complete.
 
-Next: Phase 8 — AI Advisory Foundation.
+Next: Phase 9 — Long-Term Forward Test Orchestration.
 
-Do not start Phase 8 until Phase 7 is accepted.
+Do not start Phase 9 until Phase 8 is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.
