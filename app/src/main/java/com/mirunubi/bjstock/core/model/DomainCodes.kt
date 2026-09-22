@@ -97,6 +97,22 @@ enum class AiRecommendation {
     NO_OPINION,
 }
 
+enum class ForwardCycleStatus {
+    PENDING,
+    RUNNING,
+    COMPLETE,
+    FAILED,
+}
+
+enum class ForwardCycleStage {
+    PENDING_FILLS,
+    FACTORS,
+    EVALUATIONS,
+    ORDER_CREATION,
+    SNAPSHOT,
+    COMPLETE,
+}
+
 enum class Board {
     KOSPI,
     KOSDAQ,

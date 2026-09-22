@@ -21,7 +21,10 @@ class ProcessPendingOrdersUseCase(
     private val fills: VirtualFillService,
     private val policyService: PaperTradingPolicyService,
 ) {
-    suspend operator fun invoke(strategyRunId: Long): List<PaperTradeResult> {
+    suspend operator fun invoke(
+        strategyRunId: Long,
+        asOfMarketDate: java.time.LocalDate? = null,
+    ): List<PaperTradeResult> {
         val run = strategyRunDao.findById(strategyRunId)
             ?: return listOf(
                 PaperTradeResult(PaperTradeAction.NO_TRADE, "strategy run not found"),
@@ -43,10 +46,13 @@ class ProcessPendingOrdersUseCase(
         }
         val pending = orderDao.findByRunAndStatus(strategyRunId, OrderStatus.PENDING_EXECUTION)
             .sortedWith(compareBy({ it.evaluationId ?: Long.MAX_VALUE }, { it.id }))
-        return pending.map { order -> processOne(order, policy) }
+        return pending.map { order -> processOne(order, policy, asOfMarketDate) }
     }
 
-    suspend fun processOne(orderId: Long): PaperTradeResult {
+    suspend fun processOne(
+        orderId: Long,
+        asOfMarketDate: java.time.LocalDate? = null,
+    ): PaperTradeResult {
         val order = orderDao.findById(orderId)
             ?: return PaperTradeResult(PaperTradeAction.NO_TRADE, "order not found")
         val policy = try {
@@ -58,12 +64,13 @@ class ProcessPendingOrdersUseCase(
                 message = "MISSING_TRADING_POLICY",
             )
         }
-        return processOne(order, policy)
+        return processOne(order, policy, asOfMarketDate)
     }
 
     private suspend fun processOne(
         order: OrderEntity,
         policy: RunPaperTradingPolicy,
+        asOfMarketDate: java.time.LocalDate?,
     ): PaperTradeResult {
         if (order.status == OrderStatus.VIRTUAL_FILLED) {
             return PaperTradeResult(
@@ -94,12 +101,20 @@ class ProcessPendingOrdersUseCase(
                 message = "evaluation missing for pending order",
             )
 
-        val nextBar = marketDailyBarDao.findNextTradingBar(order.instrumentId, signalDate)
-            ?: return PaperTradeResult(
-                action = PaperTradeAction.PENDING,
-                orderId = order.id,
-                message = "waiting for next trading bar after $signalDate",
+        val nextBar = if (asOfMarketDate == null) {
+            marketDailyBarDao.findNextTradingBar(order.instrumentId, signalDate)
+        } else {
+            marketDailyBarDao.findNextTradingBarAsOf(
+                instrumentId = order.instrumentId,
+                afterDate = signalDate,
+                asOfDate = asOfMarketDate,
             )
+        } ?: return PaperTradeResult(
+            action = PaperTradeAction.PENDING,
+            orderId = order.id,
+            message = "waiting for next trading bar after $signalDate" +
+                (asOfMarketDate?.let { " asOf $it" } ?: ""),
+        )
 
         return when (order.side) {
             OrderSide.BUY -> fillBuy(order, nextBar.tradeDate, nextBar.openPrice, policy)

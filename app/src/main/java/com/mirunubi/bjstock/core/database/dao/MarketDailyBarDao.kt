@@ -78,6 +78,14 @@ interface MarketDailyBarDao {
 
     @Query(
         """
+        DELETE FROM market_daily_bars
+        WHERE instrument_id = :instrumentId AND trade_date = :tradeDate
+        """,
+    )
+    suspend fun deleteByInstrumentAndDate(instrumentId: Long, tradeDate: LocalDate): Int
+
+    @Query(
+        """
         SELECT * FROM market_daily_bars
         WHERE instrument_id = :instrumentId
           AND trade_date > :afterDate
@@ -89,4 +97,44 @@ interface MarketDailyBarDao {
         instrumentId: Long,
         afterDate: LocalDate,
     ): MarketDailyBarEntity?
+
+    @Query(
+        """
+        SELECT * FROM market_daily_bars
+        WHERE instrument_id = :instrumentId
+          AND trade_date > :afterDate
+          AND trade_date <= :asOfDate
+        ORDER BY trade_date ASC
+        LIMIT 1
+        """,
+    )
+    suspend fun findNextTradingBarAsOf(
+        instrumentId: Long,
+        afterDate: LocalDate,
+        asOfDate: LocalDate,
+    ): MarketDailyBarEntity?
+
+    @Query(
+        """
+        SELECT DISTINCT trade_date FROM market_daily_bars
+        WHERE instrument_id IN (:instrumentIds)
+          AND trade_date > :afterDate
+          AND trade_date <= :throughDate
+        ORDER BY trade_date ASC
+        """,
+    )
+    suspend fun findDistinctTradeDatesInRange(
+        instrumentIds: List<Long>,
+        afterDate: LocalDate,
+        throughDate: LocalDate,
+    ): List<LocalDate>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM market_daily_bars
+        WHERE instrument_id = :instrumentId
+          AND trade_date < :beforeDate
+        """,
+    )
+    suspend fun countBarsBefore(instrumentId: Long, beforeDate: LocalDate): Int
 }

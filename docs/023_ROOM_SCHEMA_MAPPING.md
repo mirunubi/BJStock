@@ -36,7 +36,7 @@ Storage rules:
 
 **Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
 
-Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Explicit Migration(1, 2), Migration(2, 3), Migration(3, 4), and Migration(4, 5) are registered; `fallbackToDestructiveMigration` is not used.
+Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Phase 9 adds `strategy_run_instruments` and `forward_test_cycles` in Room version 6. Explicit Migration(1, 2), Migration(2, 3), Migration(3, 4), Migration(4, 5), and Migration(5, 6) are registered; `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -195,6 +195,46 @@ Phase 4 persistence:
 **Date/Time Mapping:** start/end LocalDate; started/ended/created/updated Instant UTC
 
 **Constraint Difference:** `run_type` PAPER-only and status CHECK → enums stored as String. cash/date CHECKs INTENTIONAL omission.
+
+---
+
+## strategy_run_instruments
+
+**PostgreSQL Table:** `bjstock.strategy_run_instruments`
+
+**Room Entity:** `StrategyRunInstrumentEntity` / `strategy_run_instruments`
+
+**PK:** `id`
+
+**FK:** `strategy_run_id → strategy_runs.id` RESTRICT; `instrument_id → instruments.id` RESTRICT
+
+**Unique:** `(strategy_run_id, instrument_id)`
+
+**Numeric Mapping:** none
+
+**Date/Time Mapping:** `created_at` Instant UTC
+
+**Constraint Difference:** none beyond unique. Application enforces DRAFT-only edits. Added in Room version 6 via Migration(5, 6).
+
+---
+
+## forward_test_cycles
+
+**PostgreSQL Table:** `bjstock.forward_test_cycles`
+
+**Room Entity:** `ForwardTestCycleEntity` / `forward_test_cycles`
+
+**PK:** `id`
+
+**FK:** `strategy_run_id → strategy_runs.id` RESTRICT
+
+**Unique:** `(strategy_run_id, market_date)`
+
+**Numeric Mapping:** none (`attempt_count` Int)
+
+**Date/Time Mapping:** `market_date` LocalDate; started/completed/created/updated Instant UTC
+
+**Constraint Difference:** status/stage CHECKs INTENTIONAL omission — enums stored as String. `error_message` must never contain secrets. Added in Room version 6 via Migration(5, 6).
 
 ---
 

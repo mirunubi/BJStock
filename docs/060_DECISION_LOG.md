@@ -473,3 +473,47 @@ AI results are append-only per request; revisions require a new request.
 ## D-118
 
 AI confidence is not written to `stock_evaluations.ai_score`.
+
+## D-119
+
+Forward Test Universe is a per-run snapshot in `strategy_run_instruments` and is immutable after READY.
+
+## D-120
+
+WorkManager wake-up time is not market time; catch-up uses market dates, not worker wall clock.
+
+## D-121
+
+BJStock daily data cutoff is 18:00 Asia/Seoul as an operational assumption, not exchange law.
+
+## D-122
+
+Missing market dates are processed ASC (catch-up) from last COMPLETE exclusive through `throughDate` inclusive.
+
+## D-123
+
+A FAILED market date blocks processing of later dates until that date is retried successfully.
+
+## D-124
+
+Daily pipeline order is Pending Fill → Factor → Evaluation → Order → Snapshot.
+
+## D-125
+
+Pending fills with `asOfMarketDate` must not see bars after that date (future-bar poison blocked).
+
+## D-126
+
+On run end_date, new pending orders are not created from that day's signals.
+
+## D-127
+
+On run end_date, open positions are not force-liquidated; final snapshot marks to market at close.
+
+## D-128
+
+Forward Test auto scheduler default is OFF until physical-device acceptance.
+
+## D-129
+
+AI Advisory does not participate in the automatic forward-test pipeline and never blocks cycles.

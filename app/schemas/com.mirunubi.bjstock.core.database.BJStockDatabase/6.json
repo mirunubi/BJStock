@@ -1,0 +1,2099 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 6,
+    "identityHash": "0856bcf6b20fceee9e9a8c4d5a5ed70a",
+    "entities": [
+      {
+        "tableName": "instruments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `market` TEXT NOT NULL, `symbol` TEXT NOT NULL, `name` TEXT NOT NULL, `sector` TEXT, `industry` TEXT, `currency` TEXT NOT NULL, `is_active` INTEGER NOT NULL, `listed_date` INTEGER, `delisted_date` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `standard_code` TEXT, `board` TEXT NOT NULL, `instrument_type` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "market",
+            "columnName": "market",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sector",
+            "columnName": "sector",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "industry",
+            "columnName": "industry",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "is_active",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "listedDate",
+            "columnName": "listed_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "delistedDate",
+            "columnName": "delisted_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "standardCode",
+            "columnName": "standard_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "board",
+            "columnName": "board",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instrumentType",
+            "columnName": "instrument_type",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_instruments_market_symbol",
+            "unique": true,
+            "columnNames": [
+              "market",
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_instruments_market_symbol` ON `${TABLE_NAME}` (`market`, `symbol`)"
+          }
+        ]
+      },
+      {
+        "tableName": "market_daily_bars",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `instrument_id` INTEGER NOT NULL, `trade_date` INTEGER NOT NULL, `open_price` INTEGER NOT NULL, `high_price` INTEGER NOT NULL, `low_price` INTEGER NOT NULL, `close_price` INTEGER NOT NULL, `volume` INTEGER NOT NULL, `trading_value` INTEGER, `source` TEXT NOT NULL, `collected_at` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instrumentId",
+            "columnName": "instrument_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tradeDate",
+            "columnName": "trade_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "openPrice",
+            "columnName": "open_price",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "highPrice",
+            "columnName": "high_price",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lowPrice",
+            "columnName": "low_price",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "closePrice",
+            "columnName": "close_price",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "volume",
+            "columnName": "volume",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tradingValue",
+            "columnName": "trading_value",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "collectedAt",
+            "columnName": "collected_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_market_daily_bars_instrument_trade_date",
+            "unique": true,
+            "columnNames": [
+              "instrument_id",
+              "trade_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_market_daily_bars_instrument_trade_date` ON `${TABLE_NAME}` (`instrument_id`, `trade_date`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "instruments",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "instrument_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "factor_definitions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `factor_code` TEXT NOT NULL, `factor_name` TEXT NOT NULL, `category` TEXT NOT NULL, `description` TEXT, `value_type` TEXT NOT NULL, `higher_is_better` INTEGER NOT NULL, `is_active` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factorCode",
+            "columnName": "factor_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factorName",
+            "columnName": "factor_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "valueType",
+            "columnName": "value_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "higherIsBetter",
+            "columnName": "higher_is_better",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "is_active",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_factor_definitions_factor_code",
+            "unique": true,
+            "columnNames": [
+              "factor_code"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_factor_definitions_factor_code` ON `${TABLE_NAME}` (`factor_code`)"
+          }
+        ]
+      },
+      {
+        "tableName": "factor_values",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `instrument_id` INTEGER NOT NULL, `factor_id` INTEGER NOT NULL, `evaluation_date` INTEGER NOT NULL, `raw_value` TEXT, `normalized_score` INTEGER, `source` TEXT NOT NULL, `calculation_version` TEXT NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`factor_id`) REFERENCES `factor_definitions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instrumentId",
+            "columnName": "instrument_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factorId",
+            "columnName": "factor_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evaluationDate",
+            "columnName": "evaluation_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawValue",
+            "columnName": "raw_value",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "normalizedScore",
+            "columnName": "normalized_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calculationVersion",
+            "columnName": "calculation_version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_factor_values_instrument_factor_date_version",
+            "unique": true,
+            "columnNames": [
+              "instrument_id",
+              "factor_id",
+              "evaluation_date",
+              "calculation_version"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_factor_values_instrument_factor_date_version` ON `${TABLE_NAME}` (`instrument_id`, `factor_id`, `evaluation_date`, `calculation_version`)"
+          },
+          {
+            "name": "idx_factor_values_instrument_eval_date",
+            "unique": false,
+            "columnNames": [
+              "instrument_id",
+              "evaluation_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_factor_values_instrument_eval_date` ON `${TABLE_NAME}` (`instrument_id`, `evaluation_date`)"
+          },
+          {
+            "name": "idx_factor_values_factor_eval_date",
+            "unique": false,
+            "columnNames": [
+              "factor_id",
+              "evaluation_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_factor_values_factor_eval_date` ON `${TABLE_NAME}` (`factor_id`, `evaluation_date`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "instruments",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "instrument_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "factor_definitions",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "factor_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "strategies",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_code` TEXT NOT NULL, `strategy_name` TEXT NOT NULL, `description` TEXT, `is_active` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyCode",
+            "columnName": "strategy_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyName",
+            "columnName": "strategy_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "is_active",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_strategies_strategy_code",
+            "unique": true,
+            "columnNames": [
+              "strategy_code"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_strategies_strategy_code` ON `${TABLE_NAME}` (`strategy_code`)"
+          }
+        ]
+      },
+      {
+        "tableName": "strategy_versions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_id` INTEGER NOT NULL, `version_no` INTEGER NOT NULL, `description` TEXT, `buy_threshold` INTEGER NOT NULL, `sell_threshold` INTEGER NOT NULL, `valid_from` INTEGER, `valid_to` INTEGER, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_id`) REFERENCES `strategies`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyId",
+            "columnName": "strategy_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "versionNo",
+            "columnName": "version_no",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "buyThreshold",
+            "columnName": "buy_threshold",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sellThreshold",
+            "columnName": "sell_threshold",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "validFrom",
+            "columnName": "valid_from",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "validTo",
+            "columnName": "valid_to",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_strategy_versions_strategy_version",
+            "unique": true,
+            "columnNames": [
+              "strategy_id",
+              "version_no"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_strategy_versions_strategy_version` ON `${TABLE_NAME}` (`strategy_id`, `version_no`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategies",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "strategy_factor_weights",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_version_id` INTEGER NOT NULL, `factor_id` INTEGER NOT NULL, `weight` INTEGER NOT NULL, `min_score` INTEGER, `max_score` INTEGER, `enabled` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `factor_calculation_version` TEXT NOT NULL, FOREIGN KEY(`strategy_version_id`) REFERENCES `strategy_versions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`factor_id`) REFERENCES `factor_definitions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyVersionId",
+            "columnName": "strategy_version_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factorId",
+            "columnName": "factor_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weight",
+            "columnName": "weight",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minScore",
+            "columnName": "min_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "maxScore",
+            "columnName": "max_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factorCalculationVersion",
+            "columnName": "factor_calculation_version",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_strategy_factor_weights_version_factor",
+            "unique": true,
+            "columnNames": [
+              "strategy_version_id",
+              "factor_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_strategy_factor_weights_version_factor` ON `${TABLE_NAME}` (`strategy_version_id`, `factor_id`)"
+          },
+          {
+            "name": "idx_strategy_factor_weights_factor_id",
+            "unique": false,
+            "columnNames": [
+              "factor_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_strategy_factor_weights_factor_id` ON `${TABLE_NAME}` (`factor_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_versions",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_version_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "factor_definitions",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "factor_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "strategy_runs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `run_name` TEXT NOT NULL, `strategy_version_id` INTEGER NOT NULL, `run_type` TEXT NOT NULL, `start_date` INTEGER NOT NULL, `end_date` INTEGER, `initial_cash` INTEGER NOT NULL, `status` TEXT NOT NULL, `started_at` INTEGER, `ended_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_version_id`) REFERENCES `strategy_versions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "runName",
+            "columnName": "run_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyVersionId",
+            "columnName": "strategy_version_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "runType",
+            "columnName": "run_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "start_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "end_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "initialCash",
+            "columnName": "initial_cash",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "started_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "ended_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "idx_strategy_runs_strategy_version",
+            "unique": false,
+            "columnNames": [
+              "strategy_version_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_strategy_runs_strategy_version` ON `${TABLE_NAME}` (`strategy_version_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_versions",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_version_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "stock_evaluations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `instrument_id` INTEGER NOT NULL, `evaluation_date` INTEGER NOT NULL, `quant_score` INTEGER NOT NULL, `ai_score` INTEGER, `final_score` INTEGER NOT NULL, `quant_decision` TEXT NOT NULL, `final_decision` TEXT NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instrumentId",
+            "columnName": "instrument_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evaluationDate",
+            "columnName": "evaluation_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantScore",
+            "columnName": "quant_score",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aiScore",
+            "columnName": "ai_score",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "finalScore",
+            "columnName": "final_score",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantDecision",
+            "columnName": "quant_decision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finalDecision",
+            "columnName": "final_decision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_stock_evaluations_run_instrument_date",
+            "unique": true,
+            "columnNames": [
+              "strategy_run_id",
+              "instrument_id",
+              "evaluation_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_stock_evaluations_run_instrument_date` ON `${TABLE_NAME}` (`strategy_run_id`, `instrument_id`, `evaluation_date`)"
+          },
+          {
+            "name": "idx_stock_evaluations_run_eval_date",
+            "unique": false,
+            "columnNames": [
+              "strategy_run_id",
+              "evaluation_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_stock_evaluations_run_eval_date` ON `${TABLE_NAME}` (`strategy_run_id`, `evaluation_date`)"
+          },
+          {
+            "name": "idx_stock_evaluations_instrument_eval_date",
+            "unique": false,
+            "columnNames": [
+              "instrument_id",
+              "evaluation_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_stock_evaluations_instrument_eval_date` ON `${TABLE_NAME}` (`instrument_id`, `evaluation_date`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "instruments",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "instrument_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "stock_evaluation_details",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `evaluation_id` INTEGER NOT NULL, `factor_id` INTEGER NOT NULL, `raw_value` TEXT, `factor_score` INTEGER NOT NULL, `weight` INTEGER NOT NULL, `weighted_score` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`evaluation_id`) REFERENCES `stock_evaluations`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`factor_id`) REFERENCES `factor_definitions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evaluationId",
+            "columnName": "evaluation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factorId",
+            "columnName": "factor_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawValue",
+            "columnName": "raw_value",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "factorScore",
+            "columnName": "factor_score",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weight",
+            "columnName": "weight",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weightedScore",
+            "columnName": "weighted_score",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_stock_evaluation_details_evaluation_factor",
+            "unique": true,
+            "columnNames": [
+              "evaluation_id",
+              "factor_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_stock_evaluation_details_evaluation_factor` ON `${TABLE_NAME}` (`evaluation_id`, `factor_id`)"
+          },
+          {
+            "name": "idx_stock_evaluation_details_factor_id",
+            "unique": false,
+            "columnNames": [
+              "factor_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_stock_evaluation_details_factor_id` ON `${TABLE_NAME}` (`factor_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "stock_evaluations",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "evaluation_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "factor_definitions",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "factor_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "positions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `instrument_id` INTEGER NOT NULL, `quantity` INTEGER NOT NULL, `average_price` INTEGER NOT NULL, `realized_profit` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instrumentId",
+            "columnName": "instrument_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity",
+            "columnName": "quantity",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "averagePrice",
+            "columnName": "average_price",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "realizedProfit",
+            "columnName": "realized_profit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_positions_run_instrument",
+            "unique": true,
+            "columnNames": [
+              "strategy_run_id",
+              "instrument_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_positions_run_instrument` ON `${TABLE_NAME}` (`strategy_run_id`, `instrument_id`)"
+          },
+          {
+            "name": "idx_positions_instrument_id",
+            "unique": false,
+            "columnNames": [
+              "instrument_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_positions_instrument_id` ON `${TABLE_NAME}` (`instrument_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "instruments",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "instrument_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "orders",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `client_order_id` TEXT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `instrument_id` INTEGER NOT NULL, `evaluation_id` INTEGER, `side` TEXT NOT NULL, `order_type` TEXT NOT NULL, `requested_price` INTEGER, `quantity` INTEGER NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `executed_at` INTEGER, `cancelled_at` INTEGER, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`evaluation_id`) REFERENCES `stock_evaluations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientOrderId",
+            "columnName": "client_order_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instrumentId",
+            "columnName": "instrument_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evaluationId",
+            "columnName": "evaluation_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "side",
+            "columnName": "side",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderType",
+            "columnName": "order_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestedPrice",
+            "columnName": "requested_price",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "quantity",
+            "columnName": "quantity",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "executedAt",
+            "columnName": "executed_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cancelledAt",
+            "columnName": "cancelled_at",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_orders_client_order_id",
+            "unique": true,
+            "columnNames": [
+              "client_order_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_orders_client_order_id` ON `${TABLE_NAME}` (`client_order_id`)"
+          },
+          {
+            "name": "idx_orders_run_created",
+            "unique": false,
+            "columnNames": [
+              "strategy_run_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_orders_run_created` ON `${TABLE_NAME}` (`strategy_run_id`, `created_at`)"
+          },
+          {
+            "name": "idx_orders_instrument_created",
+            "unique": false,
+            "columnNames": [
+              "instrument_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_orders_instrument_created` ON `${TABLE_NAME}` (`instrument_id`, `created_at`)"
+          },
+          {
+            "name": "idx_orders_evaluation_id",
+            "unique": false,
+            "columnNames": [
+              "evaluation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_orders_evaluation_id` ON `${TABLE_NAME}` (`evaluation_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "instruments",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "instrument_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "stock_evaluations",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "evaluation_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "executions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `order_id` INTEGER NOT NULL, `execution_price` INTEGER NOT NULL, `quantity` INTEGER NOT NULL, `commission` INTEGER NOT NULL, `tax` INTEGER NOT NULL, `slippage` INTEGER NOT NULL, `executed_at` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`order_id`) REFERENCES `orders`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderId",
+            "columnName": "order_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "executionPrice",
+            "columnName": "execution_price",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity",
+            "columnName": "quantity",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "commission",
+            "columnName": "commission",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tax",
+            "columnName": "tax",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slippage",
+            "columnName": "slippage",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "executedAt",
+            "columnName": "executed_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "idx_executions_order_id",
+            "unique": false,
+            "columnNames": [
+              "order_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_executions_order_id` ON `${TABLE_NAME}` (`order_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "orders",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "order_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "portfolio_daily_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `snapshot_date` INTEGER NOT NULL, `cash` INTEGER NOT NULL, `market_value` INTEGER NOT NULL, `total_asset` INTEGER NOT NULL, `daily_profit` INTEGER NOT NULL, `daily_return` INTEGER NOT NULL, `cumulative_profit` INTEGER NOT NULL, `cumulative_return` INTEGER NOT NULL, `drawdown` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snapshotDate",
+            "columnName": "snapshot_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cash",
+            "columnName": "cash",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "marketValue",
+            "columnName": "market_value",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalAsset",
+            "columnName": "total_asset",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dailyProfit",
+            "columnName": "daily_profit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dailyReturn",
+            "columnName": "daily_return",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cumulativeProfit",
+            "columnName": "cumulative_profit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cumulativeReturn",
+            "columnName": "cumulative_return",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "drawdown",
+            "columnName": "drawdown",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_portfolio_daily_snapshots_run_date",
+            "unique": true,
+            "columnNames": [
+              "strategy_run_id",
+              "snapshot_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_portfolio_daily_snapshots_run_date` ON `${TABLE_NAME}` (`strategy_run_id`, `snapshot_date`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "ai_advice_requests",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `evaluation_id` INTEGER NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `prompt_version` TEXT NOT NULL, `request_payload` TEXT, `requested_at` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`evaluation_id`) REFERENCES `stock_evaluations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evaluationId",
+            "columnName": "evaluation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "promptVersion",
+            "columnName": "prompt_version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestPayload",
+            "columnName": "request_payload",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requestedAt",
+            "columnName": "requested_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "idx_ai_advice_requests_evaluation_id",
+            "unique": false,
+            "columnNames": [
+              "evaluation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_ai_advice_requests_evaluation_id` ON `${TABLE_NAME}` (`evaluation_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "stock_evaluations",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "evaluation_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "ai_advice_results",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `request_id` INTEGER NOT NULL, `recommendation` TEXT NOT NULL, `confidence` INTEGER, `summary` TEXT, `reasoning_summary` TEXT, `risk_notes` TEXT, `raw_response` TEXT, `used_in_decision` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`request_id`) REFERENCES `ai_advice_requests`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestId",
+            "columnName": "request_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recommendation",
+            "columnName": "recommendation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "summary",
+            "columnName": "summary",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "reasoningSummary",
+            "columnName": "reasoning_summary",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "riskNotes",
+            "columnName": "risk_notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rawResponse",
+            "columnName": "raw_response",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "usedInDecision",
+            "columnName": "used_in_decision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_ai_advice_results_request_id",
+            "unique": true,
+            "columnNames": [
+              "request_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_ai_advice_results_request_id` ON `${TABLE_NAME}` (`request_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "ai_advice_requests",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "request_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "cash_ledger",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `event_type` TEXT NOT NULL, `amount` INTEGER NOT NULL, `balance_after` INTEGER NOT NULL, `reference_type` TEXT, `reference_id` INTEGER, `event_date` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventType",
+            "columnName": "event_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "balanceAfter",
+            "columnName": "balance_after",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "referenceType",
+            "columnName": "reference_type",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "referenceId",
+            "columnName": "reference_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "eventDate",
+            "columnName": "event_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "idx_cash_ledger_run_created",
+            "unique": false,
+            "columnNames": [
+              "strategy_run_id",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_cash_ledger_run_created` ON `${TABLE_NAME}` (`strategy_run_id`, `id`)"
+          },
+          {
+            "name": "idx_cash_ledger_run_event_date",
+            "unique": false,
+            "columnNames": [
+              "strategy_run_id",
+              "event_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_cash_ledger_run_event_date` ON `${TABLE_NAME}` (`strategy_run_id`, `event_date`)"
+          },
+          {
+            "name": "idx_cash_ledger_run_event_type",
+            "unique": false,
+            "columnNames": [
+              "strategy_run_id",
+              "event_type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_cash_ledger_run_event_type` ON `${TABLE_NAME}` (`strategy_run_id`, `event_type`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "paper_trading_policies",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `policy_version` TEXT NOT NULL, `buy_allocation_rate` INTEGER NOT NULL, `commission_rate` INTEGER NOT NULL, `sell_tax_rate` INTEGER NOT NULL, `slippage_bps` INTEGER NOT NULL, `execution_price_policy` TEXT NOT NULL, `additional_buy_policy` TEXT NOT NULL, `sell_policy` TEXT NOT NULL, `short_selling_allowed` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "policyVersion",
+            "columnName": "policy_version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyAllocationRate",
+            "columnName": "buy_allocation_rate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "commissionRate",
+            "columnName": "commission_rate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sellTaxRate",
+            "columnName": "sell_tax_rate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slippageBps",
+            "columnName": "slippage_bps",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "executionPricePolicy",
+            "columnName": "execution_price_policy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "additionalBuyPolicy",
+            "columnName": "additional_buy_policy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sellPolicy",
+            "columnName": "sell_policy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shortSellingAllowed",
+            "columnName": "short_selling_allowed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_paper_trading_policies_strategy_run",
+            "unique": true,
+            "columnNames": [
+              "strategy_run_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_paper_trading_policies_strategy_run` ON `${TABLE_NAME}` (`strategy_run_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "strategy_run_instruments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `instrument_id` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "instrumentId",
+            "columnName": "instrument_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_strategy_run_instruments_run_instrument",
+            "unique": true,
+            "columnNames": [
+              "strategy_run_id",
+              "instrument_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_strategy_run_instruments_run_instrument` ON `${TABLE_NAME}` (`strategy_run_id`, `instrument_id`)"
+          },
+          {
+            "name": "idx_strategy_run_instruments_run",
+            "unique": false,
+            "columnNames": [
+              "strategy_run_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_strategy_run_instruments_run` ON `${TABLE_NAME}` (`strategy_run_id`)"
+          },
+          {
+            "name": "idx_strategy_run_instruments_instrument",
+            "unique": false,
+            "columnNames": [
+              "instrument_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_strategy_run_instruments_instrument` ON `${TABLE_NAME}` (`instrument_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "instruments",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "instrument_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "forward_test_cycles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_run_id` INTEGER NOT NULL, `market_date` INTEGER NOT NULL, `status` TEXT NOT NULL, `current_stage` TEXT NOT NULL, `attempt_count` INTEGER NOT NULL, `error_code` TEXT, `error_message` TEXT, `retryable` INTEGER NOT NULL, `started_at` INTEGER, `completed_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strategyRunId",
+            "columnName": "strategy_run_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "marketDate",
+            "columnName": "market_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentStage",
+            "columnName": "current_stage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "error_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "error_message",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "retryable",
+            "columnName": "retryable",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "started_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completed_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "uq_forward_test_cycles_run_date",
+            "unique": true,
+            "columnNames": [
+              "strategy_run_id",
+              "market_date"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `uq_forward_test_cycles_run_date` ON `${TABLE_NAME}` (`strategy_run_id`, `market_date`)"
+          },
+          {
+            "name": "idx_forward_test_cycles_run_status",
+            "unique": false,
+            "columnNames": [
+              "strategy_run_id",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_forward_test_cycles_run_status` ON `${TABLE_NAME}` (`strategy_run_id`, `status`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "strategy_runs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "strategy_run_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0856bcf6b20fceee9e9a8c4d5a5ed70a')"
+    ]
+  }
+}

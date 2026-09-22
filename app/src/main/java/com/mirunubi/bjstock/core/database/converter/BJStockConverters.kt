@@ -8,6 +8,8 @@ import com.mirunubi.bjstock.core.model.CashLedgerEventType
 import com.mirunubi.bjstock.core.model.ExecutionPricePolicy
 import com.mirunubi.bjstock.core.model.FactorCategory
 import com.mirunubi.bjstock.core.model.FactorValueType
+import com.mirunubi.bjstock.core.model.ForwardCycleStage
+import com.mirunubi.bjstock.core.model.ForwardCycleStatus
 import com.mirunubi.bjstock.core.model.InstrumentType
 import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
@@ -120,6 +122,20 @@ class BJStockConverters {
 
     @TypeConverter
     fun codeToAiRecommendation(value: String): AiRecommendation = AiRecommendation.valueOf(value)
+
+    @TypeConverter
+    fun forwardCycleStatusToCode(value: ForwardCycleStatus): String = value.name
+
+    @TypeConverter
+    fun codeToForwardCycleStatus(value: String): ForwardCycleStatus =
+        ForwardCycleStatus.valueOf(value)
+
+    @TypeConverter
+    fun forwardCycleStageToCode(value: ForwardCycleStage): String = value.name
+
+    @TypeConverter
+    fun codeToForwardCycleStage(value: String): ForwardCycleStage =
+        ForwardCycleStage.valueOf(value)
 
     @TypeConverter
     fun boardToCode(value: Board): String = value.name

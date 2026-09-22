@@ -71,8 +71,12 @@ class PaperTradingEngineTest {
             database = database,
             strategyDao = database.strategyDao(),
             strategyRunDao = database.strategyRunDao(),
+            universeDao = database.strategyRunInstrumentDao(),
+            instrumentDao = database.instrumentDao(),
+            marketDailyBarDao = database.marketDailyBarDao(),
             cashLedger = cashLedger,
             policyService = policyService,
+            factorRegistry = SystemFactorRegistryFactory.create(),
             defaultPolicyTemplate = { PaperTradingPolicy.ZERO_COST },
             now = { Instant.EPOCH },
         )
@@ -250,6 +254,43 @@ class PaperTradingEngineTest {
             OrderStatus.PENDING_EXECUTION,
             database.orderDao().findByRun(runId).single().status,
         )
+    }
+
+    @Test
+    fun pendingFill_asOfMarketDate_blocksFutureBarPoison() = runBlocking {
+        val evaluationId = insertEvaluation(instrumentA, friday, TradeDecision.BUY)
+        processEvaluation(evaluationId)
+        // Monday missing; Tuesday+Wednesday already in DB (poison).
+        insertBar(instrumentA, monday.plusDays(1), open = 50_000, close = 51_000) // Tuesday
+        insertBar(instrumentA, monday.plusDays(2), open = 52_000, close = 53_000) // Wednesday
+
+        val mondayAttempt = processPending(runId, asOfMarketDate = monday)
+        assertEquals(PaperTradeAction.PENDING, mondayAttempt.single().action)
+        assertEquals(0, database.executionDao().findByRun(runId).size)
+        assertEquals(
+            OrderStatus.PENDING_EXECUTION,
+            database.orderDao().findByRun(runId).single().status,
+        )
+
+        val tuesday = monday.plusDays(1)
+        val tuesdayFill = processPending(runId, asOfMarketDate = tuesday)
+        assertEquals(PaperTradeAction.FILLED, tuesdayFill.single().action)
+        assertEquals(
+            tuesday,
+            MarketExecutionTime.toTradeDate(
+                database.executionDao().findByRun(runId).single().executedAt,
+            ),
+        )
+    }
+
+    @Test
+    fun pendingFill_sameDayBar_doesNotFill() = runBlocking {
+        val evaluationId = insertEvaluation(instrumentA, friday, TradeDecision.BUY)
+        processEvaluation(evaluationId)
+        insertBar(instrumentA, friday, open = 50_000, close = 51_000)
+        val sameDay = processPending(runId, asOfMarketDate = friday)
+        assertEquals(PaperTradeAction.PENDING, sameDay.single().action)
+        assertEquals(0, database.executionDao().findByRun(runId).size)
     }
 
     @Test

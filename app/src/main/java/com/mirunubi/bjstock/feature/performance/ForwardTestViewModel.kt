@@ -13,15 +13,43 @@ import com.mirunubi.bjstock.core.analytics.RecentExecutionView
 import com.mirunubi.bjstock.core.analytics.RunComparisonRow
 import com.mirunubi.bjstock.core.analytics.RunPerformanceSummary
 import com.mirunubi.bjstock.core.analytics.TradingPolicyView
+import com.mirunubi.bjstock.core.database.dao.ForwardTestCycleDao
+import com.mirunubi.bjstock.core.database.dao.InstrumentDao
+import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
+import com.mirunubi.bjstock.core.database.dao.StrategyRunInstrumentDao
+import com.mirunubi.bjstock.core.database.entity.ForwardTestCycleEntity
+import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyRunEntity
+import com.mirunubi.bjstock.core.forward.ForwardOrchestratorResult
+import com.mirunubi.bjstock.core.forward.ForwardTestClock
+import com.mirunubi.bjstock.core.forward.ForwardTestOrchestrator
+import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
+import com.mirunubi.bjstock.core.model.ForwardCycleStatus
+import com.mirunubi.bjstock.core.model.RunStatus
+import com.mirunubi.bjstock.core.strategy.StrategyRunService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.math.BigDecimal
+import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+enum class ForwardOpsStatus {
+    UP_TO_DATE,
+    CATCHING_UP,
+    WAITING_FOR_MARKET_DATA,
+    FAILED,
+    BLOCKED,
+}
+
+data class UniverseInstrumentView(
+    val instrumentId: Long,
+    val symbol: String,
+    val name: String,
+)
 
 data class ForwardTestUiState(
     val runs: List<StrategyRunEntity> = emptyList(),
@@ -35,6 +63,15 @@ data class ForwardTestUiState(
     val compareCandidates: List<StrategyRunEntity> = emptyList(),
     val selectedCompareIds: Set<Long> = emptySet(),
     val comparisonRows: List<RunComparisonRow> = emptyList(),
+    val autoEnabled: Boolean = false,
+    val lastCompleteDate: LocalDate? = null,
+    val latestMarketDate: LocalDate? = null,
+    val opsStatus: ForwardOpsStatus? = null,
+    val universe: List<UniverseInstrumentView> = emptyList(),
+    val universeEditable: Boolean = false,
+    val cycleHistory: List<ForwardTestCycleEntity> = emptyList(),
+    val instrumentSearch: String = "",
+    val instrumentSearchResults: List<InstrumentEntity> = emptyList(),
     val message: String? = null,
     val loading: Boolean = false,
 )
@@ -43,6 +80,14 @@ data class ForwardTestUiState(
 class ForwardTestViewModel @Inject constructor(
     private val analytics: PerformanceAnalyticsService,
     private val repository: PerformanceAnalyticsRepository,
+    private val orchestrator: ForwardTestOrchestrator,
+    private val scheduler: ForwardTestScheduler,
+    private val runService: StrategyRunService,
+    private val cycleDao: ForwardTestCycleDao,
+    private val universeDao: StrategyRunInstrumentDao,
+    private val instrumentDao: InstrumentDao,
+    private val marketDailyBarDao: MarketDailyBarDao,
+    private val clock: ForwardTestClock,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ForwardTestUiState())
     val uiState: StateFlow<ForwardTestUiState> = _uiState.asStateFlow()
@@ -53,6 +98,75 @@ class ForwardTestViewModel @Inject constructor(
 
     fun selectRun(runId: Long) {
         viewModelScope.launch { loadDashboard(runId) }
+    }
+
+    fun toggleAuto(enabled: Boolean) {
+        scheduler.setAutoEnabled(enabled)
+        _uiState.update { it.copy(autoEnabled = scheduler.isAutoEnabled()) }
+    }
+
+    fun runNow() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(loading = true, message = null) }
+            val result = orchestrator.runForwardTests()
+            _uiState.update {
+                it.copy(
+                    loading = false,
+                    message = formatResult(result),
+                )
+            }
+            _uiState.value.selectedRunId?.let { loadDashboard(it) }
+                ?: reloadRuns()
+        }
+    }
+
+    fun retryFailedCycle() {
+        val runId = _uiState.value.selectedRunId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(loading = true, message = null) }
+            val result = orchestrator.retryFailedCycle(runId)
+            _uiState.update {
+                it.copy(
+                    loading = false,
+                    message = formatResult(result),
+                )
+            }
+            loadDashboard(runId)
+        }
+    }
+
+    fun setInstrumentSearch(query: String) {
+        _uiState.update { it.copy(instrumentSearch = query) }
+        viewModelScope.launch {
+            val results = if (query.isBlank()) {
+                emptyList()
+            } else {
+                instrumentDao.searchActive("%${query.trim()}%", limit = 20)
+            }
+            _uiState.update { it.copy(instrumentSearchResults = results) }
+        }
+    }
+
+    fun addInstrument(instrumentId: Long) {
+        val runId = _uiState.value.selectedRunId ?: return
+        viewModelScope.launch {
+            runCatching { runService.addInstrument(runId, instrumentId) }
+                .onFailure { e ->
+                    _uiState.update { it.copy(message = e.message) }
+                }
+            loadDashboard(runId)
+        }
+    }
+
+    fun removeInstrument(instrumentId: Long) {
+        val runId = _uiState.value.selectedRunId ?: return
+        viewModelScope.launch {
+            runCatching { runService.removeInstrument(runId, instrumentId) }
+                .onFailure { e ->
+                    _uiState.update { it.copy(message = e.message) }
+                }
+            loadDashboard(runId)
+        }
     }
 
     fun toggleCompare(runId: Long) {
@@ -85,6 +199,7 @@ class ForwardTestViewModel @Inject constructor(
                 runs = runs,
                 compareCandidates = runs,
                 selectedRunId = it.selectedRunId ?: runs.firstOrNull()?.id,
+                autoEnabled = scheduler.isAutoEnabled(),
             )
         }
         _uiState.value.selectedRunId?.let { loadDashboard(it) }
@@ -113,6 +228,32 @@ class ForwardTestViewModel @Inject constructor(
         } else {
             null
         }
+
+        val run = runService.findById(runId)
+        val universeRows = universeDao.findByRun(runId)
+        val universeViews = universeRows.mapNotNull { row ->
+            val instrument = instrumentDao.findById(row.instrumentId) ?: return@mapNotNull null
+            UniverseInstrumentView(
+                instrumentId = instrument.id,
+                symbol = instrument.symbol,
+                name = instrument.name,
+            )
+        }
+        val lastComplete = cycleDao.findLastCompleteDate(runId)
+        val latestMarket = universeRows.mapNotNull { row ->
+            marketDailyBarDao.findLatest(row.instrumentId)?.tradeDate
+        }.maxOrNull()
+        val cycles = cycleDao.findRecentByRun(runId, limit = 30)
+        val failed = cycleDao.findOldestByStatus(runId, ForwardCycleStatus.FAILED)
+        val throughDate = clock.throughDate(run?.endDate)
+        val opsStatus = resolveOpsStatus(
+            run = run,
+            lastComplete = lastComplete,
+            latestMarket = latestMarket,
+            throughDate = throughDate,
+            failed = failed,
+        )
+
         _uiState.update {
             it.copy(
                 loading = false,
@@ -122,9 +263,57 @@ class ForwardTestViewModel @Inject constructor(
                 openPositions = positions,
                 recentExecutions = executions,
                 policy = policy,
+                autoEnabled = scheduler.isAutoEnabled(),
+                lastCompleteDate = lastComplete,
+                latestMarketDate = latestMarket,
+                opsStatus = opsStatus,
+                universe = universeViews,
+                universeEditable = run?.status == RunStatus.DRAFT,
+                cycleHistory = cycles,
                 message = mutationWarning ?: summary.errorMessage,
             )
         }
+    }
+
+    private fun resolveOpsStatus(
+        run: StrategyRunEntity?,
+        lastComplete: LocalDate?,
+        latestMarket: LocalDate?,
+        throughDate: LocalDate,
+        failed: ForwardTestCycleEntity?,
+    ): ForwardOpsStatus {
+        if (failed != null && !failed.retryable) return ForwardOpsStatus.BLOCKED
+        if (failed != null) return ForwardOpsStatus.FAILED
+        if (run == null || run.status == RunStatus.DRAFT) {
+            return ForwardOpsStatus.WAITING_FOR_MARKET_DATA
+        }
+        if (latestMarket == null) return ForwardOpsStatus.WAITING_FOR_MARKET_DATA
+        val target = if (run.endDate != null && run.endDate.isBefore(throughDate)) {
+            run.endDate
+        } else {
+            minOf(throughDate, latestMarket)
+        }
+        if (lastComplete == null) {
+            return if (latestMarket < run.startDate) {
+                ForwardOpsStatus.WAITING_FOR_MARKET_DATA
+            } else {
+                ForwardOpsStatus.CATCHING_UP
+            }
+        }
+        return if (!lastComplete.isBefore(target)) {
+            ForwardOpsStatus.UP_TO_DATE
+        } else {
+            ForwardOpsStatus.CATCHING_UP
+        }
+    }
+
+    private fun formatResult(result: ForwardOrchestratorResult): String = when (result) {
+        is ForwardOrchestratorResult.Ok ->
+            "Processed ${result.processedDates.size} day(s)" +
+                (result.message?.let { " — $it" } ?: "")
+        is ForwardOrchestratorResult.Blocked ->
+            "Blocked ${result.marketDate ?: ""} ${result.errorCode}: ${result.errorMessage}"
+        is ForwardOrchestratorResult.NoOp -> result.reason
     }
 
     companion object {
@@ -136,5 +325,14 @@ class ForwardTestViewModel @Inject constructor(
 
         fun formatRateAsAssumption(rate: BigDecimal): String =
             PerformanceMath.formatSignedPercent(rate).removePrefix("+")
+
+        fun formatOpsStatus(status: ForwardOpsStatus?): String = when (status) {
+            ForwardOpsStatus.UP_TO_DATE -> "UP TO DATE"
+            ForwardOpsStatus.CATCHING_UP -> "CATCHING UP"
+            ForwardOpsStatus.WAITING_FOR_MARKET_DATA -> "WAITING FOR MARKET DATA"
+            ForwardOpsStatus.FAILED -> "FAILED"
+            ForwardOpsStatus.BLOCKED -> "BLOCKED"
+            null -> "—"
+        }
     }
 }

@@ -347,6 +347,77 @@ Create as DRAFT/READY, start RUNNING, then COMPLETED or CANCELLED. This row is t
 
 ---
 
+## strategy_run_instruments
+
+**Purpose**
+
+Forward-test universe snapshot for one strategy run. Editable only while the run is `DRAFT`; immutable after `READY`.
+
+**PK**
+
+- `id`
+
+**FK**
+
+- `strategy_run_id → strategy_runs.id` RESTRICT
+- `instrument_id → instruments.id` RESTRICT
+
+**Unique**
+
+- `UNIQUE (strategy_run_id, instrument_id)`
+
+**Main Columns**
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| strategy_run_id | BIGINT | run owner |
+| instrument_id | BIGINT | universe member |
+| created_at | TIMESTAMPTZ | |
+
+**Lifecycle**
+
+Insert/delete only for DRAFT runs. Full-market auto enrollment is forbidden.
+
+---
+
+## forward_test_cycles
+
+**Purpose**
+
+One market-date processing attempt for one strategy run (catch-up / daily pipeline).
+
+**PK**
+
+- `id`
+
+**FK**
+
+- `strategy_run_id → strategy_runs.id` RESTRICT
+
+**Unique**
+
+- `UNIQUE (strategy_run_id, market_date)`
+
+**Main Columns**
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| market_date | DATE | trading day being processed |
+| status | TEXT | PENDING, RUNNING, COMPLETE, FAILED |
+| current_stage | TEXT | PENDING_FILLS → FACTORS → EVALUATIONS → ORDER_CREATION → SNAPSHOT → COMPLETE |
+| attempt_count | INTEGER | >= 0 |
+| error_code | TEXT | nullable; never secrets |
+| error_message | TEXT | nullable; sanitized |
+| retryable | BOOLEAN | |
+| started_at / completed_at | TIMESTAMPTZ | nullable |
+| created_at / updated_at | TIMESTAMPTZ | |
+
+**Lifecycle**
+
+Create when a market date is first processed. FAILED dates block later dates until retry succeeds. `error_message` must never contain KIS/OpenAI secrets.
+
+---
+
 ## stock_evaluations
 
 **Purpose**

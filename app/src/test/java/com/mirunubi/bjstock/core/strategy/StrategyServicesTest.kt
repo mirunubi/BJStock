@@ -327,8 +327,12 @@ class StrategyServicesTest {
             database = database,
             strategyDao = database.strategyDao(),
             strategyRunDao = database.strategyRunDao(),
+            universeDao = database.strategyRunInstrumentDao(),
+            instrumentDao = database.instrumentDao(),
+            marketDailyBarDao = database.marketDailyBarDao(),
             cashLedger = cash,
             policyService = policies,
+            factorRegistry = SystemFactorRegistryFactory.create(),
             now = { Instant.EPOCH },
         ).createReadyRun(versionId, "Run", date, 10_000_000)
     }

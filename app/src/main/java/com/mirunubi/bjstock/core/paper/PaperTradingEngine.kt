@@ -36,9 +36,12 @@ class PaperTradingEngine(
         return evaluations.map { processEvaluation(it.id) }
     }
 
-    suspend fun processPendingOrders(strategyRunId: Long): List<PaperTradeResult> {
+    suspend fun processPendingOrders(
+        strategyRunId: Long,
+        asOfMarketDate: LocalDate? = null,
+    ): List<PaperTradeResult> {
         ensureRunning(strategyRunId)
-        return processPending(strategyRunId)
+        return processPending(strategyRunId, asOfMarketDate)
     }
 
     suspend fun createDailySnapshot(

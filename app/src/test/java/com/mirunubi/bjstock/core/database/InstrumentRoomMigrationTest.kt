@@ -260,11 +260,107 @@ class InstrumentRoomMigrationTest {
         }
     }
 
+    @Test
+    fun migrate5To6_createsUniverseAndForwardCycleTables() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(V5_TEST_DB)
+
+        context.openOrCreateDatabase(V5_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            sqlite.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS strategy_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    run_name TEXT NOT NULL
+                )
+                """.trimIndent(),
+            )
+            sqlite.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS instruments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    symbol TEXT NOT NULL
+                )
+                """.trimIndent(),
+            )
+            sqlite.execSQL("INSERT INTO strategy_runs (id, run_name) VALUES (7, 'legacy')")
+            sqlite.execSQL("INSERT INTO instruments (id, symbol) VALUES (3, '005930')")
+            sqlite.version = 5
+        }
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(V5_TEST_DB)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(6) {
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            error("v5 database should already exist")
+                        }
+
+                        override fun onUpgrade(
+                            db: androidx.sqlite.db.SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) {
+                            assertEquals(5, oldVersion)
+                            assertEquals(6, newVersion)
+                            BJStockMigrations.MIGRATION_5_6.migrate(db)
+                        }
+                    },
+                )
+                .build(),
+        )
+
+        helper.writableDatabase.use { migrated ->
+            migrated.query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='strategy_run_instruments'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+            }
+            migrated.query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='forward_test_cycles'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+            }
+            migrated.execSQL(
+                """
+                INSERT INTO strategy_run_instruments (strategy_run_id, instrument_id, created_at)
+                VALUES (7, 3, 0)
+                """.trimIndent(),
+            )
+            migrated.execSQL(
+                """
+                INSERT INTO forward_test_cycles (
+                    strategy_run_id, market_date, status, current_stage, attempt_count,
+                    retryable, created_at, updated_at
+                ) VALUES (7, 20354, 'COMPLETE', 'COMPLETE', 1, 0, 0, 0)
+                """.trimIndent(),
+            )
+            migrated.query("SELECT strategy_run_id, instrument_id FROM strategy_run_instruments")
+                .use {
+                    assertEquals(true, it.moveToFirst())
+                    assertEquals(7L, it.getLong(0))
+                    assertEquals(3L, it.getLong(1))
+                }
+            migrated.query(
+                "SELECT strategy_run_id, status FROM forward_test_cycles WHERE strategy_run_id = 7",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(7L, it.getLong(0))
+                assertEquals("COMPLETE", it.getString(1))
+            }
+            migrated.query("SELECT id, run_name FROM strategy_runs WHERE id = 7").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("legacy", it.getString(1))
+            }
+        }
+    }
+
     companion object {
         private const val TEST_DB = "instrument-migration-test"
         private const val V2_TEST_DB = "strategy-weight-migration-test"
         private const val V3_TEST_DB = "cash-ledger-migration-test"
         private const val V4_TEST_DB = "paper-policy-migration-test"
+        private const val V5_TEST_DB = "forward-orch-migration-test"
         private const val V1_INSTRUMENTS =
             "CREATE TABLE IF NOT EXISTS `instruments` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `market` TEXT NOT NULL, `symbol` TEXT NOT NULL, `name` TEXT NOT NULL, `sector` TEXT, `industry` TEXT, `currency` TEXT NOT NULL, `is_active` INTEGER NOT NULL, `listed_date` INTEGER, `delisted_date` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)"
         private const val V2_STRATEGY_FACTOR_WEIGHTS =

@@ -50,6 +50,10 @@ Execution Price = that bar's open (+ optional slippage policy)
 
 If no later bar exists, the order stays `PENDING_EXECUTION`.
 
+Forward-test orchestration passes `asOfMarketDate` so fills only consider bars with
+`signalDate < trade_date <= asOfMarketDate`. Future bars already stored in Room cannot
+poison pending execution (look-ahead blocked).
+
 ## Costs
 
 Costs come from the run's policy snapshot (`commission_rate`, `sell_tax_rate`, `slippage_bps`).

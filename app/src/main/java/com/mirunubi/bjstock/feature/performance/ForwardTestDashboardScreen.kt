@@ -16,12 +16,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -33,7 +36,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mirunubi.bjstock.core.analytics.DailyPerformancePoint
 import com.mirunubi.bjstock.core.analytics.PerformanceMath
 import com.mirunubi.bjstock.core.analytics.PerformanceStatus
+import com.mirunubi.bjstock.core.model.ForwardCycleStatus
 import java.math.BigDecimal
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +87,22 @@ fun ForwardTestDashboardScreen(
                 }
             }
 
+            OrchestrationSection(
+                state = state,
+                onToggleAuto = viewModel::toggleAuto,
+                onRunNow = viewModel::runNow,
+                onRetry = viewModel::retryFailedCycle,
+            )
+
+            UniverseSection(
+                state = state,
+                onSearch = viewModel::setInstrumentSearch,
+                onAdd = viewModel::addInstrument,
+                onRemove = viewModel::removeInstrument,
+            )
+
+            CycleHistorySection(state.cycleHistory)
+
             state.message?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
@@ -109,6 +130,111 @@ fun ForwardTestDashboardScreen(
                     OpenPositionsSection(state.openPositions)
                     ExecutionsSection(state.recentExecutions)
                     PolicySection(state.policy)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrchestrationSection(
+    state: ForwardTestUiState,
+    onToggleAuto: (Boolean) -> Unit,
+    onRunNow: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Forward Orchestration", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Auto Forward Test ${if (state.autoEnabled) "ON" else "OFF"}")
+                Switch(
+                    checked = state.autoEnabled,
+                    onCheckedChange = onToggleAuto,
+                )
+            }
+            Text("Last Complete: ${state.lastCompleteDate ?: "—"}")
+            Text("Latest Market Data: ${state.latestMarketDate ?: "—"}")
+            Text("Status: ${ForwardTestViewModel.formatOpsStatus(state.opsStatus)}")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onRunNow, enabled = !state.loading) {
+                    Text("Run Now")
+                }
+                TextButton(onClick = onRetry, enabled = !state.loading) {
+                    Text("Retry Failed Cycle")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UniverseSection(
+    state: ForwardTestUiState,
+    onSearch: (String) -> Unit,
+    onAdd: (Long) -> Unit,
+    onRemove: (Long) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Universe", style = MaterialTheme.typography.titleMedium)
+            if (state.universe.isEmpty()) {
+                Text("No instruments")
+            } else {
+                state.universe.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${row.symbol} ${row.name}")
+                        if (state.universeEditable) {
+                            TextButton(onClick = { onRemove(row.instrumentId) }) {
+                                Text("Remove")
+                            }
+                        }
+                    }
+                }
+            }
+            if (state.universeEditable) {
+                OutlinedTextField(
+                    value = state.instrumentSearch,
+                    onValueChange = onSearch,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Add instrument (search)") },
+                    singleLine = true,
+                )
+                state.instrumentSearchResults.forEach { instrument ->
+                    TextButton(onClick = { onAdd(instrument.id) }) {
+                        Text("Add ${instrument.symbol} ${instrument.name}")
+                    }
+                }
+            } else {
+                Text("Read only after READY", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CycleHistorySection(cycles: List<com.mirunubi.bjstock.core.database.entity.ForwardTestCycleEntity>) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Cycle History", style = MaterialTheme.typography.titleMedium)
+            if (cycles.isEmpty()) {
+                Text("No cycles yet")
+            } else {
+                cycles.forEach { cycle ->
+                    val err = if (cycle.status == ForwardCycleStatus.FAILED) {
+                        " ${cycle.errorCode ?: ""} ${cycle.errorMessage ?: ""}".trimEnd()
+                    } else {
+                        ""
+                    }
+                    Text("${cycle.marketDate} ${cycle.status}$err")
                 }
             }
         }

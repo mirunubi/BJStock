@@ -27,6 +27,7 @@ enum class StrategyErrorKind {
     NOT_FOUND,
     NOT_DRAFT,
     IMMUTABLE,
+    INVALID_STATE,
     INVALID_THRESHOLDS,
     INVALID_WEIGHT,
     INVALID_GATE,

@@ -103,16 +103,18 @@ Status: complete for build / JVM-Robolectric verification. Clipboard/Share/Paste
 
 Run paper trading for one year or longer and review strategy quality.
 
+Status: complete for build / JVM-Robolectric verification. Physical WorkManager + KIS daily automation runtime is DEFERRED — physical device pending.
+
 ### Future — Live Trading
 
 Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 8 — AI Advisory Foundation is build/unit complete.
+Phase 9 — Long-Term Forward Test Orchestration is build/unit complete.
 
-Next: Phase 9 — Long-Term Forward Test Orchestration.
+Next: Physical Device Runtime Gate (WorkManager / KIS daily automation), then Future — Live Trading (out of current scope).
 
-Do not start Phase 9 until Phase 8 is accepted.
+Do not enable Auto Forward Test by default until physical-device acceptance.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

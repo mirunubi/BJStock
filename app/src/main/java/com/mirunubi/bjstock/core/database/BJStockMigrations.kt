@@ -116,4 +116,74 @@ object BJStockMigrations {
             )
         }
     }
+
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `strategy_run_instruments` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `strategy_run_id` INTEGER NOT NULL,
+                    `instrument_id` INTEGER NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT,
+                    FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_strategy_run_instruments_run_instrument`
+                ON `strategy_run_instruments` (`strategy_run_id`, `instrument_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_strategy_run_instruments_run`
+                ON `strategy_run_instruments` (`strategy_run_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_strategy_run_instruments_instrument`
+                ON `strategy_run_instruments` (`instrument_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `forward_test_cycles` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `strategy_run_id` INTEGER NOT NULL,
+                    `market_date` INTEGER NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `current_stage` TEXT NOT NULL,
+                    `attempt_count` INTEGER NOT NULL,
+                    `error_code` TEXT,
+                    `error_message` TEXT,
+                    `retryable` INTEGER NOT NULL,
+                    `started_at` INTEGER,
+                    `completed_at` INTEGER,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_forward_test_cycles_run_date`
+                ON `forward_test_cycles` (`strategy_run_id`, `market_date`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_forward_test_cycles_run_status`
+                ON `forward_test_cycles` (`strategy_run_id`, `status`)
+                """.trimIndent(),
+            )
+        }
+    }
 }

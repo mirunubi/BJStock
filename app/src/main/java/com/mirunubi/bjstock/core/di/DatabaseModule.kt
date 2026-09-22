@@ -8,6 +8,7 @@ import com.mirunubi.bjstock.core.database.dao.AiAdviceDao
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
+import com.mirunubi.bjstock.core.database.dao.ForwardTestCycleDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.OrderDao
@@ -17,6 +18,7 @@ import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
+import com.mirunubi.bjstock.core.database.dao.StrategyRunInstrumentDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,6 +42,7 @@ object DatabaseModule {
                 BJStockMigrations.MIGRATION_2_3,
                 BJStockMigrations.MIGRATION_3_4,
                 BJStockMigrations.MIGRATION_4_5,
+                BJStockMigrations.MIGRATION_5_6,
             )
             .build()
     }
@@ -86,4 +89,12 @@ object DatabaseModule {
 
     @Provides
     fun provideAiAdviceDao(database: BJStockDatabase): AiAdviceDao = database.aiAdviceDao()
+
+    @Provides
+    fun provideStrategyRunInstrumentDao(database: BJStockDatabase): StrategyRunInstrumentDao =
+        database.strategyRunInstrumentDao()
+
+    @Provides
+    fun provideForwardTestCycleDao(database: BJStockDatabase): ForwardTestCycleDao =
+        database.forwardTestCycleDao()
 }

@@ -84,6 +84,10 @@ strategy_versions
       ▼
 strategy_runs
       │
+      ├──────── strategy_run_instruments
+      │
+      ├──────── forward_test_cycles
+      │
       ├──────── stock_evaluations
       │                 │
       │                 ▼
@@ -136,6 +140,8 @@ Each strategy-factor row pins `factor_calculation_version`. Enabled weights must
 ### Forward Test
 
 - `strategy_runs`
+- `strategy_run_instruments` (per-run universe snapshot; immutable after READY)
+- `forward_test_cycles` (one market-date processing record per run)
 
 ### Evaluation
 
