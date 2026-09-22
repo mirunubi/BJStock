@@ -36,7 +36,7 @@ Storage rules:
 
 **Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
 
-Phase 3-D added `standard_code`, `board`, and `instrument_type`. Room version is 2. Migration(1, 2) adds the columns with `board`/`instrument_type` default `OTHER`. `fallbackToDestructiveMigration` is not used.
+Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Explicit Migration(1, 2) and Migration(2, 3) are registered; `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -112,7 +112,7 @@ Phase 4 persistence:
 - System factor source is `BJSTOCK_MARKET_ENGINE`, not `KIS`.
 - UPSERT by `(instrument_id, factor_id, evaluation_date, calculation_version)`.
 - `NO_DATA` / `INSUFFICIENT_HISTORY` / `INVALID_DATA` are not inserted.
-- Room schema version stays 2. Factor DAO/repository addition does not change columns.
+- Room schema version stayed 2 for Phase 4. Phase 5 changes it to 3 for strategy factor-version pinning.
 
 ---
 
@@ -168,11 +168,13 @@ Phase 4 persistence:
 
 **Unique:** `(strategy_version_id, factor_id)`
 
+**Columns:** `factor_calculation_version` TEXT is a nonblank pinned registry version. Migration 2→3 gives existing rows `v1`.
+
 **Numeric Mapping:** `weight` NUMERIC(8,6) → Long * 1_000_000. min/max score Long * 10_000.
 
 **Date/Time Mapping:** Instant UTC
 
-**Constraint Difference:** weight 0..1 CHECK INTENTIONAL omission. Sum=1.0 remains SQL/app verification, not a trigger.
+**Constraint Difference:** weight 0..1 and nonblank-version CHECKs are application validation in Room. Enabled sum=1.0 is exact scaled-integer activation validation, not a trigger.
 
 ---
 

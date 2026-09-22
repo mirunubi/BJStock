@@ -12,6 +12,64 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class InstrumentRoomMigrationTest {
     @Test
+    fun migrate2To3_keepsStrategyWeightAndPinsV1() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(V2_TEST_DB)
+
+        context.openOrCreateDatabase(V2_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            sqlite.execSQL(V2_STRATEGY_FACTOR_WEIGHTS)
+            sqlite.execSQL(
+                """
+                INSERT INTO strategy_factor_weights
+                    (id, strategy_version_id, factor_id, weight, min_score, max_score, enabled, created_at)
+                VALUES
+                    (17, 9, 3, 250000, 400000, NULL, 1, 0)
+                """.trimIndent(),
+            )
+            sqlite.version = 2
+        }
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(V2_TEST_DB)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(3) {
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            error("v2 database should already exist")
+                        }
+
+                        override fun onUpgrade(
+                            db: androidx.sqlite.db.SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) {
+                            assertEquals(2, oldVersion)
+                            assertEquals(3, newVersion)
+                            BJStockMigrations.MIGRATION_2_3.migrate(db)
+                        }
+                    },
+                )
+                .build(),
+        )
+
+        helper.writableDatabase.use { migrated ->
+            migrated.query(
+                """
+                SELECT id, strategy_version_id, factor_id, weight, factor_calculation_version
+                FROM strategy_factor_weights
+                """.trimIndent(),
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(17L, it.getLong(it.getColumnIndexOrThrow("id")))
+                assertEquals(9L, it.getLong(it.getColumnIndexOrThrow("strategy_version_id")))
+                assertEquals(3L, it.getLong(it.getColumnIndexOrThrow("factor_id")))
+                assertEquals(250000L, it.getLong(it.getColumnIndexOrThrow("weight")))
+                assertEquals("v1", it.getString(it.getColumnIndexOrThrow("factor_calculation_version")))
+            }
+        }
+    }
+
+    @Test
     fun migrate1To2_keepsExistingInstrumentAndDefaultsNewColumns() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(TEST_DB)
@@ -71,7 +129,10 @@ class InstrumentRoomMigrationTest {
 
     companion object {
         private const val TEST_DB = "instrument-migration-test"
+        private const val V2_TEST_DB = "strategy-weight-migration-test"
         private const val V1_INSTRUMENTS =
             "CREATE TABLE IF NOT EXISTS `instruments` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `market` TEXT NOT NULL, `symbol` TEXT NOT NULL, `name` TEXT NOT NULL, `sector` TEXT, `industry` TEXT, `currency` TEXT NOT NULL, `is_active` INTEGER NOT NULL, `listed_date` INTEGER, `delisted_date` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)"
+        private const val V2_STRATEGY_FACTOR_WEIGHTS =
+            "CREATE TABLE IF NOT EXISTS `strategy_factor_weights` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `strategy_version_id` INTEGER NOT NULL, `factor_id` INTEGER NOT NULL, `weight` INTEGER NOT NULL, `min_score` INTEGER, `max_score` INTEGER, `enabled` INTEGER NOT NULL, `created_at` INTEGER NOT NULL)"
     }
 }

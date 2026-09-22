@@ -285,3 +285,43 @@ Factor outputs are values only. They do not create BUY/HOLD/SELL decisions.
 ## D-071
 
 Financial-statement factors are not implemented until a trusted data source is chosen.
+
+## D-072
+
+Strategy versions explicitly pin each enabled factor's calculation version.
+
+## D-073
+
+ACTIVE strategy-version thresholds, enabled factors, weights, calculation versions, and gates are immutable. Changes require a new DRAFT version.
+
+## D-074
+
+Enabled factor weights use the existing scaled-integer policy and must sum exactly to 100%.
+
+## D-075
+
+A missing enabled factor is not replaced with zero and remaining weights are not renormalized.
+
+## D-076
+
+Factor min/max scores are inclusive eligibility gates, not weighted-score clamps.
+
+## D-077
+
+BUY, HOLD, and SELL use inclusive buy/sell thresholds. A failed factor gate produces NO_ACTION.
+
+## D-078
+
+Forward evaluations are immutable snapshots. A duplicate run/instrument/date is not overwritten.
+
+## D-079
+
+Preview evaluation does not persist evaluation rows and may evaluate a DRAFT strategy version.
+
+## D-080
+
+While AI is unused, `ai_score` is NULL and final score/decision equal the quant result.
+
+## D-081
+
+Phase 5 BUY/SELL decisions do not create orders, executions, or positions.

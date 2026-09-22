@@ -47,4 +47,6 @@ data class StrategyFactorWeightEntity(
     val enabled: Boolean = true,
     @ColumnInfo(name = "created_at")
     val createdAt: Instant = Instant.now(),
+    @ColumnInfo(name = "factor_calculation_version")
+    val factorCalculationVersion: String,
 )

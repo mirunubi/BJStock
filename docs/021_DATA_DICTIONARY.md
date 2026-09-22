@@ -286,17 +286,19 @@ Per-version factor weights used to rebuild scores.
 | weight | NUMERIC(8, 6) | 0..1 |
 | min_score / max_score | NUMERIC(7, 4) | nullable, 0..100 |
 | enabled | BOOLEAN | default TRUE |
+| factor_calculation_version | TEXT | pinned Factor Engine version; nonblank, default `v1` for migration |
 | created_at | TIMESTAMPTZ | |
 
 **Important Constraints**
 
 - `0 <= weight <= 1`
 - `min_score <= max_score` when both present
-- enabled weight sum = 1.0 is verified by SQL, not a trigger
+- `TRIM(factor_calculation_version) <> ''`
+- enabled weight sum = 1.0 is enforced at activation by the application service, not a trigger
 
 **Lifecycle**
 
-Insert with the version. Changing weights of a used version requires a new version.
+Insert with a DRAFT version. ACTIVE/RETIRED weights, enabled flags, calculation versions, and gates are immutable. Changing them requires a new version.
 
 ---
 

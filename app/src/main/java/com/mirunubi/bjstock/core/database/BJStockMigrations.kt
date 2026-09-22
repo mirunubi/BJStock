@@ -15,4 +15,12 @@ object BJStockMigrations {
             )
         }
     }
+
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE strategy_factor_weights ADD COLUMN factor_calculation_version TEXT NOT NULL DEFAULT 'v1'",
+            )
+        }
+    }
 }

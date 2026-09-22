@@ -7,6 +7,7 @@ import com.mirunubi.bjstock.core.database.BJStockMigrations
 import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
+import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import dagger.Module
@@ -27,7 +28,10 @@ object DatabaseModule {
             BJStockDatabase::class.java,
             BJStockDatabase.NAME,
         )
-            .addMigrations(BJStockMigrations.MIGRATION_1_2)
+            .addMigrations(
+                BJStockMigrations.MIGRATION_1_2,
+                BJStockMigrations.MIGRATION_2_3,
+            )
             .build()
     }
 
@@ -46,4 +50,8 @@ object DatabaseModule {
 
     @Provides
     fun provideStrategyRunDao(database: BJStockDatabase): StrategyRunDao = database.strategyRunDao()
+
+    @Provides
+    fun provideStockEvaluationDao(database: BJStockDatabase): StockEvaluationDao =
+        database.stockEvaluationDao()
 }

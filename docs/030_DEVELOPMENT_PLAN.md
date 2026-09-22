@@ -73,6 +73,8 @@ Status: complete for build / unit verification. Runtime (KIS history on device �
 
 Score instruments and apply strategy weights/versions.
 
+Status: complete for build / JVM-Robolectric verification. Runtime (physical-device KIS → factor → strategy flow) is DEFERRED — physical device pending.
+
 ### Phase 6 — Virtual Account / Paper Trading
 
 Implement BJStock-owned virtual account, paper orders, and executions against `strategy_runs`.
@@ -95,10 +97,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 4 — Factor Definition & Calculation Foundation is build/unit complete.
+Phase 5 — Strategy Weighting & Evaluation is build/unit complete.
 
-Next: Phase 5 — Strategy Weighting & Evaluation.
+Next: Phase 6 — Virtual Account & Paper Trading Engine.
 
-Do not start Phase 5 until Phase 4 is accepted.
+Do not start Phase 6 until Phase 5 is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

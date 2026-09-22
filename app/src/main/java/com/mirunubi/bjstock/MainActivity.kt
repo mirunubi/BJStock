@@ -14,6 +14,7 @@ import com.mirunubi.bjstock.feature.factor.FactorTestScreen
 import com.mirunubi.bjstock.feature.instrument.InstrumentMasterScreen
 import com.mirunubi.bjstock.feature.kis.KisSettingsScreen
 import com.mirunubi.bjstock.feature.market.MarketDataTestScreen
+import com.mirunubi.bjstock.feature.strategy.StrategyLabScreen
 import com.mirunubi.bjstock.ui.theme.BJStockTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -41,6 +42,7 @@ private fun BJStockNavHost() {
                 onOpenMarketData = { navController.navigate("market_data_test") },
                 onOpenInstrumentMaster = { navController.navigate("instrument_master") },
                 onOpenFactorTest = { navController.navigate("factor_test") },
+                onOpenStrategyLab = { navController.navigate("strategy_lab") },
             )
         }
         composable("database_info") {
@@ -57,6 +59,9 @@ private fun BJStockNavHost() {
         }
         composable("factor_test") {
             FactorTestScreen(onBack = { navController.popBackStack() })
+        }
+        composable("strategy_lab") {
+            StrategyLabScreen(onBack = { navController.popBackStack() })
         }
     }
 }

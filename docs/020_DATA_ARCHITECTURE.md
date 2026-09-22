@@ -129,9 +129,9 @@ Store `raw_value` and `normalized_score` together when both exist.
 - `strategy_versions`
 - `strategy_factor_weights`
 
-A version used in a live forward test is treated as immutable. Do not overwrite historical settings.
+A DRAFT version is editable. ACTIVE and RETIRED versions are immutable; changing thresholds, enabled factors, weights, pinned calculation versions, or gates requires a new version.
 
-Enabled weights should sum to `1.0` per version. This is checked by `db/scripts/verify_strategy_weights.sql`, not by a trigger.
+Each strategy-factor row pins `factor_calculation_version`. Enabled weights must sum exactly to `1.0` using the existing scaled-integer representation. Activation enforces this in the application service; there is no trigger.
 
 ### Forward Test
 
@@ -141,6 +141,8 @@ Enabled weights should sum to `1.0` per version. This is checked by `db/scripts/
 
 - `stock_evaluations`
 - `stock_evaluation_details`
+
+Preview evaluation does not write these tables. Forward evaluation writes one header plus all enabled-factor details in a Room transaction and never overwrites an existing run/instrument/date snapshot.
 
 One official evaluation per run / instrument / date.
 

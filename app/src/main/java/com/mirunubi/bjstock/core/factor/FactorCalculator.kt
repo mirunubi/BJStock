@@ -25,17 +25,39 @@ data class FactorBinding(
     val definition: SystemFactorDefinition,
 ) {
     val factorCode: String = calculator.factorCode
+    val lookupKey: String = lookupKey(factorCode, calculationVersion)
+
+    companion object {
+        fun lookupKey(factorCode: String, calculationVersion: String): String =
+            "$factorCode:$calculationVersion"
+    }
 }
 
 class FactorRegistry(
     bindings: List<FactorBinding>,
 ) {
-    private val byCode = bindings.associateBy { it.factorCode }
+    private val byCodeAndVersion = bindings.associateBy { it.lookupKey }
+    private val byCode = bindings.groupBy { it.factorCode }
 
-    fun get(factorCode: String): FactorBinding? = byCode[factorCode]
+    fun get(factorCode: String, calculationVersion: String): FactorBinding? =
+        byCodeAndVersion[FactorBinding.lookupKey(factorCode, calculationVersion)]
+
+    fun get(factorCode: String): FactorBinding? =
+        get(factorCode, FactorCalculationVersions.V1) ?: byCode[factorCode]?.firstOrNull()
+
+    fun require(factorCode: String, calculationVersion: String): FactorBinding =
+        get(factorCode, calculationVersion)
+            ?: error("Unknown factor: $factorCode:$calculationVersion")
 
     fun require(factorCode: String): FactorBinding =
         get(factorCode) ?: error("Unknown factor code: $factorCode")
 
-    fun systemBindings(): List<FactorBinding> = FactorCodes.SYSTEM.map(::require)
+    fun isSupported(factorCode: String, calculationVersion: String): Boolean =
+        get(factorCode, calculationVersion) != null
+
+    fun versionsFor(factorCode: String): List<String> =
+        byCode[factorCode].orEmpty().map { it.calculationVersion }.distinct()
+
+    fun systemBindings(): List<FactorBinding> =
+        FactorCodes.SYSTEM.map { require(it, FactorCalculationVersions.V1) }
 }

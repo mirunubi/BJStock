@@ -34,8 +34,25 @@ class FactorValueRepository(
     suspend fun findDefinitionByCode(factorCode: String): FactorDefinitionEntity? =
         factorDao.findDefinitionByCode(factorCode)
 
+    suspend fun findDefinitionById(id: Long): FactorDefinitionEntity? =
+        factorDao.findDefinitionById(id)
+
+    suspend fun findAllDefinitions() = factorDao.findAllDefinitions()
+
     suspend fun findValues(instrumentId: Long, evaluationDate: LocalDate): List<FactorValueEntity> =
         factorDao.findValues(instrumentId, evaluationDate)
+
+    suspend fun findValue(
+        instrumentId: Long,
+        factorId: Long,
+        evaluationDate: LocalDate,
+        calculationVersion: String,
+    ): FactorValueEntity? = factorDao.findValue(
+        instrumentId = instrumentId,
+        factorId = factorId,
+        evaluationDate = evaluationDate,
+        calculationVersion = calculationVersion,
+    )
 
     suspend fun findLatestFactorValue(instrumentId: Long, factorId: Long): FactorValueEntity? =
         factorDao.findLatestFactorValue(instrumentId, factorId)

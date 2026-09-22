@@ -7,6 +7,7 @@ import com.mirunubi.bjstock.core.database.converter.BJStockConverters
 import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
+import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.entity.AiAdviceRequestEntity
@@ -45,7 +46,7 @@ import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
         AiAdviceRequestEntity::class,
         AiAdviceResultEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(BJStockConverters::class)
@@ -55,10 +56,11 @@ abstract class BJStockDatabase : RoomDatabase() {
     abstract fun factorDao(): FactorDao
     abstract fun strategyDao(): StrategyDao
     abstract fun strategyRunDao(): StrategyRunDao
+    abstract fun stockEvaluationDao(): StockEvaluationDao
 
     companion object {
         const val NAME = "bjstock.db"
-        const val VERSION = 2
+        const val VERSION = 3
         const val ENTITY_COUNT = 16
     }
 }

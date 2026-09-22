@@ -77,6 +77,13 @@ Role:
 
 - Version strategy definitions
 - Produce a decision candidate from weighted scores
+- Pin every enabled factor to an exact calculation version
+- Enforce DRAFT/ACTIVE/RETIRED lifecycle and ACTIVE immutability
+- Require exact-date factor values and exact scaled-integer weight totals
+- Apply eligibility gates before emitting BUY/HOLD/SELL or NO_ACTION
+- Keep Preview computation separate from immutable forward-evaluation snapshots
+
+Phase 5 persists no orders, executions, or positions. BUY and SELL are evaluation results only.
 
 ### Virtual Trading
 
