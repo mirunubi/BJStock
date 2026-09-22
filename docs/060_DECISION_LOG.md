@@ -389,3 +389,43 @@ A READY/RUNNING run without a policy snapshot cannot trade (`MISSING_TRADING_POL
 ## D-097
 
 `created_at` is the BJStock record creation timestamp. Analytics must not treat it as the trading day.
+
+## D-098
+
+Performance Analytics is read-only over Room history and never rewrites trading tables.
+
+## D-099
+
+`portfolio_daily_snapshots.total_asset` is the account-value source of truth for performance metrics.
+
+## D-100
+
+MDD uses only the peak observed up to each date (no look-ahead).
+
+## D-101
+
+A closed trade is one BUY→SELL round trip under Phase 6 position rules.
+
+## D-102
+
+Win rate excludes breakeven trades from the denominator.
+
+## D-103
+
+Holding period is calendar days between simulated market execution dates.
+
+## D-104
+
+CAGR is not shown when elapsed calendar days are under 365.
+
+## D-105
+
+Sharpe ratio and annualized volatility are out of scope for Phase 7.
+
+## D-106
+
+Benchmark index comparison is deferred to a later phase.
+
+## D-107
+
+Performance Analytics does not call network APIs.

@@ -47,4 +47,12 @@ interface PortfolioDailySnapshotDao {
         """,
     )
     suspend fun findPeakTotalAsset(strategyRunId: Long, asOfDate: LocalDate): Long?
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM portfolio_daily_snapshots
+        WHERE strategy_run_id = :strategyRunId
+        """,
+    )
+    suspend fun countByRun(strategyRunId: Long): Int
 }

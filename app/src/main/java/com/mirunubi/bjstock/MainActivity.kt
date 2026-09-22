@@ -15,6 +15,8 @@ import com.mirunubi.bjstock.feature.instrument.InstrumentMasterScreen
 import com.mirunubi.bjstock.feature.kis.KisSettingsScreen
 import com.mirunubi.bjstock.feature.market.MarketDataTestScreen
 import com.mirunubi.bjstock.feature.paper.PaperTradingLabScreen
+import com.mirunubi.bjstock.feature.performance.CompareRunsScreen
+import com.mirunubi.bjstock.feature.performance.ForwardTestDashboardScreen
 import com.mirunubi.bjstock.feature.strategy.StrategyLabScreen
 import com.mirunubi.bjstock.ui.theme.BJStockTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -45,6 +47,7 @@ private fun BJStockNavHost() {
                 onOpenFactorTest = { navController.navigate("factor_test") },
                 onOpenStrategyLab = { navController.navigate("strategy_lab") },
                 onOpenPaperLab = { navController.navigate("paper_lab") },
+                onOpenForwardTest = { navController.navigate("forward_test") },
             )
         }
         composable("database_info") {
@@ -67,6 +70,15 @@ private fun BJStockNavHost() {
         }
         composable("paper_lab") {
             PaperTradingLabScreen(onBack = { navController.popBackStack() })
+        }
+        composable("forward_test") {
+            ForwardTestDashboardScreen(
+                onBack = { navController.popBackStack() },
+                onOpenCompare = { navController.navigate("compare_runs") },
+            )
+        }
+        composable("compare_runs") {
+            CompareRunsScreen(onBack = { navController.popBackStack() })
         }
     }
 }

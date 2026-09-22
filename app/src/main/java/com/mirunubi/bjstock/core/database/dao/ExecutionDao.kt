@@ -30,4 +30,14 @@ interface ExecutionDao {
 
     @Query("SELECT COUNT(*) FROM executions WHERE order_id = :orderId")
     suspend fun countByOrderId(orderId: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM executions
+        WHERE order_id IN (
+            SELECT id FROM orders WHERE strategy_run_id = :strategyRunId
+        )
+        """,
+    )
+    suspend fun countByRun(strategyRunId: Long): Int
 }

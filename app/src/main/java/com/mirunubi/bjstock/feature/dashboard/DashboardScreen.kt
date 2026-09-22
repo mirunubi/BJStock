@@ -34,6 +34,7 @@ fun DashboardScreen(
     onOpenFactorTest: () -> Unit,
     onOpenStrategyLab: () -> Unit,
     onOpenPaperLab: () -> Unit,
+    onOpenForwardTest: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -43,6 +44,9 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("BJStock") },
                 actions = {
+                    TextButton(onClick = onOpenForwardTest) {
+                        Text("Forward Test")
+                    }
                     TextButton(onClick = onOpenPaperLab) {
                         Text("Paper Lab")
                     }

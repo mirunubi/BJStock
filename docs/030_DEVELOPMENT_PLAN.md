@@ -91,6 +91,8 @@ Status: complete for build / JVM-Robolectric verification. Runtime remains DEFER
 
 Track forward-test results through portfolio snapshots and related metrics.
 
+Status: complete for build / JVM-Robolectric verification. Runtime (physical-device Forward Test dashboard) is DEFERRED — physical device pending.
+
 ### Phase 8 — AI Advisory
 
 Add optional AI advice. AI remains off-by-default capable and never executes trades.
@@ -105,10 +107,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 6.1 — Paper Trading Policy Snapshot Hardening is build/unit complete.
+Phase 7 — Performance Analytics & Forward Test Dashboard is build/unit complete.
 
-Next: Phase 7 — Performance Analytics & Forward Test Dashboard.
+Next: Phase 8 — AI Advisory Foundation.
 
-Do not start Phase 7 until Phase 6.1 is accepted.
+Do not start Phase 8 until Phase 7 is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.
