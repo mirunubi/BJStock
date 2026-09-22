@@ -137,11 +137,25 @@ A DRAFT version is editable. ACTIVE and RETIRED versions are immutable; changing
 
 Each strategy-factor row pins `factor_calculation_version`. Enabled weights must sum exactly to `1.0` using the existing scaled-integer representation. Activation enforces this in the application service; there is no trigger.
 
+### Themes
+
+- `themes`
+- `theme_instruments` (many-to-many over `instruments`; live watchlist, not a run universe)
+
+### Signal Rules
+
+- `strategy_signal_rules` (DRAFT mutable; ACTIVE/RETIRED immutable; hard trigger before factor fallback)
+
 ### Forward Test
 
 - `strategy_runs`
-- `strategy_run_instruments` (per-run universe snapshot; immutable after READY)
+- `strategy_run_instruments` (per-run universe snapshot; immutable after READY; may be copied from a Theme)
 - `forward_test_cycles` (one market-date processing record per run)
+
+### Audit / Diagnostics
+
+- `trade_audit_logs` (append-only human timeline; permanent retention)
+- `api_error_logs` (KIS diagnostics; rolling 7-day retention; no secrets)
 
 ### Evaluation
 

@@ -23,6 +23,7 @@ import com.mirunubi.bjstock.core.paper.ProcessEvaluationUseCase
 import com.mirunubi.bjstock.core.paper.ProcessPendingOrdersUseCase
 import com.mirunubi.bjstock.core.paper.VirtualFillService
 import com.mirunubi.bjstock.core.strategy.EvaluateStrategyRunUseCase
+import com.mirunubi.bjstock.core.strategy.SignalRuleEngine
 import com.mirunubi.bjstock.core.strategy.StrategyActivationResult
 import com.mirunubi.bjstock.core.strategy.StrategyEvaluationLoader
 import com.mirunubi.bjstock.core.strategy.StrategyEvaluationRepository
@@ -72,6 +73,7 @@ class ForwardTestOrchestratorTest {
             strategyDao = database.strategyDao(),
             factorValues = factorValues,
             registry = registry,
+            signalRuleDao = database.strategySignalRuleDao(),
             now = { Instant.EPOCH },
         )
         val policyService = PaperTradingPolicyService(
@@ -134,7 +136,13 @@ class ForwardTestOrchestratorTest {
             strategyDao = database.strategyDao(),
             strategyRunDao = database.strategyRunDao(),
             evaluations = StrategyEvaluationRepository(database, database.stockEvaluationDao()),
-            loader = StrategyEvaluationLoader(strategyService, database.factorDao(), factorValues),
+            loader = StrategyEvaluationLoader(
+                strategyService = strategyService,
+                factorDao = database.factorDao(),
+                factorValues = factorValues,
+                signalRuleDao = database.strategySignalRuleDao(),
+                signalRuleEngine = SignalRuleEngine(database.marketDailyBarDao()),
+            ),
         )
         instrumentId = database.instrumentDao().insert(
             InstrumentEntity(market = "KRX", symbol = "005930", name = "Samsung"),

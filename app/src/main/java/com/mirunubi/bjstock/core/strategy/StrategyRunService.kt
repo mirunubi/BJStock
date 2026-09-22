@@ -38,6 +38,7 @@ class StrategyRunService(
     private val credentials: KisCredentialStore? = null,
     private val settings: KisSettingsStore? = null,
     private val historyGateway: KisForwardMarketDataGateway? = null,
+    private val themeService: com.mirunubi.bjstock.core.theme.ThemeService? = null,
     private val defaultPolicyTemplate: () -> PaperTradingPolicy = { PaperTradingPolicy.DEFAULT },
     private val now: () -> Instant = { Instant.now() },
 ) {
@@ -156,6 +157,35 @@ class StrategyRunService(
                 createdAt = now(),
             ),
         )
+    }
+
+    suspend fun addThemeToUniverse(strategyRunId: Long, themeId: Long): Int {
+        requireDraft(strategyRunId)
+        val themes = themeService
+            ?: throw StrategyVersionException(StrategyErrorKind.NOT_FOUND, "theme $themeId")
+        val theme = themes.findById(themeId)
+            ?: throw StrategyVersionException(StrategyErrorKind.NOT_FOUND, "theme $themeId")
+        if (!theme.isActive) {
+            throw StrategyVersionException(
+                StrategyErrorKind.INVALID_STATE,
+                "theme is inactive",
+            )
+        }
+        val ids = themes.listInstrumentIds(themeId)
+        var added = 0
+        for (instrumentId in ids) {
+            if (!universeDao.exists(strategyRunId, instrumentId)) {
+                universeDao.insert(
+                    StrategyRunInstrumentEntity(
+                        strategyRunId = strategyRunId,
+                        instrumentId = instrumentId,
+                        createdAt = now(),
+                    ),
+                )
+                added++
+            }
+        }
+        return added
     }
 
     suspend fun removeInstrument(strategyRunId: Long, instrumentId: Long) {

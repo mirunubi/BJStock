@@ -19,6 +19,7 @@ import com.mirunubi.bjstock.feature.paper.PaperTradingLabScreen
 import com.mirunubi.bjstock.feature.performance.CompareRunsScreen
 import com.mirunubi.bjstock.feature.performance.ForwardTestDashboardScreen
 import com.mirunubi.bjstock.feature.strategy.StrategyLabScreen
+import com.mirunubi.bjstock.feature.theme.ThemesScreen
 import com.mirunubi.bjstock.ui.theme.BJStockTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -45,6 +46,7 @@ private fun BJStockNavHost() {
                 onOpenKisSettings = { navController.navigate("kis_settings") },
                 onOpenMarketData = { navController.navigate("market_data_test") },
                 onOpenInstrumentMaster = { navController.navigate("instrument_master") },
+                onOpenThemes = { navController.navigate("themes") },
                 onOpenFactorTest = { navController.navigate("factor_test") },
                 onOpenStrategyLab = { navController.navigate("strategy_lab") },
                 onOpenPaperLab = { navController.navigate("paper_lab") },
@@ -54,6 +56,9 @@ private fun BJStockNavHost() {
         }
         composable("database_info") {
             DatabaseInfoScreen(onBack = { navController.popBackStack() })
+        }
+        composable("themes") {
+            ThemesScreen(onBack = { navController.popBackStack() })
         }
         composable("kis_settings") {
             KisSettingsScreen(onBack = { navController.popBackStack() })

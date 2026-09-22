@@ -1,5 +1,6 @@
 package com.mirunubi.bjstock.core.forward
 
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.ForwardTestCycleDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
@@ -49,6 +50,7 @@ class ForwardTestOrchestrator(
     private val createSnapshot: CreateDailySnapshotUseCase,
     private val marketData: ForwardMarketDataGateway,
     private val clock: ForwardTestClock = ForwardTestClock(),
+    private val apiErrorLog: ApiErrorLogService? = null,
     private val now: () -> Instant = { Instant.now() },
 ) {
     suspend fun runForwardTests(throughDate: LocalDate? = null): ForwardOrchestratorResult {
@@ -64,6 +66,7 @@ class ForwardTestOrchestrator(
                 return result
             }
         }
+        cleanupApiErrorsOnSuccess(last)
         return last
     }
 
@@ -167,9 +170,17 @@ class ForwardTestOrchestrator(
             allowNewOrders = run.endDate == null || failed.marketDate.isBefore(run.endDate),
         )
         if (result is ForwardOrchestratorResult.Ok) {
-            return runSingleStrategyRun(runId, throughDate)
+            val continued = runSingleStrategyRun(runId, throughDate)
+            cleanupApiErrorsOnSuccess(continued)
+            return continued
         }
         return result
+    }
+
+    private suspend fun cleanupApiErrorsOnSuccess(result: ForwardOrchestratorResult) {
+        if (result is ForwardOrchestratorResult.Ok || result is ForwardOrchestratorResult.NoOp) {
+            runCatching { apiErrorLog?.cleanupOlderThanSevenDays() }
+        }
     }
 
     private suspend fun processCycle(

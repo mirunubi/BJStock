@@ -1,6 +1,7 @@
 package com.mirunubi.bjstock.core.di
 
 import android.content.Context
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.ForwardTestCycleDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
@@ -62,12 +63,14 @@ object ForwardModule {
         localRepository: MarketDataLocalRepository,
         syncFromLatest: SyncDailyBarsFromLatestUseCase,
         historicalSync: SyncHistoricalDailyBarsUseCase,
+        apiErrorLog: ApiErrorLogService,
     ): KisForwardMarketDataGateway = KisForwardMarketDataGateway(
         credentials = credentials,
         settings = settings,
         localRepository = localRepository,
         syncFromLatest = syncFromLatest,
         historicalSync = historicalSync,
+        apiErrorLog = apiErrorLog,
     )
 
     @Provides
@@ -96,6 +99,7 @@ object ForwardModule {
         createSnapshot: CreateDailySnapshotUseCase,
         marketData: ForwardMarketDataGateway,
         clock: ForwardTestClock,
+        apiErrorLog: ApiErrorLogService,
     ): ForwardTestOrchestrator = ForwardTestOrchestrator(
         strategyRunDao = strategyRunDao,
         strategyDao = strategyDao,
@@ -114,5 +118,6 @@ object ForwardModule {
         createSnapshot = createSnapshot,
         marketData = marketData,
         clock = clock,
+        apiErrorLog = apiErrorLog,
     )
 }

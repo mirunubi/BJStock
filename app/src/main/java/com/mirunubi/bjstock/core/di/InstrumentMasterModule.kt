@@ -1,5 +1,6 @@
 package com.mirunubi.bjstock.core.di
 
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.instrument.InstrumentMasterDownloader
@@ -48,10 +49,12 @@ object InstrumentMasterModule {
         parser: KisMstParser,
         database: BJStockDatabase,
         instrumentDao: InstrumentDao,
+        apiErrorLog: ApiErrorLogService,
     ): InstrumentMasterSynchronizer = InstrumentMasterSynchronizer(
         downloader = downloader,
         parser = parser,
         database = database,
         instrumentDao = instrumentDao,
+        apiErrorLog = apiErrorLog,
     )
 }

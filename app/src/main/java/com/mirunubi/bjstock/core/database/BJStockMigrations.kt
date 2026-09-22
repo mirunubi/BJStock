@@ -186,4 +186,157 @@ object BJStockMigrations {
             )
         }
     }
+
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `themes` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `description` TEXT,
+                    `is_active` INTEGER NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_themes_name` ON `themes` (`name`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `theme_instruments` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `theme_id` INTEGER NOT NULL,
+                    `instrument_id` INTEGER NOT NULL,
+                    `note` TEXT,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`theme_id`) REFERENCES `themes`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT,
+                    FOREIGN KEY(`instrument_id`) REFERENCES `instruments`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_theme_instruments_theme_instrument`
+                ON `theme_instruments` (`theme_id`, `instrument_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_theme_instruments_theme`
+                ON `theme_instruments` (`theme_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_theme_instruments_instrument`
+                ON `theme_instruments` (`instrument_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `strategy_signal_rules` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `strategy_version_id` INTEGER NOT NULL,
+                    `rule_code` TEXT NOT NULL,
+                    `metric_code` TEXT NOT NULL,
+                    `operator` TEXT NOT NULL,
+                    `threshold_value` TEXT NOT NULL,
+                    `action` TEXT NOT NULL,
+                    `priority` INTEGER NOT NULL,
+                    `enabled` INTEGER NOT NULL,
+                    `rule_version` TEXT NOT NULL,
+                    `description` TEXT,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`strategy_version_id`) REFERENCES `strategy_versions`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_strategy_signal_rules_version_code`
+                ON `strategy_signal_rules` (`strategy_version_id`, `rule_code`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_strategy_signal_rules_version`
+                ON `strategy_signal_rules` (`strategy_version_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `trade_audit_logs` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `strategy_run_id` INTEGER NOT NULL,
+                    `instrument_id` INTEGER,
+                    `evaluation_id` INTEGER,
+                    `order_id` INTEGER,
+                    `execution_id` INTEGER,
+                    `market_date` INTEGER,
+                    `event_type` TEXT NOT NULL,
+                    `decision_source` TEXT,
+                    `rule_id` INTEGER,
+                    `reason_code` TEXT,
+                    `reason_text` TEXT,
+                    `metric_code` TEXT,
+                    `observed_value` TEXT,
+                    `threshold_value` TEXT,
+                    `event_key` TEXT NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_trade_audit_logs_event_key`
+                ON `trade_audit_logs` (`event_key`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_trade_audit_logs_run_date`
+                ON `trade_audit_logs` (`strategy_run_id`, `market_date`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_trade_audit_logs_run_created`
+                ON `trade_audit_logs` (`strategy_run_id`, `created_at`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `api_error_logs` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `provider` TEXT NOT NULL,
+                    `operation` TEXT NOT NULL,
+                    `error_type` TEXT NOT NULL,
+                    `http_status` INTEGER,
+                    `business_code` TEXT,
+                    `safe_message` TEXT NOT NULL,
+                    `retryable` INTEGER NOT NULL,
+                    `strategy_run_id` INTEGER,
+                    `forward_cycle_id` INTEGER,
+                    `occurred_at` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_api_error_logs_occurred`
+                ON `api_error_logs` (`occurred_at`)
+                """.trimIndent(),
+            )
+        }
+    }
 }

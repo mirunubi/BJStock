@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.mirunubi.bjstock.core.database.converter.BJStockConverters
 import com.mirunubi.bjstock.core.database.dao.AiAdviceDao
+import com.mirunubi.bjstock.core.database.dao.ApiErrorLogDao
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
@@ -19,8 +20,12 @@ import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunInstrumentDao
+import com.mirunubi.bjstock.core.database.dao.StrategySignalRuleDao
+import com.mirunubi.bjstock.core.database.dao.ThemeDao
+import com.mirunubi.bjstock.core.database.dao.TradeAuditLogDao
 import com.mirunubi.bjstock.core.database.entity.AiAdviceRequestEntity
 import com.mirunubi.bjstock.core.database.entity.AiAdviceResultEntity
+import com.mirunubi.bjstock.core.database.entity.ApiErrorLogEntity
 import com.mirunubi.bjstock.core.database.entity.CashLedgerEntity
 import com.mirunubi.bjstock.core.database.entity.ExecutionEntity
 import com.mirunubi.bjstock.core.database.entity.FactorDefinitionEntity
@@ -38,7 +43,11 @@ import com.mirunubi.bjstock.core.database.entity.StrategyEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyFactorWeightEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyRunEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyRunInstrumentEntity
+import com.mirunubi.bjstock.core.database.entity.StrategySignalRuleEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
+import com.mirunubi.bjstock.core.database.entity.ThemeEntity
+import com.mirunubi.bjstock.core.database.entity.ThemeInstrumentEntity
+import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
 
 @Database(
     entities = [
@@ -62,8 +71,13 @@ import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
         PaperTradingPolicyEntity::class,
         StrategyRunInstrumentEntity::class,
         ForwardTestCycleEntity::class,
+        ThemeEntity::class,
+        ThemeInstrumentEntity::class,
+        StrategySignalRuleEntity::class,
+        TradeAuditLogEntity::class,
+        ApiErrorLogEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(BJStockConverters::class)
@@ -83,10 +97,14 @@ abstract class BJStockDatabase : RoomDatabase() {
     abstract fun aiAdviceDao(): AiAdviceDao
     abstract fun strategyRunInstrumentDao(): StrategyRunInstrumentDao
     abstract fun forwardTestCycleDao(): ForwardTestCycleDao
+    abstract fun themeDao(): ThemeDao
+    abstract fun strategySignalRuleDao(): StrategySignalRuleDao
+    abstract fun tradeAuditLogDao(): TradeAuditLogDao
+    abstract fun apiErrorLogDao(): ApiErrorLogDao
 
     companion object {
         const val NAME = "bjstock.db"
-        const val VERSION = 6
-        const val ENTITY_COUNT = 20
+        const val VERSION = 7
+        const val ENTITY_COUNT = 25
     }
 }

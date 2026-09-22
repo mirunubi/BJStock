@@ -1,5 +1,6 @@
 package com.mirunubi.bjstock.core.strategy
 
+import com.mirunubi.bjstock.core.model.DecisionSource
 import com.mirunubi.bjstock.core.model.TradeDecision
 
 enum class StrategyEvaluationStatus {
@@ -32,6 +33,12 @@ data class StrategyEvaluationResult(
     val missingFactorCodes: List<String> = emptyList(),
     val message: String? = null,
     val persistedEvaluationId: Long? = null,
+    val decisionSource: DecisionSource = DecisionSource.FACTOR_STRATEGY,
+    val triggeredRuleId: Long? = null,
+    val reasonText: String? = null,
+    val metricCode: String? = null,
+    val observedValue: String? = null,
+    val thresholdValue: String? = null,
 ) {
     val isPersistable: Boolean
         get() = status == StrategyEvaluationStatus.SUCCESS ||

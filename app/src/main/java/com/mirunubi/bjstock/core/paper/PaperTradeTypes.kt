@@ -28,6 +28,7 @@ enum class PaperTradeAction {
     SNAPSHOT_ALREADY_EXISTS,
     SNAPSHOT_FAILED,
     MISSING_TRADING_POLICY,
+    ORDER_SKIPPED,
 }
 
 data class PaperTradeResult(

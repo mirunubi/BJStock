@@ -116,6 +116,20 @@ interface MarketDailyBarDao {
 
     @Query(
         """
+        SELECT * FROM market_daily_bars
+        WHERE instrument_id = :instrumentId
+          AND trade_date < :beforeDate
+        ORDER BY trade_date DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun findPreviousTradingBar(
+        instrumentId: Long,
+        beforeDate: LocalDate,
+    ): MarketDailyBarEntity?
+
+    @Query(
+        """
         SELECT DISTINCT trade_date FROM market_daily_bars
         WHERE instrument_id IN (:instrumentIds)
           AND trade_date > :afterDate

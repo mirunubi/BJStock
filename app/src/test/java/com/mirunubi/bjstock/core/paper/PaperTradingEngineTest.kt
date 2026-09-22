@@ -180,13 +180,13 @@ class PaperTradingEngineTest {
     @Test
     fun noShortAndNoAveraging() = runBlocking {
         val sellNoPos = insertEvaluation(instrumentA, friday, TradeDecision.SELL)
-        assertEquals(PaperTradeAction.NO_TRADE, processEvaluation(sellNoPos).action)
+        assertEquals(PaperTradeAction.ORDER_SKIPPED, processEvaluation(sellNoPos).action)
         assertEquals(0, database.orderDao().countByRun(runId))
 
         seedOpenPosition(instrumentA, quantity = 10, avg = 50_000)
         val ordersBefore = database.orderDao().countByRun(runId)
         val buyAgain = insertEvaluation(instrumentA, friday.plusDays(1), TradeDecision.BUY)
-        assertEquals(PaperTradeAction.NO_TRADE, processEvaluation(buyAgain).action)
+        assertEquals(PaperTradeAction.ORDER_SKIPPED, processEvaluation(buyAgain).action)
         assertEquals(ordersBefore, database.orderDao().countByRun(runId))
         assertNull(database.orderDao().findByEvaluationAndSide(buyAgain, com.mirunubi.bjstock.core.model.OrderSide.BUY))
     }

@@ -846,3 +846,25 @@ Laboratory migration history for `scripts/db-migrate.ps1`.
 **Lifecycle**
 
 Inserted by the runner after a successful file apply. Never re-run an applied version.
+
+---
+
+## themes
+
+User interest theme (watchlist basket). Unique `name`.
+
+## theme_instruments
+
+Many-to-many theme membership. Unique `(theme_id, instrument_id)`.
+
+## strategy_signal_rules
+
+Hard signal rules pinned to `strategy_version_id`. Metric Phase 9.1: `DAILY_CHANGE_PCT`. Operators `GTE`/`LTE`. Actions `BUY`/`SELL`.
+
+## trade_audit_logs
+
+Append-only human-readable trade timeline. Unique `event_key`. Never auto-deleted.
+
+## api_error_logs
+
+KIS diagnostics errors. Rolling 7-day retention. Never store secrets.

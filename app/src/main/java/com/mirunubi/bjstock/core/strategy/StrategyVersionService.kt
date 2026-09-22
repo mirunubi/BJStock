@@ -1,12 +1,16 @@
 package com.mirunubi.bjstock.core.strategy
 
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
+import com.mirunubi.bjstock.core.database.dao.StrategySignalRuleDao
 import com.mirunubi.bjstock.core.database.entity.StrategyEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyFactorWeightEntity
+import com.mirunubi.bjstock.core.database.entity.StrategySignalRuleEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
-import com.mirunubi.bjstock.core.factor.FactorCalculationVersions
 import com.mirunubi.bjstock.core.factor.FactorRegistry
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
+import com.mirunubi.bjstock.core.model.SignalAction
+import com.mirunubi.bjstock.core.model.SignalMetricCode
+import com.mirunubi.bjstock.core.model.SignalOperator
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import java.math.BigDecimal
 import java.time.Instant
@@ -15,6 +19,7 @@ class StrategyVersionService(
     private val strategyDao: StrategyDao,
     private val factorValues: FactorValueRepository,
     private val registry: FactorRegistry,
+    private val signalRuleDao: StrategySignalRuleDao? = null,
     private val now: () -> Instant = { Instant.now() },
 ) {
     suspend fun createStrategy(code: String, name: String, description: String? = null): Long {
@@ -75,6 +80,15 @@ class StrategyVersionService(
                 ),
             )
         }
+        signalRuleDao?.findByVersion(source.id)?.forEach { rule ->
+            signalRuleDao.insert(
+                rule.copy(
+                    id = 0,
+                    strategyVersionId = newId,
+                    createdAt = now(),
+                ),
+            )
+        }
         return newId
     }
 
@@ -83,6 +97,75 @@ class StrategyVersionService(
 
     suspend fun findWeights(strategyVersionId: Long): List<StrategyFactorWeightEntity> =
         strategyDao.findWeights(strategyVersionId)
+
+    suspend fun findSignalRules(strategyVersionId: Long): List<StrategySignalRuleEntity> =
+        signalRuleDao?.findByVersion(strategyVersionId).orEmpty()
+
+    suspend fun upsertDraftSignalRule(
+        strategyVersionId: Long,
+        ruleCode: String,
+        metricCode: SignalMetricCode = SignalMetricCode.DAILY_CHANGE_PCT,
+        operator: SignalOperator,
+        thresholdValue: String,
+        action: SignalAction,
+        priority: Int,
+        enabled: Boolean = true,
+        description: String? = null,
+        ruleVersion: String = "v1",
+    ): Long {
+        requireDraft(strategyVersionId)
+        val dao = requireSignalRuleDao()
+        val code = ruleCode.trim()
+        require(code.isNotEmpty()) { "rule_code must not be blank" }
+        require(priority >= 0) { "priority must be >= 0" }
+        val threshold = thresholdValue.trim()
+        require(threshold.isNotEmpty()) { "threshold_value must not be blank" }
+        SignalRuleEngine.parseThreshold(threshold)
+            ?: throw StrategyVersionException(
+                StrategyErrorKind.INVALID_STATE,
+                "threshold_value is not numeric: $threshold",
+            )
+        val existing = dao.findByVersion(strategyVersionId).find { it.ruleCode == code }
+        return if (existing == null) {
+            dao.insert(
+                StrategySignalRuleEntity(
+                    strategyVersionId = strategyVersionId,
+                    ruleCode = code,
+                    metricCode = metricCode,
+                    operator = operator,
+                    thresholdValue = threshold,
+                    action = action,
+                    priority = priority,
+                    enabled = enabled,
+                    ruleVersion = ruleVersion.trim().ifEmpty { "v1" },
+                    description = description,
+                    createdAt = now(),
+                ),
+            )
+        } else {
+            dao.update(
+                existing.copy(
+                    metricCode = metricCode,
+                    operator = operator,
+                    thresholdValue = threshold,
+                    action = action,
+                    priority = priority,
+                    enabled = enabled,
+                    ruleVersion = ruleVersion.trim().ifEmpty { existing.ruleVersion },
+                    description = description,
+                ),
+            )
+            existing.id
+        }
+    }
+
+    suspend fun deleteDraftSignalRule(ruleId: Long) {
+        val dao = requireSignalRuleDao()
+        val rule = dao.findById(ruleId)
+            ?: throw StrategyVersionException(StrategyErrorKind.NOT_FOUND, "signal rule $ruleId")
+        requireDraft(rule.strategyVersionId)
+        dao.deleteById(ruleId)
+    }
 
     suspend fun findAllStrategies(): List<StrategyEntity> = strategyDao.findAllStrategies()
 
@@ -203,6 +286,13 @@ class StrategyVersionService(
                 )
             }
         }
+        val rules = signalRuleDao?.findByVersion(strategyVersionId).orEmpty()
+        SignalRuleEngine.conflictError(rules)?.let {
+            return StrategyActivationResult.Failed(
+                StrategyActivationFailure.CONFLICTING_SIGNAL_RULES,
+                it,
+            )
+        }
         strategyDao.updateVersionStatus(strategyVersionId, StrategyVersionStatus.ACTIVE)
         return StrategyActivationResult.Success(strategyVersionId)
     }
@@ -233,9 +323,16 @@ class StrategyVersionService(
             StrategyVersionStatus.ACTIVE, StrategyVersionStatus.RETIRED -> {
                 throw StrategyVersionException(
                     StrategyErrorKind.IMMUTABLE,
-                    "ACTIVE/RETIRED strategy versions cannot change thresholds, weights, factor versions, or gates",
+                    "ACTIVE/RETIRED strategy versions cannot change thresholds, weights, factor versions, gates, or signal rules",
                 )
             }
         }
     }
+
+    private fun requireSignalRuleDao(): StrategySignalRuleDao =
+        signalRuleDao
+            ?: throw StrategyVersionException(
+                StrategyErrorKind.INVALID_STATE,
+                "signal rule dao unavailable",
+            )
 }

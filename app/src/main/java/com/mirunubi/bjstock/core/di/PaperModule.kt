@@ -1,5 +1,6 @@
 package com.mirunubi.bjstock.core.di
 
+import com.mirunubi.bjstock.core.audit.TradeAuditLogService
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
@@ -50,12 +51,14 @@ object PaperModule {
         executionDao: ExecutionDao,
         positionDao: PositionDao,
         cashLedger: CashLedgerService,
+        audit: TradeAuditLogService,
     ): VirtualFillService = VirtualFillService(
         database = database,
         orderDao = orderDao,
         executionDao = executionDao,
         positionDao = positionDao,
         cashLedger = cashLedger,
+        audit = audit,
     )
 
     @Provides
@@ -65,11 +68,13 @@ object PaperModule {
         strategyRunDao: StrategyRunDao,
         orderDao: OrderDao,
         positionDao: PositionDao,
+        audit: TradeAuditLogService,
     ): ProcessEvaluationUseCase = ProcessEvaluationUseCase(
         evaluationDao = evaluationDao,
         strategyRunDao = strategyRunDao,
         orderDao = orderDao,
         positionDao = positionDao,
+        audit = audit,
     )
 
     @Provides

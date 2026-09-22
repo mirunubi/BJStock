@@ -1,5 +1,6 @@
 package com.mirunubi.bjstock.core.paper
 
+import com.mirunubi.bjstock.core.audit.TradeAuditLogService
 import com.mirunubi.bjstock.core.database.dao.OrderDao
 import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
@@ -9,6 +10,7 @@ import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
 import com.mirunubi.bjstock.core.model.OrderType
 import com.mirunubi.bjstock.core.model.RunStatus
+import com.mirunubi.bjstock.core.model.TradeAuditEventType
 import com.mirunubi.bjstock.core.model.TradeDecision
 import java.time.Instant
 
@@ -17,6 +19,7 @@ class ProcessEvaluationUseCase(
     private val strategyRunDao: StrategyRunDao,
     private val orderDao: OrderDao,
     private val positionDao: PositionDao,
+    private val audit: TradeAuditLogService? = null,
     private val now: () -> Instant = { Instant.now() },
 ) {
     suspend operator fun invoke(evaluationId: Long): PaperTradeResult {
@@ -66,17 +69,43 @@ class ProcessEvaluationUseCase(
         when (side) {
             OrderSide.BUY -> {
                 if (openQty > 0L) {
+                    audit?.append(
+                        strategyRunId = evaluation.strategyRunId,
+                        eventType = TradeAuditEventType.ORDER_SKIPPED,
+                        eventKey = TradeAuditLogService.orderSkippedKey(
+                            evaluationId,
+                            "POSITION_ALREADY_OPEN",
+                        ),
+                        instrumentId = evaluation.instrumentId,
+                        evaluationId = evaluationId,
+                        marketDate = evaluation.evaluationDate,
+                        reasonCode = "POSITION_ALREADY_OPEN",
+                        reasonText = "BUY skipped: position already open",
+                    )
                     return PaperTradeResult(
-                        action = PaperTradeAction.NO_TRADE,
-                        message = "already holding; Phase 6 forbids additional buys",
+                        action = PaperTradeAction.ORDER_SKIPPED,
+                        message = "POSITION_ALREADY_OPEN",
                     )
                 }
             }
             OrderSide.SELL -> {
                 if (openQty <= 0L) {
+                    audit?.append(
+                        strategyRunId = evaluation.strategyRunId,
+                        eventType = TradeAuditEventType.ORDER_SKIPPED,
+                        eventKey = TradeAuditLogService.orderSkippedKey(
+                            evaluationId,
+                            "NO_POSITION_TO_SELL",
+                        ),
+                        instrumentId = evaluation.instrumentId,
+                        evaluationId = evaluationId,
+                        marketDate = evaluation.evaluationDate,
+                        reasonCode = "NO_POSITION_TO_SELL",
+                        reasonText = "SELL skipped: no position to sell",
+                    )
                     return PaperTradeResult(
-                        action = PaperTradeAction.NO_TRADE,
-                        message = "no position to sell; shorting forbidden",
+                        action = PaperTradeAction.ORDER_SKIPPED,
+                        message = "NO_POSITION_TO_SELL",
                     )
                 }
             }
@@ -97,6 +126,16 @@ class ProcessEvaluationUseCase(
                 status = OrderStatus.PENDING_EXECUTION,
                 createdAt = now(),
             ),
+        )
+        audit?.append(
+            strategyRunId = evaluation.strategyRunId,
+            eventType = TradeAuditEventType.ORDER_CREATED,
+            eventKey = TradeAuditLogService.orderCreatedKey(orderId),
+            instrumentId = evaluation.instrumentId,
+            evaluationId = evaluationId,
+            orderId = orderId,
+            marketDate = evaluation.evaluationDate,
+            reasonText = "${side.name} signal → PENDING_EXECUTION",
         )
         return PaperTradeResult(
             action = PaperTradeAction.ORDER_CREATED,

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mirunubi.bjstock.core.strategy.StrategyEvaluationStatus
+import com.mirunubi.bjstock.core.model.SignalOperator
+import com.mirunubi.bjstock.core.model.SignalAction
 import com.mirunubi.bjstock.core.strategy.StrategyScoreMath
 import java.math.BigDecimal
 
@@ -159,6 +161,75 @@ fun StrategyLabScreen(
                 )
             }
             item {
+                Text("Signal Rules (DRAFT)", style = MaterialTheme.typography.titleSmall)
+                Text("Metric: DAILY_CHANGE_PCT", style = MaterialTheme.typography.bodySmall)
+                state.signalRules.forEach { rule ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "${rule.ruleCode} ${rule.operator} ${rule.thresholdValue} -> ${rule.action} p${rule.priority}",
+                        )
+                        if (state.isDraft) {
+                            TextButton(onClick = { viewModel.deleteSignalRule(rule.id) }) {
+                                Text("Delete")
+                            }
+                        }
+                    }
+                }
+                if (state.isDraft) {
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = state.ruleCode,
+                        onValueChange = viewModel::onRuleCodeChanged,
+                        label = { Text("Rule code") },
+                        singleLine = true,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = state.ruleOperator == SignalOperator.GTE,
+                            onClick = { viewModel.onRuleOperatorChanged(SignalOperator.GTE) },
+                            label = { Text("GTE") },
+                        )
+                        FilterChip(
+                            selected = state.ruleOperator == SignalOperator.LTE,
+                            onClick = { viewModel.onRuleOperatorChanged(SignalOperator.LTE) },
+                            label = { Text("LTE") },
+                        )
+                    }
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = state.ruleThreshold,
+                        onValueChange = viewModel::onRuleThresholdChanged,
+                        label = { Text("Threshold %") },
+                        singleLine = true,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = state.ruleAction == SignalAction.BUY,
+                            onClick = { viewModel.onRuleActionChanged(SignalAction.BUY) },
+                            label = { Text("BUY") },
+                        )
+                        FilterChip(
+                            selected = state.ruleAction == SignalAction.SELL,
+                            onClick = { viewModel.onRuleActionChanged(SignalAction.SELL) },
+                            label = { Text("SELL") },
+                        )
+                    }
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = state.rulePriority,
+                        onValueChange = viewModel::onRulePriorityChanged,
+                        label = { Text("Priority (lower = higher)") },
+                        singleLine = true,
+                    )
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = viewModel::addSignalRule,
+                    ) { Text("Add Signal Rule") }
+                }
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = viewModel::activate,

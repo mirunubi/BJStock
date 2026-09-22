@@ -8,6 +8,7 @@ enum class StrategyActivationFailure {
     INVALID_THRESHOLDS,
     UNSUPPORTED_FACTOR_VERSION,
     INVALID_GATE,
+    CONFLICTING_SIGNAL_RULES,
 }
 
 sealed class StrategyActivationResult {

@@ -3,6 +3,7 @@ package com.mirunubi.bjstock.core.di
 import android.content.Context
 import android.util.Log
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.kis.EncryptedKisSecretStore
 import com.mirunubi.bjstock.core.kis.KisAuthLogger
 import com.mirunubi.bjstock.core.kis.KisAuthRepository
@@ -108,12 +109,14 @@ object KisModule {
         tokenStore: KisTokenStore,
         settingsStore: KisSettingsStore,
         logger: KisAuthLogger,
+        apiErrorLog: ApiErrorLogService,
     ): KisAuthRepository = KisAuthRepository(
         api = api,
         credentialStore = credentialStore,
         tokenStore = tokenStore,
         settingsStore = settingsStore,
         logger = logger,
+        apiErrorLog = apiErrorLog,
     )
 
     @Provides
@@ -123,10 +126,12 @@ object KisModule {
         authRepository: KisAuthRepository,
         credentialStore: KisCredentialStore,
         logger: KisAuthLogger,
+        apiErrorLog: ApiErrorLogService,
     ): KisMarketRepository = KisMarketRepositoryImpl(
         api = api,
         authRepository = authRepository,
         credentialStore = credentialStore,
         logger = logger,
+        apiErrorLog = apiErrorLog,
     )
 }

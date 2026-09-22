@@ -31,6 +31,7 @@ fun DashboardScreen(
     onOpenKisSettings: () -> Unit,
     onOpenMarketData: () -> Unit,
     onOpenInstrumentMaster: () -> Unit,
+    onOpenThemes: () -> Unit,
     onOpenFactorTest: () -> Unit,
     onOpenStrategyLab: () -> Unit,
     onOpenPaperLab: () -> Unit,
@@ -56,6 +57,9 @@ fun DashboardScreen(
                     }
                     TextButton(onClick = onOpenStrategyLab) {
                         Text("Strategy Lab")
+                    }
+                    TextButton(onClick = onOpenThemes) {
+                        Text("Themes")
                     }
                     TextButton(onClick = onOpenFactorTest) {
                         Text("Factors")

@@ -517,3 +517,56 @@ Forward Test auto scheduler default is OFF until physical-device acceptance.
 ## D-129
 
 AI Advisory does not participate in the automatic forward-test pipeline and never blocks cycles.
+
+## D-130
+
+Existing instruments remains the KOSPI/KOSDAQ local master; no duplicate master table.
+
+## D-131
+
+Themes are many-to-many interest baskets over instruments.
+
+## D-132
+
+Theme membership changes do not mutate existing Forward Test universes.
+
+## D-133
+
+Strategy Run Universe is an immutable snapshot copied from Theme (or individual adds) while DRAFT.
+
+## D-134
+
+DAILY_CHANGE_PCT hard signal rules support BUY/SELL with GTE/LTE.
+
+## D-135
+
+Triggered signal rules take priority over factor-strategy decisions.
+
+## D-136
+
+When no signal rule triggers, evaluation falls back to the existing factor strategy.
+
+## D-137
+
+Signal rules are immutable on ACTIVE/RETIRED strategy versions (DRAFT-only mutation).
+
+## D-138
+
+Trade audit logs are permanently retained (append-only).
+
+## D-139
+
+Orders and executions remain the transaction source of truth; audit is a human-readable timeline.
+
+## D-140
+
+API error logs are separate from trade audit.
+
+## D-141
+
+API error logs use rolling 7-day retention.
+
+## D-142
+
+API error logs never store secrets, tokens, or raw HTTP bodies.
+

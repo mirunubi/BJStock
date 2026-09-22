@@ -12,6 +12,10 @@ import com.mirunubi.bjstock.core.factor.FactorRegistry
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
 import com.mirunubi.bjstock.core.factor.SystemFactorCatalog
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
+import com.mirunubi.bjstock.core.model.SignalOperator
+import com.mirunubi.bjstock.core.model.SignalMetricCode
+import com.mirunubi.bjstock.core.model.SignalAction
+import com.mirunubi.bjstock.core.database.entity.StrategySignalRuleEntity
 import com.mirunubi.bjstock.core.strategy.PreviewStrategyEvaluationUseCase
 import com.mirunubi.bjstock.core.strategy.StrategyActivationResult
 import com.mirunubi.bjstock.core.strategy.StrategyEvaluationResult
@@ -66,6 +70,12 @@ data class StrategyLabUiState(
     val selectedInstrument: InstrumentEntity? = null,
     val evaluationDate: String = "",
     val preview: StrategyEvaluationResult? = null,
+    val signalRules: List<StrategySignalRuleEntity> = emptyList(),
+    val ruleCode: String = "",
+    val ruleOperator: SignalOperator = SignalOperator.GTE,
+    val ruleThreshold: String = "3.0",
+    val ruleAction: SignalAction = SignalAction.SELL,
+    val rulePriority: String = "10",
     val message: String? = null,
     val busy: Boolean = false,
 ) {
@@ -254,6 +264,52 @@ class StrategyLabViewModel @Inject constructor(
         }
     }
 
+
+    fun onRuleCodeChanged(value: String) = _uiState.update { it.copy(ruleCode = value) }
+    fun onRuleOperatorChanged(value: SignalOperator) = _uiState.update { it.copy(ruleOperator = value) }
+    fun onRuleThresholdChanged(value: String) = _uiState.update { it.copy(ruleThreshold = value) }
+    fun onRuleActionChanged(value: SignalAction) = _uiState.update { it.copy(ruleAction = value) }
+    fun onRulePriorityChanged(value: String) = _uiState.update { it.copy(rulePriority = value) }
+
+    fun addSignalRule() {
+        val versionId = _uiState.value.selectedVersionId ?: return
+        if (!_uiState.value.isDraft) return
+        viewModelScope.launch {
+            runCatching {
+                strategyService.upsertDraftSignalRule(
+                    strategyVersionId = versionId,
+                    ruleCode = _uiState.value.ruleCode.ifBlank {
+                        "DAILY_${_uiState.value.ruleAction}_${_uiState.value.ruleOperator}"
+                    },
+                    metricCode = SignalMetricCode.DAILY_CHANGE_PCT,
+                    operator = _uiState.value.ruleOperator,
+                    thresholdValue = _uiState.value.ruleThreshold,
+                    action = _uiState.value.ruleAction,
+                    priority = _uiState.value.rulePriority.trim().toIntOrNull() ?: 10,
+                )
+            }.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        message = "Signal rule saved",
+                        ruleCode = "",
+                    )
+                }
+                loadVersion(versionId)
+            }.onFailure { error ->
+                _uiState.update { it.copy(message = error.message) }
+            }
+        }
+    }
+
+    fun deleteSignalRule(ruleId: Long) {
+        val versionId = _uiState.value.selectedVersionId ?: return
+        viewModelScope.launch {
+            runCatching { strategyService.deleteDraftSignalRule(ruleId) }
+                .onSuccess { loadVersion(versionId) }
+                .onFailure { error -> _uiState.update { it.copy(message = error.message) } }
+        }
+    }
+
     private suspend fun saveDraftNow() {
         val state = _uiState.value
         val versionId = state.selectedVersionId ?: return
@@ -356,6 +412,7 @@ class StrategyLabViewModel @Inject constructor(
                 } ?: "",
             )
         }
+        val rules = strategyService.findSignalRules(versionId)
         _uiState.update {
             it.copy(
                 selectedVersionId = versionId,
@@ -367,6 +424,7 @@ class StrategyLabViewModel @Inject constructor(
                     .stripTrailingZeros()
                     .toPlainString(),
                 factors = factors,
+                signalRules = rules,
                 preview = null,
             )
         }

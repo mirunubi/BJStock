@@ -113,6 +113,48 @@ enum class ForwardCycleStage {
     COMPLETE,
 }
 
+enum class SignalMetricCode {
+    DAILY_CHANGE_PCT,
+}
+
+enum class SignalOperator {
+    GTE,
+    LTE,
+}
+
+enum class SignalAction {
+    BUY,
+    SELL,
+}
+
+enum class DecisionSource {
+    SIGNAL_RULE,
+    FACTOR_STRATEGY,
+}
+
+enum class TradeAuditEventType {
+    RULE_TRIGGERED,
+    EVALUATION_DECIDED,
+    ORDER_CREATED,
+    ORDER_SKIPPED,
+    ORDER_REJECTED,
+    ORDER_CANCELLED,
+    EXECUTION_FILLED,
+}
+
+enum class ApiErrorProvider {
+    KIS,
+}
+
+enum class ApiErrorType {
+    NETWORK_TIMEOUT,
+    HTTP_ERROR,
+    AUTH_ERROR,
+    KIS_BUSINESS_ERROR,
+    MALFORMED_RESPONSE,
+    MASTER_DOWNLOAD_ERROR,
+}
+
 enum class Board {
     KOSPI,
     KOSDAQ,

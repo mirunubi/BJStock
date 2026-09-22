@@ -36,7 +36,7 @@ Storage rules:
 
 **Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
 
-Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Phase 9 adds `strategy_run_instruments` and `forward_test_cycles` in Room version 6. Explicit Migration(1, 2), Migration(2, 3), Migration(3, 4), Migration(4, 5), and Migration(5, 6) are registered; `fallbackToDestructiveMigration` is not used.
+Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Phase 9 adds `strategy_run_instruments` and `forward_test_cycles` in Room version 6. Phase 9.1 adds `themes`, `theme_instruments`, `strategy_signal_rules`, `trade_audit_logs`, and `api_error_logs` in Room version 7. Explicit Migration(1, 2) through Migration(6, 7) are registered; `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -433,3 +433,13 @@ Phase 4 persistence:
 **Date/Time Mapping:** Instant UTC
 
 **Constraint Difference:** recommendation CHECK → enum String. 0..1 confidence CHECK INTENTIONAL omission.
+
+---
+
+## themes / theme_instruments / strategy_signal_rules / trade_audit_logs / api_error_logs
+
+**PostgreSQL:** `0008_theme_rule_audit_logging.sql`
+
+**Room:** version 7 entities + `MIGRATION_6_7`
+
+CHECK vocabularies enforced in Kotlin enums / application services. Trade audit is append-only; API errors use rolling 7-day cleanup.

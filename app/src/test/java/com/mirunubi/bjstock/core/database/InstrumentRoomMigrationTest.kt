@@ -355,12 +355,141 @@ class InstrumentRoomMigrationTest {
         }
     }
 
+
+    @Test
+    fun migrate6To7_createsThemeRuleAuditTables() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(V6_TEST_DB)
+
+        context.openOrCreateDatabase(V6_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            sqlite.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS strategy_versions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL
+                )
+                """.trimIndent(),
+            )
+            sqlite.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS strategy_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL
+                )
+                """.trimIndent(),
+            )
+            sqlite.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS instruments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL
+                )
+                """.trimIndent(),
+            )
+            sqlite.execSQL("INSERT INTO strategy_versions (id) VALUES (1)")
+            sqlite.execSQL("INSERT INTO strategy_runs (id) VALUES (9)")
+            sqlite.execSQL("INSERT INTO instruments (id) VALUES (5)")
+            sqlite.version = 6
+        }
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(V6_TEST_DB)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(7) {
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            error("v6 database should already exist")
+                        }
+
+                        override fun onUpgrade(
+                            db: androidx.sqlite.db.SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) {
+                            assertEquals(6, oldVersion)
+                            assertEquals(7, newVersion)
+                            BJStockMigrations.MIGRATION_6_7.migrate(db)
+                        }
+                    },
+                )
+                .build(),
+        )
+
+        helper.writableDatabase.use { migrated ->
+            for (table in listOf(
+                "themes",
+                "theme_instruments",
+                "strategy_signal_rules",
+                "trade_audit_logs",
+                "api_error_logs",
+            )) {
+                migrated.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='$table'",
+                ).use {
+                    assertEquals(true, it.moveToFirst())
+                }
+            }
+            migrated.execSQL(
+                """
+                INSERT INTO themes (name, description, is_active, created_at, updated_at)
+                VALUES ('HBM', NULL, 1, 0, 0)
+                """.trimIndent(),
+            )
+            migrated.execSQL(
+                """
+                INSERT INTO theme_instruments (theme_id, instrument_id, note, created_at)
+                VALUES (1, 5, NULL, 0)
+                """.trimIndent(),
+            )
+            migrated.execSQL(
+                """
+                INSERT INTO strategy_signal_rules (
+                    strategy_version_id, rule_code, metric_code, operator, threshold_value,
+                    action, priority, enabled, rule_version, description, created_at
+                ) VALUES (1, 'SELL_3', 'DAILY_CHANGE_PCT', 'GTE', '3.0', 'SELL', 10, 1, 'v1', NULL, 0)
+                """.trimIndent(),
+            )
+            migrated.execSQL(
+                """
+                INSERT INTO trade_audit_logs (
+                    strategy_run_id, event_type, event_key, created_at
+                ) VALUES (9, 'EVALUATION_DECIDED', 'evaluation:1:decision', 0)
+                """.trimIndent(),
+            )
+            migrated.execSQL(
+                """
+                INSERT INTO api_error_logs (
+                    provider, operation, error_type, safe_message, retryable, occurred_at
+                ) VALUES ('KIS', 'KIS_OAUTH', 'AUTH_ERROR', 'auth failed', 0, 0)
+                """.trimIndent(),
+            )
+            migrated.query("SELECT name FROM themes").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("HBM", it.getString(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM theme_instruments").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(1, it.getInt(0))
+            }
+            migrated.query("SELECT rule_code FROM strategy_signal_rules").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("SELL_3", it.getString(0))
+            }
+            migrated.query("SELECT event_key FROM trade_audit_logs").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("evaluation:1:decision", it.getString(0))
+            }
+            migrated.query("SELECT operation FROM api_error_logs").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("KIS_OAUTH", it.getString(0))
+            }
+        }
+    }
+
     companion object {
         private const val TEST_DB = "instrument-migration-test"
         private const val V2_TEST_DB = "strategy-weight-migration-test"
         private const val V3_TEST_DB = "cash-ledger-migration-test"
         private const val V4_TEST_DB = "paper-policy-migration-test"
         private const val V5_TEST_DB = "forward-orch-migration-test"
+        private const val V6_TEST_DB = "theme-rule-audit-migration-test"
         private const val V1_INSTRUMENTS =
             "CREATE TABLE IF NOT EXISTS `instruments` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `market` TEXT NOT NULL, `symbol` TEXT NOT NULL, `name` TEXT NOT NULL, `sector` TEXT, `industry` TEXT, `currency` TEXT NOT NULL, `is_active` INTEGER NOT NULL, `listed_date` INTEGER, `delisted_date` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)"
         private const val V2_STRATEGY_FACTOR_WEIGHTS =

@@ -1,14 +1,18 @@
 package com.mirunubi.bjstock.core.forward
 
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.KisApiErrorMapper
 import com.mirunubi.bjstock.core.kis.KisCredentialStore
 import com.mirunubi.bjstock.core.kis.KisSettingsStore
-import com.mirunubi.bjstock.core.kis.market.KisMarketException
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorKind
+import com.mirunubi.bjstock.core.kis.market.KisMarketException
 import com.mirunubi.bjstock.core.marketdata.HistoricalSyncErrorKind
 import com.mirunubi.bjstock.core.marketdata.HistoricalSyncException
 import com.mirunubi.bjstock.core.marketdata.MarketDataLocalRepository
 import com.mirunubi.bjstock.core.marketdata.SyncDailyBarsFromLatestUseCase
 import com.mirunubi.bjstock.core.marketdata.SyncHistoricalDailyBarsUseCase
+import com.mirunubi.bjstock.core.model.ApiErrorProvider
+import com.mirunubi.bjstock.core.model.ApiErrorType
 import java.time.LocalDate
 
 /**
@@ -21,6 +25,7 @@ class KisForwardMarketDataGateway(
     private val localRepository: MarketDataLocalRepository,
     private val syncFromLatest: SyncDailyBarsFromLatestUseCase,
     private val historicalSync: SyncHistoricalDailyBarsUseCase,
+    private val apiErrorLog: ApiErrorLogService? = null,
 ) : ForwardMarketDataGateway {
     override suspend fun ensureCredentials(): Boolean {
         val environment = settings.selectedEnvironment()
@@ -41,6 +46,7 @@ class KisForwardMarketDataGateway(
                     syncFromLatest(instrumentId, throughDate)
                 }
             } catch (ex: HistoricalSyncException) {
+                recordSyncError(ex)
                 return MarketSyncOutcome(
                     success = false,
                     errorCode = when (ex.kind) {
@@ -52,6 +58,7 @@ class KisForwardMarketDataGateway(
                     retryable = ex.kind != HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND,
                 )
             } catch (ex: KisMarketException) {
+                recordMarketError(ex)
                 val auth = ex.kind == KisMarketErrorKind.AUTHENTICATION
                 return MarketSyncOutcome(
                     success = false,
@@ -64,6 +71,7 @@ class KisForwardMarketDataGateway(
                     retryable = !auth,
                 )
             } catch (ex: Exception) {
+                recordGenericError(ex.message ?: "network failure")
                 return MarketSyncOutcome(
                     success = false,
                     errorCode = ForwardErrorCode.NETWORK_FAILURE.name,
@@ -86,6 +94,7 @@ class KisForwardMarketDataGateway(
             try {
                 historicalSync(instrumentId, from, startDate)
             } catch (ex: Exception) {
+                recordGenericError(ex.message ?: "history prepare failed")
                 return MarketSyncOutcome(
                     success = false,
                     errorCode = ForwardErrorCode.NETWORK_FAILURE.name,
@@ -97,5 +106,49 @@ class KisForwardMarketDataGateway(
             }
         }
         return MarketSyncOutcome(success = true)
+    }
+
+    private suspend fun recordMarketError(ex: KisMarketException) {
+        val log = apiErrorLog ?: return
+        runCatching {
+            log.record(
+                provider = ApiErrorProvider.KIS,
+                operation = "KIS_FORWARD_SYNC",
+                errorType = KisApiErrorMapper.fromMarketKind(ex.kind),
+                safeMessage = ex.publicMessage,
+                retryable = KisApiErrorMapper.isRetryable(ex.kind),
+                httpStatus = ex.audit?.httpCode,
+                businessCode = ex.audit?.msgCd,
+            )
+        }
+    }
+
+    private suspend fun recordSyncError(ex: HistoricalSyncException) {
+        val log = apiErrorLog ?: return
+        runCatching {
+            log.record(
+                provider = ApiErrorProvider.KIS,
+                operation = "KIS_HISTORICAL_SYNC",
+                errorType = when (ex.kind) {
+                    HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND -> ApiErrorType.KIS_BUSINESS_ERROR
+                    else -> ApiErrorType.NETWORK_TIMEOUT
+                },
+                safeMessage = ex.publicMessage,
+                retryable = ex.kind != HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND,
+            )
+        }
+    }
+
+    private suspend fun recordGenericError(message: String) {
+        val log = apiErrorLog ?: return
+        runCatching {
+            log.record(
+                provider = ApiErrorProvider.KIS,
+                operation = "KIS_FORWARD_SYNC",
+                errorType = ApiErrorType.NETWORK_TIMEOUT,
+                safeMessage = message,
+                retryable = true,
+            )
+        }
     }
 }

@@ -1,9 +1,12 @@
 package com.mirunubi.bjstock.core.instrument
 
 import androidx.room.withTransaction
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
+import com.mirunubi.bjstock.core.model.ApiErrorProvider
+import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.model.Board
 import java.time.Instant
 
@@ -12,6 +15,7 @@ class InstrumentMasterSynchronizer(
     private val parser: KisMstParser,
     private val database: BJStockDatabase,
     private val instrumentDao: InstrumentDao,
+    private val apiErrorLog: ApiErrorLogService? = null,
     private val policy: InstrumentMasterSyncPolicy = InstrumentMasterSyncPolicy(),
     private val now: () -> Instant = { Instant.now() },
 ) {
@@ -139,24 +143,35 @@ class InstrumentMasterSynchronizer(
         return null
     }
 
-    private fun failed(
+    private suspend fun failed(
         board: Board,
         startedAt: Instant,
         downloaded: Boolean,
         parsed: Int,
         invalid: Int,
         reason: String,
-    ): InstrumentMasterSyncResult = InstrumentMasterSyncResult(
-        board = board,
-        downloaded = downloaded,
-        parsed = parsed,
-        inserted = 0,
-        updated = 0,
-        deactivated = 0,
-        invalid = invalid,
-        startedAt = startedAt,
-        completedAt = now(),
-        success = false,
-        failureReason = reason,
-    )
+    ): InstrumentMasterSyncResult {
+        runCatching {
+            apiErrorLog?.record(
+                provider = ApiErrorProvider.KIS,
+                operation = "KIS_MASTER_DOWNLOAD",
+                errorType = ApiErrorType.MASTER_DOWNLOAD_ERROR,
+                safeMessage = "$board: $reason",
+                retryable = true,
+            )
+        }
+        return InstrumentMasterSyncResult(
+            board = board,
+            downloaded = downloaded,
+            parsed = parsed,
+            inserted = 0,
+            updated = 0,
+            deactivated = 0,
+            invalid = invalid,
+            startedAt = startedAt,
+            completedAt = now(),
+            success = false,
+            failureReason = reason,
+        )
+    }
 }

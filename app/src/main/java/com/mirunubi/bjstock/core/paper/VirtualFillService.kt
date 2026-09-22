@@ -24,6 +24,7 @@ class VirtualFillService(
     private val executionDao: ExecutionDao,
     private val positionDao: PositionDao,
     private val cashLedger: CashLedgerService,
+    private val audit: com.mirunubi.bjstock.core.audit.TradeAuditLogService? = null,
     private val now: () -> Instant = { Instant.now() },
     private val failAfterExecution: Boolean = false,
 ) {
@@ -122,6 +123,22 @@ class VirtualFillService(
                 orderId = order.id,
                 executionId = executionId,
             )
+        }.also { result ->
+            if (result.action == PaperTradeAction.FILLED && result.executionId != null) {
+                audit?.append(
+                    strategyRunId = order.strategyRunId,
+                    eventType = com.mirunubi.bjstock.core.model.TradeAuditEventType.EXECUTION_FILLED,
+                    eventKey = com.mirunubi.bjstock.core.audit.TradeAuditLogService.executionFilledKey(
+                        result.executionId,
+                    ),
+                    instrumentId = order.instrumentId,
+                    evaluationId = order.evaluationId,
+                    orderId = order.id,
+                    executionId = result.executionId,
+                    marketDate = executionDate,
+                    reasonText = "BUY $quantity shares at next trading day open $executionPriceWon",
+                )
+            }
         }
     }
 
@@ -217,6 +234,22 @@ class VirtualFillService(
                 orderId = order.id,
                 executionId = executionId,
             )
+        }.also { result ->
+            if (result.action == PaperTradeAction.FILLED && result.executionId != null) {
+                audit?.append(
+                    strategyRunId = order.strategyRunId,
+                    eventType = com.mirunubi.bjstock.core.model.TradeAuditEventType.EXECUTION_FILLED,
+                    eventKey = com.mirunubi.bjstock.core.audit.TradeAuditLogService.executionFilledKey(
+                        result.executionId,
+                    ),
+                    instrumentId = order.instrumentId,
+                    evaluationId = order.evaluationId,
+                    orderId = order.id,
+                    executionId = result.executionId,
+                    marketDate = executionDate,
+                    reasonText = "SELL $quantity shares at next trading day open $executionPriceWon",
+                )
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.BJStockMigrations
 import com.mirunubi.bjstock.core.database.dao.AiAdviceDao
+import com.mirunubi.bjstock.core.database.dao.ApiErrorLogDao
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
@@ -19,6 +20,9 @@ import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunInstrumentDao
+import com.mirunubi.bjstock.core.database.dao.StrategySignalRuleDao
+import com.mirunubi.bjstock.core.database.dao.ThemeDao
+import com.mirunubi.bjstock.core.database.dao.TradeAuditLogDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -43,6 +47,7 @@ object DatabaseModule {
                 BJStockMigrations.MIGRATION_3_4,
                 BJStockMigrations.MIGRATION_4_5,
                 BJStockMigrations.MIGRATION_5_6,
+                BJStockMigrations.MIGRATION_6_7,
             )
             .build()
     }
@@ -97,4 +102,19 @@ object DatabaseModule {
     @Provides
     fun provideForwardTestCycleDao(database: BJStockDatabase): ForwardTestCycleDao =
         database.forwardTestCycleDao()
+
+    @Provides
+    fun provideThemeDao(database: BJStockDatabase): ThemeDao = database.themeDao()
+
+    @Provides
+    fun provideStrategySignalRuleDao(database: BJStockDatabase): StrategySignalRuleDao =
+        database.strategySignalRuleDao()
+
+    @Provides
+    fun provideTradeAuditLogDao(database: BJStockDatabase): TradeAuditLogDao =
+        database.tradeAuditLogDao()
+
+    @Provides
+    fun provideApiErrorLogDao(database: BJStockDatabase): ApiErrorLogDao =
+        database.apiErrorLogDao()
 }

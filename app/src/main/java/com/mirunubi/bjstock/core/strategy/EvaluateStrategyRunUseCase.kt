@@ -1,9 +1,12 @@
 package com.mirunubi.bjstock.core.strategy
 
+import com.mirunubi.bjstock.core.audit.TradeAuditLogService
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
+import com.mirunubi.bjstock.core.model.DecisionSource
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
+import com.mirunubi.bjstock.core.model.TradeAuditEventType
 import java.time.LocalDate
 
 class EvaluateStrategyRunUseCase(
@@ -11,6 +14,7 @@ class EvaluateStrategyRunUseCase(
     private val strategyRunDao: StrategyRunDao,
     private val evaluations: StrategyEvaluationRepository,
     private val loader: StrategyEvaluationLoader,
+    private val audit: TradeAuditLogService? = null,
 ) {
     suspend operator fun invoke(
         strategyRunId: Long,
@@ -59,7 +63,51 @@ class EvaluateStrategyRunUseCase(
             evaluationDate = evaluationDate,
             result = computed,
         )
+        writeAudit(strategyRunId, instrumentId, evaluationDate, evaluationId, computed)
         return computed.copy(persistedEvaluationId = evaluationId)
+    }
+
+    private suspend fun writeAudit(
+        strategyRunId: Long,
+        instrumentId: Long,
+        evaluationDate: LocalDate,
+        evaluationId: Long,
+        computed: StrategyEvaluationResult,
+    ) {
+        val auditLog = audit ?: return
+        if (computed.decisionSource == DecisionSource.SIGNAL_RULE && computed.triggeredRuleId != null) {
+            auditLog.append(
+                strategyRunId = strategyRunId,
+                eventType = TradeAuditEventType.RULE_TRIGGERED,
+                eventKey = TradeAuditLogService.ruleTriggeredKey(
+                    evaluationId,
+                    computed.triggeredRuleId,
+                ),
+                instrumentId = instrumentId,
+                evaluationId = evaluationId,
+                marketDate = evaluationDate,
+                decisionSource = DecisionSource.SIGNAL_RULE,
+                ruleId = computed.triggeredRuleId,
+                reasonText = computed.reasonText,
+                metricCode = computed.metricCode,
+                observedValue = computed.observedValue,
+                thresholdValue = computed.thresholdValue,
+            )
+        }
+        auditLog.append(
+            strategyRunId = strategyRunId,
+            eventType = TradeAuditEventType.EVALUATION_DECIDED,
+            eventKey = TradeAuditLogService.evaluationDecisionKey(evaluationId),
+            instrumentId = instrumentId,
+            evaluationId = evaluationId,
+            marketDate = evaluationDate,
+            decisionSource = computed.decisionSource,
+            ruleId = computed.triggeredRuleId,
+            reasonText = computed.reasonText ?: computed.message,
+            metricCode = computed.metricCode,
+            observedValue = computed.observedValue,
+            thresholdValue = computed.thresholdValue,
+        )
     }
 
     companion object {

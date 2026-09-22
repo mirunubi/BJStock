@@ -3,8 +3,11 @@ package com.mirunubi.bjstock.core.database.converter
 import androidx.room.TypeConverter
 import com.mirunubi.bjstock.core.model.AdditionalBuyPolicy
 import com.mirunubi.bjstock.core.model.AiRecommendation
+import com.mirunubi.bjstock.core.model.ApiErrorProvider
+import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.model.Board
 import com.mirunubi.bjstock.core.model.CashLedgerEventType
+import com.mirunubi.bjstock.core.model.DecisionSource
 import com.mirunubi.bjstock.core.model.ExecutionPricePolicy
 import com.mirunubi.bjstock.core.model.FactorCategory
 import com.mirunubi.bjstock.core.model.FactorValueType
@@ -17,7 +20,11 @@ import com.mirunubi.bjstock.core.model.OrderType
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.RunType
 import com.mirunubi.bjstock.core.model.SellPolicy
+import com.mirunubi.bjstock.core.model.SignalAction
+import com.mirunubi.bjstock.core.model.SignalMetricCode
+import com.mirunubi.bjstock.core.model.SignalOperator
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
+import com.mirunubi.bjstock.core.model.TradeAuditEventType
 import com.mirunubi.bjstock.core.model.TradeDecision
 import java.time.Instant
 import java.time.LocalDate
@@ -136,6 +143,49 @@ class BJStockConverters {
     @TypeConverter
     fun codeToForwardCycleStage(value: String): ForwardCycleStage =
         ForwardCycleStage.valueOf(value)
+
+    @TypeConverter
+    fun signalMetricToCode(value: SignalMetricCode): String = value.name
+
+    @TypeConverter
+    fun codeToSignalMetric(value: String): SignalMetricCode = SignalMetricCode.valueOf(value)
+
+    @TypeConverter
+    fun signalOperatorToCode(value: SignalOperator): String = value.name
+
+    @TypeConverter
+    fun codeToSignalOperator(value: String): SignalOperator = SignalOperator.valueOf(value)
+
+    @TypeConverter
+    fun signalActionToCode(value: SignalAction): String = value.name
+
+    @TypeConverter
+    fun codeToSignalAction(value: String): SignalAction = SignalAction.valueOf(value)
+
+    @TypeConverter
+    fun decisionSourceToCode(value: DecisionSource): String = value.name
+
+    @TypeConverter
+    fun codeToDecisionSource(value: String): DecisionSource = DecisionSource.valueOf(value)
+
+    @TypeConverter
+    fun tradeAuditEventToCode(value: TradeAuditEventType): String = value.name
+
+    @TypeConverter
+    fun codeToTradeAuditEvent(value: String): TradeAuditEventType =
+        TradeAuditEventType.valueOf(value)
+
+    @TypeConverter
+    fun apiErrorProviderToCode(value: ApiErrorProvider): String = value.name
+
+    @TypeConverter
+    fun codeToApiErrorProvider(value: String): ApiErrorProvider = ApiErrorProvider.valueOf(value)
+
+    @TypeConverter
+    fun apiErrorTypeToCode(value: ApiErrorType): String = value.name
+
+    @TypeConverter
+    fun codeToApiErrorType(value: String): ApiErrorType = ApiErrorType.valueOf(value)
 
     @TypeConverter
     fun boardToCode(value: Board): String = value.name

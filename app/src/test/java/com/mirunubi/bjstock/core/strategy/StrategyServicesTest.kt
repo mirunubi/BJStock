@@ -11,6 +11,7 @@ import com.mirunubi.bjstock.core.factor.FactorCalculationVersions
 import com.mirunubi.bjstock.core.factor.FactorCodes
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
 import com.mirunubi.bjstock.core.factor.SystemFactorRegistryFactory
+import com.mirunubi.bjstock.core.strategy.SignalRuleEngine
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.RunType
@@ -54,12 +55,15 @@ class StrategyServicesTest {
             strategyDao = database.strategyDao(),
             factorValues = factorValues,
             registry = SystemFactorRegistryFactory.create(),
+            signalRuleDao = database.strategySignalRuleDao(),
             now = { Instant.EPOCH },
         )
         loader = StrategyEvaluationLoader(
             strategyService = strategyService,
             factorDao = database.factorDao(),
             factorValues = factorValues,
+            signalRuleDao = database.strategySignalRuleDao(),
+            signalRuleEngine = SignalRuleEngine(database.marketDailyBarDao()),
         )
         evaluationRepository = StrategyEvaluationRepository(
             database = database,

@@ -105,15 +105,21 @@ Run paper trading for one year or longer and review strategy quality.
 
 Status: complete for build / JVM-Robolectric verification. Physical WorkManager + KIS daily automation runtime is DEFERRED — physical device pending.
 
+### Phase 9.1 — Themes, Signal Rules & Audit Logging
+
+Themes/watchlists, DAILY_CHANGE_PCT signal rules, trade audit timeline, and rolling 7-day API error diagnostics.
+
+Status: complete for build / JVM-Robolectric verification. Runtime remains DEFERRED — physical device pending.
+
 ### Future — Live Trading
 
 Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 9 — Long-Term Forward Test Orchestration is build/unit complete.
+Phase 9.1 — Themes, Signal Rules & Audit Logging is build/unit complete.
 
-Next: Physical Device Runtime Gate (WorkManager / KIS daily automation), then Future — Live Trading (out of current scope).
+Next: Phase 10 — Physical Device End-to-End Runtime Acceptance (not started).
 
 Do not enable Auto Forward Test by default until physical-device acceptance.
 

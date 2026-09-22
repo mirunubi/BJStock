@@ -1,10 +1,13 @@
 package com.mirunubi.bjstock.core.kis.market
 
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.KisApiErrorMapper
 import com.mirunubi.bjstock.core.kis.KisAuthException
 import com.mirunubi.bjstock.core.kis.KisAuthLogger
 import com.mirunubi.bjstock.core.kis.KisAuthRepository
 import com.mirunubi.bjstock.core.kis.KisCredentialStore
 import com.mirunubi.bjstock.core.kis.KisEnvironmentConfig
+import com.mirunubi.bjstock.core.model.ApiErrorProvider
 import com.mirunubi.bjstock.core.network.kis.KisMarketApi
 import com.mirunubi.bjstock.core.network.kis.KisMarketHeaders
 import java.io.IOException
@@ -20,6 +23,7 @@ class KisMarketRepositoryImpl(
     private val authRepository: KisAuthRepository,
     private val credentialStore: KisCredentialStore,
     private val logger: KisAuthLogger,
+    private val apiErrorLog: ApiErrorLogService? = null,
     private val today: () -> LocalDate = { LocalDate.now(ZoneId.of("Asia/Seoul")) },
     private val baseUrl: suspend () -> String = {
         KisEnvironmentConfig.baseUrl(authRepository.selectedEnvironment())
@@ -30,7 +34,7 @@ class KisMarketRepositoryImpl(
         val path = KisMarketApiConfig.INQUIRE_PRICE_PATH
         KisReadOnlyGuard.assertAllowed(path)
         logger.info("KIS inquire-price request started")
-        val response = execute(path, KisMarketApiConfig.TR_INQUIRE_PRICE) { url, headers ->
+        val response = execute("KIS_CURRENT_PRICE", path, KisMarketApiConfig.TR_INQUIRE_PRICE) { url, headers ->
             api.inquirePrice(
                 url = url,
                 headers = headers,
@@ -38,7 +42,7 @@ class KisMarketRepositoryImpl(
                 symbol = code,
             )
         }
-        ensureBusinessSuccess(response.rtCd, response.msgCd, response.msg1)
+        ensureBusinessSuccess("KIS_CURRENT_PRICE", response.rtCd, response.msgCd, response.msg1)
         val quote = KisCurrentPriceMapper.map(code, response)
         logger.info("KIS request success")
         return quote
@@ -55,7 +59,11 @@ class KisMarketRepositoryImpl(
         val path = KisMarketApiConfig.INQUIRE_DAILY_ITEMCHARTPRICE_PATH
         KisReadOnlyGuard.assertAllowed(path)
         logger.info("KIS inquire-daily-itemchartprice request started")
-        val response = execute(path, KisMarketApiConfig.TR_INQUIRE_DAILY_ITEMCHARTPRICE) { url, headers ->
+        val response = execute(
+            "KIS_DAILY_PRICE",
+            path,
+            KisMarketApiConfig.TR_INQUIRE_DAILY_ITEMCHARTPRICE,
+        ) { url, headers ->
             api.inquireDailyItemChartPrice(
                 url = url,
                 headers = headers,
@@ -67,7 +75,7 @@ class KisMarketRepositoryImpl(
                 adjustment = KisMarketApiConfig.priceAdjustmentCode(adjustment),
             )
         }
-        ensureBusinessSuccess(response.rtCd, response.msgCd, response.msg1)
+        ensureBusinessSuccess("KIS_DAILY_PRICE", response.rtCd, response.msgCd, response.msg1)
         val bars = KisDailyBarMapper.map(code, response)
         logger.info("KIS request success")
         return bars
@@ -82,24 +90,34 @@ class KisMarketRepositoryImpl(
         }
     }
 
-    private fun ensureBusinessSuccess(rtCd: String?, msgCd: String?, msg1: String?) {
+    private suspend fun ensureBusinessSuccess(
+        operation: String,
+        rtCd: String?,
+        msgCd: String?,
+        msg1: String?,
+    ) {
         if (rtCd == null) {
-            throw KisMarketException(
+            val error = KisMarketException(
                 kind = KisMarketErrorKind.MALFORMED_RESPONSE,
                 publicMessage = "KIS 응답 오류",
             )
+            recordError(operation, error)
+            throw error
         }
         if (rtCd != "0") {
             logger.info("KIS business error: ${msgCd ?: "unknown"}")
-            throw KisMarketException(
+            val error = KisMarketException(
                 kind = KisMarketErrorKind.BUSINESS,
                 publicMessage = "KIS 응답 오류",
                 audit = KisMarketErrorAudit(msgCd = msgCd, msg1 = msg1),
             )
+            recordError(operation, error)
+            throw error
         }
     }
 
     private suspend fun <T> execute(
+        operation: String,
         path: String,
         trId: String,
         call: suspend (url: String, headers: Map<String, String>) -> T,
@@ -108,17 +126,23 @@ class KisMarketRepositoryImpl(
         val token = try {
             authRepository.getValidToken(environment)
         } catch (error: KisAuthException) {
-            throw KisMarketException(
+            val wrapped = KisMarketException(
                 kind = KisMarketErrorKind.AUTHENTICATION,
                 publicMessage = "인증 필요",
                 audit = KisMarketErrorAudit(httpCode = error.httpCode),
             )
+            recordError(operation, wrapped)
+            throw wrapped
         }
         val credentials = credentialStore.loadCredentials(environment)
-            ?: throw KisMarketException(
-                kind = KisMarketErrorKind.AUTHENTICATION,
-                publicMessage = "인증 필요",
-            )
+            ?: run {
+                val wrapped = KisMarketException(
+                    kind = KisMarketErrorKind.AUTHENTICATION,
+                    publicMessage = "인증 필요",
+                )
+                recordError(operation, wrapped)
+                throw wrapped
+            }
         val url = KisMarketApiConfig.pathUrl(baseUrl(), path)
         val headers = KisMarketHeaders.of(token, credentials, trId)
         return try {
@@ -128,40 +152,65 @@ class KisMarketRepositoryImpl(
         } catch (error: CancellationException) {
             throw error
         } catch (error: HttpException) {
-            if (error.code() == 401) {
-                throw KisMarketException(
+            val wrapped = if (error.code() == 401) {
+                KisMarketException(
                     kind = KisMarketErrorKind.AUTHENTICATION,
                     publicMessage = "인증 필요",
                     audit = KisMarketErrorAudit(httpCode = 401),
                 )
+            } else {
+                KisMarketException(
+                    kind = KisMarketErrorKind.HTTP,
+                    publicMessage = "연결 실패",
+                    audit = KisMarketErrorAudit(httpCode = error.code()),
+                )
             }
-            throw KisMarketException(
-                kind = KisMarketErrorKind.HTTP,
-                publicMessage = "연결 실패",
-                audit = KisMarketErrorAudit(httpCode = error.code()),
-            )
+            recordError(operation, wrapped)
+            throw wrapped
         } catch (error: SerializationException) {
-            throw KisMarketException(
+            val wrapped = KisMarketException(
                 kind = KisMarketErrorKind.MALFORMED_RESPONSE,
                 publicMessage = "KIS 응답 오류",
             )
+            recordError(operation, wrapped)
+            throw wrapped
         } catch (error: IOException) {
-            if (error is InterruptedIOException) {
-                throw KisMarketException(
+            val wrapped = if (error is InterruptedIOException) {
+                KisMarketException(
                     kind = KisMarketErrorKind.NETWORK_TIMEOUT,
                     publicMessage = "연결 실패",
                 )
+            } else {
+                KisMarketException(
+                    kind = KisMarketErrorKind.HTTP,
+                    publicMessage = "연결 실패",
+                )
             }
-            throw KisMarketException(
-                kind = KisMarketErrorKind.HTTP,
-                publicMessage = "연결 실패",
-            )
+            recordError(operation, wrapped)
+            throw wrapped
         } catch (error: IllegalStateException) {
             throw error
         } catch (_: Exception) {
-            throw KisMarketException(
+            val wrapped = KisMarketException(
                 kind = KisMarketErrorKind.MALFORMED_RESPONSE,
                 publicMessage = "KIS 응답 오류",
+            )
+            recordError(operation, wrapped)
+            throw wrapped
+        }
+    }
+
+    private suspend fun recordError(operation: String, error: KisMarketException) {
+        val log = apiErrorLog ?: return
+        runCatching {
+            log.record(
+                provider = ApiErrorProvider.KIS,
+                operation = operation,
+                errorType = KisApiErrorMapper.fromMarketKind(error.kind),
+                safeMessage = error.publicMessage,
+                retryable = KisApiErrorMapper.isRetryable(error.kind),
+                httpStatus = error.audit?.httpCode,
+                businessCode = error.audit?.msgCd,
             )
         }
     }

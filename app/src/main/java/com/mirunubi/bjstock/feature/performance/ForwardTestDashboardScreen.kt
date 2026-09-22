@@ -99,7 +99,10 @@ fun ForwardTestDashboardScreen(
                 onSearch = viewModel::setInstrumentSearch,
                 onAdd = viewModel::addInstrument,
                 onRemove = viewModel::removeInstrument,
+                onAddTheme = viewModel::addThemeToUniverse,
             )
+
+            TradeTimelineSection(state)
 
             CycleHistorySection(state.cycleHistory)
 
@@ -178,6 +181,7 @@ private fun UniverseSection(
     onSearch: (String) -> Unit,
     onAdd: (Long) -> Unit,
     onRemove: (Long) -> Unit,
+    onAddTheme: (Long) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -213,8 +217,50 @@ private fun UniverseSection(
                         Text("Add ${instrument.symbol} ${instrument.name}")
                     }
                 }
+                Text("Add From Theme", style = MaterialTheme.typography.titleSmall)
+                if (state.activeThemes.isEmpty()) {
+                    Text("No active themes")
+                } else {
+                    state.activeThemes.forEach { theme ->
+                        TextButton(onClick = { onAddTheme(theme.id) }) {
+                            Text("Add ${theme.name}")
+                        }
+                    }
+                }
             } else {
                 Text("Read only after READY", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun TradeTimelineSection(state: ForwardTestUiState) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Trade Timeline", style = MaterialTheme.typography.titleMedium)
+            if (state.tradeTimeline.isEmpty()) {
+                Text("No audit events yet")
+            } else {
+                state.tradeTimeline.forEach { event ->
+                    Text(
+                        "${event.marketDate ?: "—"} ${event.eventType}" +
+                            (event.reasonText?.let { " — $it" } ?: ""),
+                    )
+                    if (event.metricCode != null || event.observedValue != null) {
+                        Text(
+                            listOfNotNull(
+                                event.decisionSource?.name,
+                                event.metricCode,
+                                event.observedValue?.let { "obs $it" },
+                                event.thresholdValue?.let { "thr $it" },
+                                event.reasonCode,
+                            ).joinToString(" | "),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
             }
         }
     }

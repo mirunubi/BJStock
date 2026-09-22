@@ -27,6 +27,10 @@ import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
 import com.mirunubi.bjstock.core.model.ForwardCycleStatus
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.strategy.StrategyRunService
+import com.mirunubi.bjstock.core.theme.ThemeService
+import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
+import com.mirunubi.bjstock.core.database.entity.ThemeEntity
+import com.mirunubi.bjstock.core.audit.TradeAuditLogService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -72,6 +76,8 @@ data class ForwardTestUiState(
     val cycleHistory: List<ForwardTestCycleEntity> = emptyList(),
     val instrumentSearch: String = "",
     val instrumentSearchResults: List<InstrumentEntity> = emptyList(),
+    val activeThemes: List<ThemeEntity> = emptyList(),
+    val tradeTimeline: List<TradeAuditLogEntity> = emptyList(),
     val message: String? = null,
     val loading: Boolean = false,
 )
@@ -88,6 +94,8 @@ class ForwardTestViewModel @Inject constructor(
     private val instrumentDao: InstrumentDao,
     private val marketDailyBarDao: MarketDailyBarDao,
     private val clock: ForwardTestClock,
+    private val themeService: ThemeService,
+    private val tradeAuditLogService: TradeAuditLogService,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ForwardTestUiState())
     val uiState: StateFlow<ForwardTestUiState> = _uiState.asStateFlow()
@@ -162,6 +170,20 @@ class ForwardTestViewModel @Inject constructor(
         val runId = _uiState.value.selectedRunId ?: return
         viewModelScope.launch {
             runCatching { runService.removeInstrument(runId, instrumentId) }
+                .onFailure { e ->
+                    _uiState.update { it.copy(message = e.message) }
+                }
+            loadDashboard(runId)
+        }
+    }
+
+    fun addThemeToUniverse(themeId: Long) {
+        val runId = _uiState.value.selectedRunId ?: return
+        viewModelScope.launch {
+            runCatching { runService.addThemeToUniverse(runId, themeId) }
+                .onSuccess { added ->
+                    _uiState.update { it.copy(message = "Added $added instrument(s) from theme") }
+                }
                 .onFailure { e ->
                     _uiState.update { it.copy(message = e.message) }
                 }
@@ -254,6 +276,8 @@ class ForwardTestViewModel @Inject constructor(
             failed = failed,
         )
 
+        val themes = themeService.listActiveThemes()
+        val timeline = tradeAuditLogService.findRecentByRun(runId, limit = 50)
         _uiState.update {
             it.copy(
                 loading = false,
@@ -270,6 +294,8 @@ class ForwardTestViewModel @Inject constructor(
                 universe = universeViews,
                 universeEditable = run?.status == RunStatus.DRAFT,
                 cycleHistory = cycles,
+                activeThemes = themes,
+                tradeTimeline = timeline,
                 message = mutationWarning ?: summary.errorMessage,
             )
         }
