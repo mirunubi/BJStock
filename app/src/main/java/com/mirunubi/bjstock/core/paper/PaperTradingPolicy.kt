@@ -1,5 +1,9 @@
 package com.mirunubi.bjstock.core.paper
 
+import com.mirunubi.bjstock.core.database.mapping.NumericMapping
+import com.mirunubi.bjstock.core.model.AdditionalBuyPolicy
+import com.mirunubi.bjstock.core.model.ExecutionPricePolicy
+import com.mirunubi.bjstock.core.model.SellPolicy
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -35,11 +39,10 @@ data class TradingCostPolicy(
     }
 
     companion object {
-        /** Zero-cost fixture for deterministic quantity math tests. */
         val ZERO = TradingCostPolicy(BigDecimal.ZERO, BigDecimal.ZERO)
 
         /**
-         * Baseline simulation rates used by the app default.
+         * Baseline simulation rates used only as the template for new run snapshots.
          * SIMULATION ASSUMPTION only — not a legal/brokerage quote.
          */
         val BASELINE = TradingCostPolicy(
@@ -49,9 +52,6 @@ data class TradingCostPolicy(
     }
 }
 
-/**
- * Slippage policy placeholder. Phase 6 default is zero.
- */
 data class SlippagePolicy(
     val buySlippageBps: BigDecimal = BigDecimal.ZERO,
     val sellSlippageBps: BigDecimal = BigDecimal.ZERO,
@@ -79,28 +79,38 @@ data class SlippagePolicy(
 }
 
 /**
- * MVP paper policy. Stored in code for Phase 6; not yet persisted per run.
+ * Template used only when creating a new strategy run's policy snapshot.
+ * Live trading must read [RunPaperTradingPolicy] from the DB snapshot.
  */
 data class PaperTradingPolicy(
-    val buyAllocationPercent: BigDecimal = BigDecimal("10"),
+    val buyAllocationRate: BigDecimal = BigDecimal("0.10"),
     val costPolicy: TradingCostPolicy = TradingCostPolicy.BASELINE,
-    val slippagePolicy: SlippagePolicy = SlippagePolicy.ZERO,
+    val slippageBps: Long = 0L,
+    val executionPricePolicy: ExecutionPricePolicy = ExecutionPricePolicy.NEXT_TRADING_DAY_OPEN,
+    val additionalBuyPolicy: AdditionalBuyPolicy = AdditionalBuyPolicy.DISALLOW,
+    val sellPolicy: SellPolicy = SellPolicy.FULL_POSITION,
+    val shortSellingAllowed: Boolean = false,
 ) {
     init {
-        require(buyAllocationPercent > BigDecimal.ZERO) { "buyAllocationPercent must be > 0" }
-        require(buyAllocationPercent <= BigDecimal(100)) { "buyAllocationPercent must be <= 100" }
+        require(buyAllocationRate > BigDecimal.ZERO) { "buyAllocationRate must be > 0" }
+        require(buyAllocationRate <= BigDecimal.ONE) { "buyAllocationRate must be <= 1" }
+        require(slippageBps >= 0L) { "slippageBps must be >= 0" }
+        require(!shortSellingAllowed) { "short selling is not allowed" }
     }
 
+    val buyAllocationPercent: BigDecimal
+        get() = buyAllocationRate.multiply(BigDecimal(100))
+
     companion object {
+        const val V1 = "v1"
+
         val DEFAULT = PaperTradingPolicy()
+
         val ZERO_COST = PaperTradingPolicy(costPolicy = TradingCostPolicy.ZERO)
     }
 }
 
 object PaperQuantityMath {
-    /**
-     * Largest whole-share quantity such that gross + commission <= cashBudget.
-     */
     fun maxAffordableBuyQuantity(
         cashBudgetWon: Long,
         executionPriceWon: Long,
@@ -123,6 +133,20 @@ object PaperQuantityMath {
         return BigDecimal(cashWon)
             .multiply(allocationPercent)
             .divide(BigDecimal(100), 0, RoundingMode.DOWN)
+            .longValueExact()
+    }
+
+    fun buyBudgetFromRate(cashWon: Long, allocationRate: BigDecimal): Long {
+        return BigDecimal(cashWon)
+            .multiply(allocationRate)
+            .setScale(0, RoundingMode.DOWN)
+            .longValueExact()
+    }
+
+    fun buyBudgetFromStoredRate(cashWon: Long, allocationRateStored: Long): Long {
+        return BigDecimal(cashWon)
+            .multiply(BigDecimal(allocationRateStored))
+            .divide(BigDecimal(NumericMapping.WEIGHT_FACTOR), 0, RoundingMode.DOWN)
             .longValueExact()
     }
 }

@@ -6,6 +6,7 @@ import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.entity.OrderEntity
+import com.mirunubi.bjstock.core.model.ExecutionPricePolicy
 import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
 import com.mirunubi.bjstock.core.model.RunStatus
@@ -18,7 +19,7 @@ class ProcessPendingOrdersUseCase(
     private val positionDao: PositionDao,
     private val cashLedger: CashLedgerService,
     private val fills: VirtualFillService,
-    private val policy: PaperTradingPolicy = PaperTradingPolicy.DEFAULT,
+    private val policyService: PaperTradingPolicyService,
 ) {
     suspend operator fun invoke(strategyRunId: Long): List<PaperTradeResult> {
         val run = strategyRunDao.findById(strategyRunId)
@@ -30,18 +31,40 @@ class ProcessPendingOrdersUseCase(
                 PaperTradeResult(PaperTradeAction.NO_TRADE, "run status ${run.status}"),
             )
         }
+        val policy = try {
+            policyService.requireRuntime(strategyRunId)
+        } catch (_: MissingTradingPolicyException) {
+            return listOf(
+                PaperTradeResult(
+                    action = PaperTradeAction.MISSING_TRADING_POLICY,
+                    message = "MISSING_TRADING_POLICY",
+                ),
+            )
+        }
         val pending = orderDao.findByRunAndStatus(strategyRunId, OrderStatus.PENDING_EXECUTION)
             .sortedWith(compareBy({ it.evaluationId ?: Long.MAX_VALUE }, { it.id }))
-        return pending.map { order -> processOne(order) }
+        return pending.map { order -> processOne(order, policy) }
     }
 
     suspend fun processOne(orderId: Long): PaperTradeResult {
         val order = orderDao.findById(orderId)
             ?: return PaperTradeResult(PaperTradeAction.NO_TRADE, "order not found")
-        return processOne(order)
+        val policy = try {
+            policyService.requireRuntime(order.strategyRunId)
+        } catch (_: MissingTradingPolicyException) {
+            return PaperTradeResult(
+                action = PaperTradeAction.MISSING_TRADING_POLICY,
+                orderId = order.id,
+                message = "MISSING_TRADING_POLICY",
+            )
+        }
+        return processOne(order, policy)
     }
 
-    private suspend fun processOne(order: OrderEntity): PaperTradeResult {
+    private suspend fun processOne(
+        order: OrderEntity,
+        policy: RunPaperTradingPolicy,
+    ): PaperTradeResult {
         if (order.status == OrderStatus.VIRTUAL_FILLED) {
             return PaperTradeResult(
                 action = PaperTradeAction.ALREADY_FILLED,
@@ -62,6 +85,7 @@ class ProcessPendingOrdersUseCase(
                 message = "order status ${order.status}",
             )
         }
+        require(policy.executionPricePolicy == ExecutionPricePolicy.NEXT_TRADING_DAY_OPEN)
 
         val signalDate = order.evaluationId?.let { evaluationDao.findEvaluationById(it)?.evaluationDate }
             ?: return PaperTradeResult(
@@ -78,8 +102,8 @@ class ProcessPendingOrdersUseCase(
             )
 
         return when (order.side) {
-            OrderSide.BUY -> fillBuy(order, nextBar.tradeDate, nextBar.openPrice)
-            OrderSide.SELL -> fillSell(order, nextBar.tradeDate, nextBar.openPrice)
+            OrderSide.BUY -> fillBuy(order, nextBar.tradeDate, nextBar.openPrice, policy)
+            OrderSide.SELL -> fillSell(order, nextBar.tradeDate, nextBar.openPrice, policy)
         }
     }
 
@@ -87,10 +111,11 @@ class ProcessPendingOrdersUseCase(
         order: OrderEntity,
         executionDate: java.time.LocalDate,
         openPrice: Long,
+        policy: RunPaperTradingPolicy,
     ): PaperTradeResult {
         val price = policy.slippagePolicy.applyToBuy(openPrice)
         val cash = cashLedger.currentCash(order.strategyRunId)
-        val budget = PaperQuantityMath.buyBudget(cash, policy.buyAllocationPercent)
+        val budget = PaperQuantityMath.buyBudgetFromRate(cash, policy.buyAllocationRate)
         val quantity = PaperQuantityMath.maxAffordableBuyQuantity(
             cashBudgetWon = budget,
             executionPriceWon = price,
@@ -119,6 +144,7 @@ class ProcessPendingOrdersUseCase(
         order: OrderEntity,
         executionDate: java.time.LocalDate,
         openPrice: Long,
+        policy: RunPaperTradingPolicy,
     ): PaperTradeResult {
         val position = positionDao.find(order.strategyRunId, order.instrumentId)
         val quantity = position?.quantity ?: 0L

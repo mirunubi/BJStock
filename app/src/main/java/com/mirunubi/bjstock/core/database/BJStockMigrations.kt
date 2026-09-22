@@ -54,4 +54,66 @@ object BJStockMigrations {
             )
         }
     }
+
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `paper_trading_policies` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `strategy_run_id` INTEGER NOT NULL,
+                    `policy_version` TEXT NOT NULL,
+                    `buy_allocation_rate` INTEGER NOT NULL,
+                    `commission_rate` INTEGER NOT NULL,
+                    `sell_tax_rate` INTEGER NOT NULL,
+                    `slippage_bps` INTEGER NOT NULL,
+                    `execution_price_policy` TEXT NOT NULL,
+                    `additional_buy_policy` TEXT NOT NULL,
+                    `sell_policy` TEXT NOT NULL,
+                    `short_selling_allowed` INTEGER NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_paper_trading_policies_strategy_run`
+                ON `paper_trading_policies` (`strategy_run_id`)
+                """.trimIndent(),
+            )
+            // Phase 6 baseline v1 backfill (WEIGHT_FACTOR scale).
+            db.execSQL(
+                """
+                INSERT INTO paper_trading_policies (
+                    strategy_run_id,
+                    policy_version,
+                    buy_allocation_rate,
+                    commission_rate,
+                    sell_tax_rate,
+                    slippage_bps,
+                    execution_price_policy,
+                    additional_buy_policy,
+                    sell_policy,
+                    short_selling_allowed,
+                    created_at
+                )
+                SELECT
+                    id,
+                    'v1',
+                    100000,
+                    150,
+                    2000,
+                    0,
+                    'NEXT_TRADING_DAY_OPEN',
+                    'DISALLOW',
+                    'FULL_POSITION',
+                    0,
+                    CAST(strftime('%s','now') AS INTEGER) * 1000
+                FROM strategy_runs
+                """.trimIndent(),
+            )
+        }
+    }
 }

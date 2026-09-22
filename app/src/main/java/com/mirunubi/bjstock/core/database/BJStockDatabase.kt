@@ -10,6 +10,7 @@ import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.OrderDao
+import com.mirunubi.bjstock.core.database.dao.PaperTradingPolicyDao
 import com.mirunubi.bjstock.core.database.dao.PortfolioDailySnapshotDao
 import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
@@ -24,6 +25,7 @@ import com.mirunubi.bjstock.core.database.entity.FactorValueEntity
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
 import com.mirunubi.bjstock.core.database.entity.MarketDailyBarEntity
 import com.mirunubi.bjstock.core.database.entity.OrderEntity
+import com.mirunubi.bjstock.core.database.entity.PaperTradingPolicyEntity
 import com.mirunubi.bjstock.core.database.entity.PortfolioDailySnapshotEntity
 import com.mirunubi.bjstock.core.database.entity.PositionEntity
 import com.mirunubi.bjstock.core.database.entity.StockEvaluationDetailEntity
@@ -52,8 +54,9 @@ import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
         AiAdviceRequestEntity::class,
         AiAdviceResultEntity::class,
         CashLedgerEntity::class,
+        PaperTradingPolicyEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(BJStockConverters::class)
@@ -69,10 +72,11 @@ abstract class BJStockDatabase : RoomDatabase() {
     abstract fun executionDao(): ExecutionDao
     abstract fun positionDao(): PositionDao
     abstract fun portfolioDailySnapshotDao(): PortfolioDailySnapshotDao
+    abstract fun paperTradingPolicyDao(): PaperTradingPolicyDao
 
     companion object {
         const val NAME = "bjstock.db"
-        const val VERSION = 4
-        const val ENTITY_COUNT = 17
+        const val VERSION = 5
+        const val ENTITY_COUNT = 18
     }
 }

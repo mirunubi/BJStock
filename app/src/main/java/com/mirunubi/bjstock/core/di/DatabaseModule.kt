@@ -10,6 +10,7 @@ import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.OrderDao
+import com.mirunubi.bjstock.core.database.dao.PaperTradingPolicyDao
 import com.mirunubi.bjstock.core.database.dao.PortfolioDailySnapshotDao
 import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
@@ -37,6 +38,7 @@ object DatabaseModule {
                 BJStockMigrations.MIGRATION_1_2,
                 BJStockMigrations.MIGRATION_2_3,
                 BJStockMigrations.MIGRATION_3_4,
+                BJStockMigrations.MIGRATION_4_5,
             )
             .build()
     }
@@ -76,4 +78,8 @@ object DatabaseModule {
     @Provides
     fun providePortfolioDailySnapshotDao(database: BJStockDatabase): PortfolioDailySnapshotDao =
         database.portfolioDailySnapshotDao()
+
+    @Provides
+    fun providePaperTradingPolicyDao(database: BJStockDatabase): PaperTradingPolicyDao =
+        database.paperTradingPolicyDao()
 }

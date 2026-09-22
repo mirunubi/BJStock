@@ -20,15 +20,24 @@ Strategy Evaluation
 - `cash_ledger` is the cash history; current cash is the latest `balance_after`.
 - `portfolio_daily_snapshots` are trading-day performance projections.
 
-## Trading Policy (MVP)
+## Trading Policy
 
-- BUY allocation: **10% of current cash** (`PaperTradingPolicy.buyAllocationPercent`).
-- Additional buy into an open position: **forbidden**.
-- SELL: **full position only**.
-- Short selling: **forbidden**.
-- HOLD / NO_ACTION: no order.
+Each strategy run owns one immutable `paper_trading_policies` snapshot (Phase 6.1). See [113_PAPER_TRADING_POLICY.md](113_PAPER_TRADING_POLICY.md).
 
-Policy rates live in code for Phase 6. Persisting them per run is deferred.
+Live fills load that snapshot — never the live code default.
+
+`PaperTradingPolicy.DEFAULT` is only the template when creating a new run.
+
+v1 baseline (SIMULATION ASSUMPTION):
+
+- BUY allocation: **10% of current cash**
+- Additional buy into an open position: **forbidden**
+- SELL: **full position only**
+- Short selling: **forbidden**
+- HOLD / NO_ACTION: no order
+- commission `0.00015`, sell tax `0.0020`, slippage `0`
+
+Missing snapshot → `MISSING_TRADING_POLICY` (no silent global fallback).
 
 ## Execution Timing
 
@@ -43,15 +52,18 @@ If no later bar exists, the order stays `PENDING_EXECUTION`.
 
 ## Costs
 
-`TradingCostPolicy` and `SlippagePolicy` are injectable.
+Costs come from the run's policy snapshot (`commission_rate`, `sell_tax_rate`, `slippage_bps`).
 
-**SIMULATION ASSUMPTION** defaults:
+**SIMULATION ASSUMPTION** — not claimed to be current legal/brokerage rates.
 
-- commissionRate = 0.00015
-- sellTaxRate = 0.0020
-- slippage = 0
+## executed_at
 
-These are not claimed to be current legal/brokerage rates.
+```text
+executed_at = simulated market execution date (UTC midnight Instant)
+created_at  = wall-clock DB insert time
+```
+
+Do not use `created_at` as the trading day.
 
 ## Atomic Fill
 

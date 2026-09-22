@@ -5,6 +5,7 @@ import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.OrderDao
+import com.mirunubi.bjstock.core.database.dao.PaperTradingPolicyDao
 import com.mirunubi.bjstock.core.database.dao.PortfolioDailySnapshotDao
 import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
@@ -13,6 +14,7 @@ import com.mirunubi.bjstock.core.paper.CashLedgerService
 import com.mirunubi.bjstock.core.paper.CreateDailySnapshotUseCase
 import com.mirunubi.bjstock.core.paper.PaperTradingEngine
 import com.mirunubi.bjstock.core.paper.PaperTradingPolicy
+import com.mirunubi.bjstock.core.paper.PaperTradingPolicyService
 import com.mirunubi.bjstock.core.paper.ProcessEvaluationUseCase
 import com.mirunubi.bjstock.core.paper.ProcessPendingOrdersUseCase
 import com.mirunubi.bjstock.core.paper.VirtualFillService
@@ -27,7 +29,13 @@ import javax.inject.Singleton
 object PaperModule {
     @Provides
     @Singleton
-    fun providePaperTradingPolicy(): PaperTradingPolicy = PaperTradingPolicy.DEFAULT
+    fun providePaperTradingPolicyTemplate(): PaperTradingPolicy = PaperTradingPolicy.DEFAULT
+
+    @Provides
+    @Singleton
+    fun providePaperTradingPolicyService(
+        policyDao: PaperTradingPolicyDao,
+    ): PaperTradingPolicyService = PaperTradingPolicyService(policyDao)
 
     @Provides
     @Singleton
@@ -74,7 +82,7 @@ object PaperModule {
         positionDao: PositionDao,
         cashLedger: CashLedgerService,
         fills: VirtualFillService,
-        policy: PaperTradingPolicy,
+        policyService: PaperTradingPolicyService,
     ): ProcessPendingOrdersUseCase = ProcessPendingOrdersUseCase(
         strategyRunDao = strategyRunDao,
         orderDao = orderDao,
@@ -83,7 +91,7 @@ object PaperModule {
         positionDao = positionDao,
         cashLedger = cashLedger,
         fills = fills,
-        policy = policy,
+        policyService = policyService,
     )
 
     @Provides

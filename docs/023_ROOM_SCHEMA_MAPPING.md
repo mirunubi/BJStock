@@ -36,7 +36,7 @@ Storage rules:
 
 **Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
 
-Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Explicit Migration(1, 2), Migration(2, 3), and Migration(3, 4) are registered; `fallbackToDestructiveMigration` is not used.
+Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Explicit Migration(1, 2), Migration(2, 3), Migration(3, 4), and Migration(4, 5) are registered; `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -273,6 +273,26 @@ Phase 4 persistence:
 **Date/Time Mapping:** `event_date` LocalDate; `created_at` Instant UTC
 
 **Constraint Difference:** PostgreSQL CHECK event types / balance_after >= 0 are application-validated in Room.
+
+---
+
+## paper_trading_policies
+
+**PostgreSQL Table:** `bjstock.paper_trading_policies`
+
+**Room Entity:** `PaperTradingPolicyEntity` / `paper_trading_policies`
+
+**PK:** `id`
+
+**FK:** `strategy_run_id → strategy_runs.id` RESTRICT
+
+**Unique:** `UNIQUE (strategy_run_id)` — exactly one snapshot per strategy run
+
+**Numeric Mapping:** `buy_allocation_rate` / `commission_rate` / `sell_tax_rate` → Long * `WEIGHT_FACTOR` (1_000_000). PostgreSQL stores the same rates as `NUMERIC(8,6)`. `slippage_bps` → Long/Int.
+
+**Date/Time Mapping:** `created_at` Instant UTC (snapshot creation wall clock)
+
+**Constraint Difference:** PostgreSQL CHECKs enforce policy vocabularies, non-empty `policy_version`, and `short_selling_allowed = FALSE`. Room validates via application enums / service guards.
 
 ---
 

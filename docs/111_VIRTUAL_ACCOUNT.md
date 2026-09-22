@@ -4,7 +4,16 @@ Each `strategy_runs` row is one independent virtual account.
 
 ## Initial Cash
 
-Creating a READY run writes exactly one:
+Creating a READY run (one transaction):
+
+```text
+strategy_runs insert
+  → paper_trading_policies snapshot (from template)
+  → cash_ledger INITIAL_DEPOSIT
+  → status READY
+```
+
+INITIAL_DEPOSIT:
 
 ```text
 cash_ledger.event_type = INITIAL_DEPOSIT
@@ -12,7 +21,7 @@ amount = +initial_cash
 balance_after = initial_cash
 ```
 
-Duplicate initial deposits are rejected.
+Duplicate initial deposits are rejected. Duplicate policy snapshots for the same run are rejected.
 
 ## Cash Ledger Events
 

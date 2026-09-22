@@ -361,3 +361,31 @@ Portfolio snapshots use exact trading-day closes. Missing prices fail the snapsh
 ## D-090
 
 Order status includes `PENDING_EXECUTION` for next-day open fills that are waiting for market bars.
+
+## D-091
+
+Each strategy run has exactly one immutable paper trading policy snapshot (`UNIQUE strategy_run_id`).
+
+## D-092
+
+Running paper trading loads the run's policy snapshot. It does not read the live global code default.
+
+## D-093
+
+Commission and sell-tax rates in paper policy are SIMULATION ASSUMPTION values, not claimed legal or brokerage quotes.
+
+## D-094
+
+Changing paper trading policy means creating a new strategy run. Existing run snapshots are not updated.
+
+## D-095
+
+A READY/RUNNING run without a policy snapshot cannot trade (`MISSING_TRADING_POLICY`). Silent fallback is forbidden.
+
+## D-096
+
+`executed_at` stores the simulated market execution date as UTC midnight. It is not wall-clock fill time.
+
+## D-097
+
+`created_at` is the BJStock record creation timestamp. Analytics must not treat it as the trading day.

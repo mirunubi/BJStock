@@ -81,6 +81,12 @@ Implement BJStock-owned virtual account, paper orders, and executions against `s
 
 Status: complete for build / JVM-Robolectric verification. Runtime (physical-device end-to-end forward paper flow) is DEFERRED — physical device pending.
 
+### Phase 6.1 — Paper Trading Policy Snapshot Hardening
+
+Persist one immutable `paper_trading_policies` snapshot per strategy run so past runs remain reproducible after code defaults change.
+
+Status: complete for build / JVM-Robolectric verification. Runtime remains DEFERRED — physical device pending.
+
 ### Phase 7 — Performance Analytics
 
 Track forward-test results through portfolio snapshots and related metrics.
@@ -99,10 +105,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 6 — Virtual Account & Paper Trading Engine is build/unit complete.
+Phase 6.1 — Paper Trading Policy Snapshot Hardening is build/unit complete.
 
 Next: Phase 7 — Performance Analytics & Forward Test Dashboard.
 
-Do not start Phase 7 until Phase 6 is accepted.
+Do not start Phase 7 until Phase 6.1 is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

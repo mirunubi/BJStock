@@ -158,12 +158,15 @@ Evaluation → Evaluation Detail → Decision → Virtual Order
 - `executions`
 - `positions`
 - `cash_ledger`
+- `paper_trading_policies`
 
 `orders` / `executions` are the trade-history source of truth.
 
 `positions` is a current-state projection for fast lookup.
 
 `cash_ledger` is the cash-history source of truth; current cash is the latest `balance_after`.
+
+`paper_trading_policies` is a 1:1 immutable snapshot of the paper-trading rules used by a strategy run (`UNIQUE strategy_run_id`). Code defaults are templates for new runs only.
 
 ### Performance
 

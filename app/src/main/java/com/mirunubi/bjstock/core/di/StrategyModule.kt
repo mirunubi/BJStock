@@ -8,6 +8,8 @@ import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.factor.FactorRegistry
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
 import com.mirunubi.bjstock.core.paper.CashLedgerService
+import com.mirunubi.bjstock.core.paper.PaperTradingPolicy
+import com.mirunubi.bjstock.core.paper.PaperTradingPolicyService
 import com.mirunubi.bjstock.core.strategy.EvaluateStrategyRunUseCase
 import com.mirunubi.bjstock.core.strategy.PreviewStrategyEvaluationUseCase
 import com.mirunubi.bjstock.core.strategy.StrategyEvaluationLoader
@@ -38,10 +40,20 @@ object StrategyModule {
     @Provides
     @Singleton
     fun provideStrategyRunService(
+        database: BJStockDatabase,
         strategyDao: StrategyDao,
         strategyRunDao: StrategyRunDao,
         cashLedger: CashLedgerService,
-    ): StrategyRunService = StrategyRunService(strategyDao, strategyRunDao, cashLedger)
+        policyService: PaperTradingPolicyService,
+        policyTemplate: PaperTradingPolicy,
+    ): StrategyRunService = StrategyRunService(
+        database = database,
+        strategyDao = strategyDao,
+        strategyRunDao = strategyRunDao,
+        cashLedger = cashLedger,
+        policyService = policyService,
+        defaultPolicyTemplate = { policyTemplate },
+    )
 
     @Provides
     @Singleton

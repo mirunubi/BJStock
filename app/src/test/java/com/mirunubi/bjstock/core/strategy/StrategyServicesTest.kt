@@ -15,6 +15,7 @@ import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.RunType
 import com.mirunubi.bjstock.core.paper.CashLedgerService
+import com.mirunubi.bjstock.core.paper.PaperTradingPolicyService
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -320,10 +321,14 @@ class StrategyServicesTest {
     }
 
     private suspend fun createRun(versionId: Long): Long {
+        val cash = CashLedgerService(database.cashLedgerDao()) { Instant.EPOCH }
+        val policies = PaperTradingPolicyService(database.paperTradingPolicyDao()) { Instant.EPOCH }
         return StrategyRunService(
-            database.strategyDao(),
-            database.strategyRunDao(),
-            CashLedgerService(database.cashLedgerDao()) { Instant.EPOCH },
+            database = database,
+            strategyDao = database.strategyDao(),
+            strategyRunDao = database.strategyRunDao(),
+            cashLedger = cash,
+            policyService = policies,
             now = { Instant.EPOCH },
         ).createReadyRun(versionId, "Run", date, 10_000_000)
     }

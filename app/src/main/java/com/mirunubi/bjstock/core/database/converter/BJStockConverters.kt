@@ -1,9 +1,11 @@
 package com.mirunubi.bjstock.core.database.converter
 
 import androidx.room.TypeConverter
+import com.mirunubi.bjstock.core.model.AdditionalBuyPolicy
 import com.mirunubi.bjstock.core.model.AiRecommendation
 import com.mirunubi.bjstock.core.model.Board
 import com.mirunubi.bjstock.core.model.CashLedgerEventType
+import com.mirunubi.bjstock.core.model.ExecutionPricePolicy
 import com.mirunubi.bjstock.core.model.FactorCategory
 import com.mirunubi.bjstock.core.model.FactorValueType
 import com.mirunubi.bjstock.core.model.InstrumentType
@@ -12,6 +14,7 @@ import com.mirunubi.bjstock.core.model.OrderStatus
 import com.mirunubi.bjstock.core.model.OrderType
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.RunType
+import com.mirunubi.bjstock.core.model.SellPolicy
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import com.mirunubi.bjstock.core.model.TradeDecision
 import java.time.Instant
@@ -91,6 +94,26 @@ class BJStockConverters {
     @TypeConverter
     fun codeToCashLedgerEventType(value: String): CashLedgerEventType =
         CashLedgerEventType.valueOf(value)
+
+    @TypeConverter
+    fun executionPricePolicyToCode(value: ExecutionPricePolicy): String = value.name
+
+    @TypeConverter
+    fun codeToExecutionPricePolicy(value: String): ExecutionPricePolicy =
+        ExecutionPricePolicy.valueOf(value)
+
+    @TypeConverter
+    fun additionalBuyPolicyToCode(value: AdditionalBuyPolicy): String = value.name
+
+    @TypeConverter
+    fun codeToAdditionalBuyPolicy(value: String): AdditionalBuyPolicy =
+        AdditionalBuyPolicy.valueOf(value)
+
+    @TypeConverter
+    fun sellPolicyToCode(value: SellPolicy): String = value.name
+
+    @TypeConverter
+    fun codeToSellPolicy(value: String): SellPolicy = SellPolicy.valueOf(value)
 
     @TypeConverter
     fun aiRecommendationToCode(value: AiRecommendation): String = value.name

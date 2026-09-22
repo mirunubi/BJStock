@@ -78,6 +78,18 @@ object CashLedgerReferenceTypes {
     const val EXECUTION = "EXECUTION"
 }
 
+enum class ExecutionPricePolicy {
+    NEXT_TRADING_DAY_OPEN,
+}
+
+enum class AdditionalBuyPolicy {
+    DISALLOW,
+}
+
+enum class SellPolicy {
+    FULL_POSITION,
+}
+
 enum class AiRecommendation {
     BUY,
     HOLD,

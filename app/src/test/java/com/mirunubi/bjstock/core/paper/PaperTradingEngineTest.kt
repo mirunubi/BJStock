@@ -63,10 +63,17 @@ class PaperTradingEngineTest {
             registry = SystemFactorRegistryFactory.create(),
             now = { Instant.EPOCH },
         )
+        val policyService = PaperTradingPolicyService(
+            policyDao = database.paperTradingPolicyDao(),
+            now = { Instant.EPOCH },
+        )
         runService = StrategyRunService(
-            database.strategyDao(),
-            database.strategyRunDao(),
-            cashLedger,
+            database = database,
+            strategyDao = database.strategyDao(),
+            strategyRunDao = database.strategyRunDao(),
+            cashLedger = cashLedger,
+            policyService = policyService,
+            defaultPolicyTemplate = { PaperTradingPolicy.ZERO_COST },
             now = { Instant.EPOCH },
         )
         fills = VirtualFillService(
@@ -92,7 +99,7 @@ class PaperTradingEngineTest {
             positionDao = database.positionDao(),
             cashLedger = cashLedger,
             fills = fills,
-            policy = PaperTradingPolicy.ZERO_COST,
+            policyService = policyService,
         )
         createSnapshot = CreateDailySnapshotUseCase(
             strategyRunDao = database.strategyRunDao(),
@@ -128,30 +135,28 @@ class PaperTradingEngineTest {
 
     @Test
     fun commissionAwareQuantity_reducesShares() = runBlocking {
-        val expensive = ProcessPendingOrdersUseCase(
-            strategyRunDao = database.strategyRunDao(),
-            orderDao = database.orderDao(),
-            evaluationDao = database.stockEvaluationDao(),
-            marketDailyBarDao = database.marketDailyBarDao(),
-            positionDao = database.positionDao(),
-            cashLedger = cashLedger,
-            fills = fills,
-            policy = PaperTradingPolicy(
-                buyAllocationPercent = BigDecimal("10"),
+        val expensiveRun = runService.createReadyRun(
+            strategyVersionId = versionId,
+            runName = "Expensive",
+            startDate = friday,
+            initialCashWon = 100_000_000L,
+            policyTemplate = PaperTradingPolicy(
+                buyAllocationRate = BigDecimal("0.10"),
                 costPolicy = TradingCostPolicy(
                     commissionRate = BigDecimal("0.01"),
                     sellTaxRate = BigDecimal.ZERO,
                 ),
             ),
         )
+        runId = expensiveRun
         val evaluationId = insertEvaluation(instrumentA, friday, TradeDecision.BUY)
         insertBar(instrumentA, monday, open = 50_000, close = 51_000)
         processEvaluation(evaluationId)
-        expensive(runId)
-        val position = database.positionDao().find(runId, instrumentA)!!
+        processPending(expensiveRun)
+        val position = database.positionDao().find(expensiveRun, instrumentA)!!
         assertTrue(position.quantity < 200L)
         assertTrue(position.quantity >= 198L)
-        assertTrue(cashLedger.currentCash(runId) >= 0L)
+        assertTrue(cashLedger.currentCash(expensiveRun) >= 0L)
     }
 
     @Test
@@ -230,7 +235,7 @@ class PaperTradingEngineTest {
             positionDao = database.positionDao(),
             cashLedger = cashLedger,
             fills = failingFills,
-            policy = PaperTradingPolicy.ZERO_COST,
+            policyService = PaperTradingPolicyService(database.paperTradingPolicyDao()) { Instant.EPOCH },
         )
         val evaluationId = insertEvaluation(instrumentA, friday, TradeDecision.BUY)
         insertBar(instrumentA, monday, open = 50_000, close = 51_000)

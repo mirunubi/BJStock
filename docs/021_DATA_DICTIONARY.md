@@ -546,6 +546,45 @@ Append only. Current cash is the latest `balance_after`.
 
 ---
 
+## paper_trading_policies
+
+**Purpose**
+
+Immutable paper-trading policy snapshot for one strategy run. Enables reproducibility after code defaults change.
+
+**PK**
+
+- `id`
+
+**FK**
+
+- `strategy_run_id → strategy_runs.id` RESTRICT
+
+**Unique**
+
+- `UNIQUE (strategy_run_id)`
+
+**Main Columns**
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| policy_version | TEXT | non-empty; initial `v1` |
+| buy_allocation_rate | NUMERIC(8,6) | fraction of cash for BUY (e.g. 0.10); Room Long * WEIGHT_FACTOR |
+| commission_rate | NUMERIC(8,6) | SIMULATION ASSUMPTION |
+| sell_tax_rate | NUMERIC(8,6) | SIMULATION ASSUMPTION |
+| slippage_bps | INTEGER | >= 0 |
+| execution_price_policy | TEXT | currently `NEXT_TRADING_DAY_OPEN` only |
+| additional_buy_policy | TEXT | currently `DISALLOW` only |
+| sell_policy | TEXT | currently `FULL_POSITION` only |
+| short_selling_allowed | BOOLEAN | CHECK = FALSE in Phase 6.1 |
+| created_at | TIMESTAMPTZ | snapshot creation time |
+
+**Lifecycle**
+
+Created once when a run enters READY (with INITIAL_DEPOSIT). Never updated. Policy change requires a new strategy run.
+
+---
+
 ## executions
 
 **Purpose**
