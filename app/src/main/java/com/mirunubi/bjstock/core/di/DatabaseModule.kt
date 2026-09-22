@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.BJStockMigrations
+import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
@@ -36,6 +37,9 @@ object DatabaseModule {
     @Provides
     fun provideMarketDailyBarDao(database: BJStockDatabase): MarketDailyBarDao =
         database.marketDailyBarDao()
+
+    @Provides
+    fun provideFactorDao(database: BJStockDatabase): FactorDao = database.factorDao()
 
     @Provides
     fun provideStrategyDao(database: BJStockDatabase): StrategyDao = database.strategyDao()

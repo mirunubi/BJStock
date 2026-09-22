@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.mirunubi.bjstock.core.database.converter.BJStockConverters
+import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
@@ -51,6 +52,7 @@ import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
 abstract class BJStockDatabase : RoomDatabase() {
     abstract fun instrumentDao(): InstrumentDao
     abstract fun marketDailyBarDao(): MarketDailyBarDao
+    abstract fun factorDao(): FactorDao
     abstract fun strategyDao(): StrategyDao
     abstract fun strategyRunDao(): StrategyRunDao
 

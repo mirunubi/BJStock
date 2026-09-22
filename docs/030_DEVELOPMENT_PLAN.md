@@ -65,9 +65,11 @@ Status: complete for build / unit verification. Runtime (actual MST download, li
 
 ### Phase 4 — Factor Definition & Calculation Foundation
 
-Define factors and compute factor values from stored market data.
+Define six market-data system factors and compute raw values plus 0..100 scores from Room daily bars.
 
-### Phase 5 — Scoring / Strategy Engine
+Status: complete for build / unit verification. Runtime (KIS history on device → Room → Factor Test screen) is DEFERRED — physical device pending.
+
+### Phase 5 — Strategy Weighting & Evaluation
 
 Score instruments and apply strategy weights/versions.
 
@@ -93,10 +95,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 3-D — Instrument Master & Historical Sync is build/unit complete.
+Phase 4 — Factor Definition & Calculation Foundation is build/unit complete.
 
-Next: Phase 4 — Factor Definition & Calculation Foundation.
+Next: Phase 5 — Strategy Weighting & Evaluation.
 
-Do not start Phase 4 until Phase 3-D is accepted.
+Do not start Phase 5 until Phase 4 is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

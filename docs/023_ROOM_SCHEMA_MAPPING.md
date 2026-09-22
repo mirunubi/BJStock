@@ -105,7 +105,14 @@ Phase 3-C persistence rules:
 
 **Date/Time Mapping:** `evaluation_date` LocalDate; `created_at` Instant UTC
 
-**Constraint Difference:** 0..100 score CHECK INTENTIONAL omission.
+**Constraint Difference:** 0..100 score CHECK INTENTIONAL omission. Phase 4 writes SUCCESS scores already clamped to 0..100, stored as Long × 10_000.
+
+Phase 4 persistence:
+
+- System factor source is `BJSTOCK_MARKET_ENGINE`, not `KIS`.
+- UPSERT by `(instrument_id, factor_id, evaluation_date, calculation_version)`.
+- `NO_DATA` / `INSUFFICIENT_HISTORY` / `INVALID_DATA` are not inserted.
+- Room schema version stays 2. Factor DAO/repository addition does not change columns.
 
 ---
 

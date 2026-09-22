@@ -49,12 +49,16 @@ Role:
 
 ### Factor Engine
 
-Computes factor values from stored market data.
+Computes factor values from stored Room market data only.
 
 Role:
 
 - Apply factor definitions to instruments
 - Persist computed factor values for later scoring
+- Never read future bars (`tradeDate > asOfDate`)
+- Never call KIS during calculation
+
+Phase 4 implements six market-data system factors. Missing values are not stored as zero. Results are factor values only; they are not BUY/SELL decisions.
 
 ### Scoring Engine
 

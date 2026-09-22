@@ -60,4 +60,19 @@ interface MarketDailyBarDao {
 
     @Query("SELECT COUNT(*) FROM market_daily_bars")
     suspend fun count(): Int
+
+    @Query(
+        """
+        SELECT * FROM market_daily_bars
+        WHERE instrument_id = :instrumentId
+          AND trade_date <= :asOfDate
+        ORDER BY trade_date DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun findBarsUpToDate(
+        instrumentId: Long,
+        asOfDate: LocalDate,
+        limit: Int,
+    ): List<MarketDailyBarEntity>
 }

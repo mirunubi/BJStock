@@ -249,3 +249,39 @@ Historical daily sync stores ADJUSTED prices only.
 ## D-062
 
 Whole-market historical backfill is forbidden in this phase.
+
+## D-063
+
+The Factor Engine reads only local Room market data. It does not call KIS.
+
+## D-064
+
+Factor calculation must not read market bars after `asOfDate`.
+
+## D-065
+
+A missing factor is not a zero score. `NO_DATA`, `INSUFFICIENT_HISTORY`, and `INVALID_DATA` are not stored.
+
+## D-066
+
+The initial system catalog is six market-data factors: PRICE_VS_MA20, PRICE_VS_MA60, MOMENTUM_20D, MOMENTUM_60D, VOLATILITY_20D, VOLUME_RATIO_20D.
+
+## D-067
+
+Raw calculation and 0..100 normalization are separate steps.
+
+## D-068
+
+Normalized factor scores are in 0..100.
+
+## D-069
+
+`calculation_version` is preserved. Re-running the same version UPSERTs; a new version inserts a new row.
+
+## D-070
+
+Factor outputs are values only. They do not create BUY/HOLD/SELL decisions.
+
+## D-071
+
+Financial-statement factors are not implemented until a trusted data source is chosen.
