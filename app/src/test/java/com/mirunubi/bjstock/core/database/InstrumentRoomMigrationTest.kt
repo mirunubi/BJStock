@@ -127,9 +127,59 @@ class InstrumentRoomMigrationTest {
         }
     }
 
+    @Test
+    fun migrate3To4_createsCashLedgerTable() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(V3_TEST_DB)
+
+        context.openOrCreateDatabase(V3_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            sqlite.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS strategy_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    run_name TEXT NOT NULL
+                )
+                """.trimIndent(),
+            )
+            sqlite.version = 3
+        }
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(V3_TEST_DB)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(4) {
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            error("v3 database should already exist")
+                        }
+
+                        override fun onUpgrade(
+                            db: androidx.sqlite.db.SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) {
+                            assertEquals(3, oldVersion)
+                            assertEquals(4, newVersion)
+                            BJStockMigrations.MIGRATION_3_4.migrate(db)
+                        }
+                    },
+                )
+                .build(),
+        )
+
+        helper.writableDatabase.use { migrated ->
+            migrated.query("SELECT name FROM sqlite_master WHERE type='table' AND name='cash_ledger'")
+                .use {
+                    assertEquals(true, it.moveToFirst())
+                    assertEquals("cash_ledger", it.getString(0))
+                }
+        }
+    }
+
     companion object {
         private const val TEST_DB = "instrument-migration-test"
         private const val V2_TEST_DB = "strategy-weight-migration-test"
+        private const val V3_TEST_DB = "cash-ledger-migration-test"
         private const val V1_INSTRUMENTS =
             "CREATE TABLE IF NOT EXISTS `instruments` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `market` TEXT NOT NULL, `symbol` TEXT NOT NULL, `name` TEXT NOT NULL, `sector` TEXT, `industry` TEXT, `currency` TEXT NOT NULL, `is_active` INTEGER NOT NULL, `listed_date` INTEGER, `delisted_date` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)"
         private const val V2_STRATEGY_FACTOR_WEIGHTS =

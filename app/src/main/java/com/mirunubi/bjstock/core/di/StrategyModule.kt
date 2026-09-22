@@ -7,6 +7,7 @@ import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.factor.FactorRegistry
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
+import com.mirunubi.bjstock.core.paper.CashLedgerService
 import com.mirunubi.bjstock.core.strategy.EvaluateStrategyRunUseCase
 import com.mirunubi.bjstock.core.strategy.PreviewStrategyEvaluationUseCase
 import com.mirunubi.bjstock.core.strategy.StrategyEvaluationLoader
@@ -39,7 +40,8 @@ object StrategyModule {
     fun provideStrategyRunService(
         strategyDao: StrategyDao,
         strategyRunDao: StrategyRunDao,
-    ): StrategyRunService = StrategyRunService(strategyDao, strategyRunDao)
+        cashLedger: CashLedgerService,
+    ): StrategyRunService = StrategyRunService(strategyDao, strategyRunDao, cashLedger)
 
     @Provides
     @Singleton

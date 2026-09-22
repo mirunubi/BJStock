@@ -33,6 +33,7 @@ fun DashboardScreen(
     onOpenInstrumentMaster: () -> Unit,
     onOpenFactorTest: () -> Unit,
     onOpenStrategyLab: () -> Unit,
+    onOpenPaperLab: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -42,6 +43,9 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("BJStock") },
                 actions = {
+                    TextButton(onClick = onOpenPaperLab) {
+                        Text("Paper Lab")
+                    }
                     TextButton(onClick = onOpenStrategyLab) {
                         Text("Strategy Lab")
                     }

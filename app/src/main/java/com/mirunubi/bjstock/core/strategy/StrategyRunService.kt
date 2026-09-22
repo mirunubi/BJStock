@@ -6,12 +6,14 @@ import com.mirunubi.bjstock.core.database.entity.StrategyRunEntity
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.RunType
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
+import com.mirunubi.bjstock.core.paper.CashLedgerService
 import java.time.Instant
 import java.time.LocalDate
 
 class StrategyRunService(
     private val strategyDao: StrategyDao,
     private val strategyRunDao: StrategyRunDao,
+    private val cashLedger: CashLedgerService,
     private val now: () -> Instant = { Instant.now() },
 ) {
     suspend fun createReadyRun(
@@ -20,6 +22,7 @@ class StrategyRunService(
         startDate: LocalDate,
         initialCashWon: Long,
     ): Long {
+        require(initialCashWon > 0L) { "initial_cash must be > 0" }
         val version = strategyDao.findVersionById(strategyVersionId)
             ?: throw StrategyVersionException(
                 StrategyErrorKind.NOT_FOUND,
@@ -31,7 +34,7 @@ class StrategyRunService(
                 "new strategy runs require an ACTIVE strategy version",
             )
         }
-        return strategyRunDao.insert(
+        val runId = strategyRunDao.insert(
             StrategyRunEntity(
                 runName = runName,
                 strategyVersionId = strategyVersionId,
@@ -43,7 +46,15 @@ class StrategyRunService(
                 updatedAt = now(),
             ),
         )
+        cashLedger.appendInitialDeposit(
+            strategyRunId = runId,
+            amountWon = initialCashWon,
+            eventDate = startDate,
+        )
+        return runId
     }
 
     suspend fun findById(id: Long) = strategyRunDao.findById(id)
+
+    suspend fun findAll() = strategyRunDao.findAll()
 }

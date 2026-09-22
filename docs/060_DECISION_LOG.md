@@ -325,3 +325,39 @@ While AI is unused, `ai_score` is NULL and final score/decision equal the quant 
 ## D-081
 
 Phase 5 BUY/SELL decisions do not create orders, executions, or positions.
+
+## D-082
+
+Each strategy run is one independent virtual account.
+
+## D-083
+
+Orders plus executions are the trade-history source of truth. Positions are a current projection.
+
+## D-084
+
+Virtual cash is managed through an append-only `cash_ledger`. Current cash is the latest `balance_after`.
+
+## D-085
+
+Paper fills never use the signal-day close. They use the next available trading-day open.
+
+## D-086
+
+Phase 6 forbids averaging into an existing long position and forbids short selling. Sells are full-position only.
+
+## D-087
+
+A virtual fill updates order status, execution, cash ledger, and position in one atomic Room transaction.
+
+## D-088
+
+The paper trading engine never calls network or KIS trading APIs.
+
+## D-089
+
+Portfolio snapshots use exact trading-day closes. Missing prices fail the snapshot; prior-day close is not substituted.
+
+## D-090
+
+Order status includes `PENDING_EXECUTION` for next-day open fills that are waiting for market bars.

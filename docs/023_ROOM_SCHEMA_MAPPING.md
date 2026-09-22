@@ -36,7 +36,7 @@ Storage rules:
 
 **Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
 
-Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Explicit Migration(1, 2) and Migration(2, 3) are registered; `fallbackToDestructiveMigration` is not used.
+Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Explicit Migration(1, 2), Migration(2, 3), and Migration(3, 4) are registered; `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -258,6 +258,24 @@ Phase 4 persistence:
 
 ---
 
+## cash_ledger
+
+**PostgreSQL Table:** `bjstock.cash_ledger`
+
+**Room Entity:** `CashLedgerEntity` / `cash_ledger`
+
+**PK:** `id`
+
+**FK:** `strategy_run_id → strategy_runs.id` RESTRICT
+
+**Numeric Mapping:** `amount` / `balance_after` → Long won (signed amount)
+
+**Date/Time Mapping:** `event_date` LocalDate; `created_at` Instant UTC
+
+**Constraint Difference:** PostgreSQL CHECK event types / balance_after >= 0 are application-validated in Room.
+
+---
+
 ## orders
 
 **PostgreSQL Table:** `bjstock.orders`
@@ -272,9 +290,9 @@ Phase 4 persistence:
 
 **Numeric Mapping:** `requested_price` Long won nullable; `quantity` Long shares
 
-**Date/Time Mapping:** created/executed/cancelled Instant UTC
+**Date/Time Mapping:** created/cancelled Instant wall-clock UTC. `executed_at` stores market execution date as UTC midnight of that trading day.
 
-**Constraint Difference:** side/type/status CHECK → enum String. quantity CHECK INTENTIONAL omission.
+**Constraint Difference:** side/type/status CHECK → enum String including `PENDING_EXECUTION`. quantity may be 0 for pending BUY / REJECTED.
 
 ---
 

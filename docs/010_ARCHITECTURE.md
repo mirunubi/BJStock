@@ -87,12 +87,17 @@ Phase 5 persists no orders, executions, or positions. BUY and SELL are evaluatio
 
 ### Virtual Trading
 
-Executes paper trades against the virtual account.
+Owns paper cash, orders, executions, and positions for each strategy run.
 
 Role:
 
-- Turn decisions into paper orders and executions
-- Never send live broker orders in MVP
+- Treat each strategy run as an independent virtual account backed by `cash_ledger`
+- Create paper orders from quant decisions under a deterministic policy
+- Fill at next trading-day open only (never signal-day close)
+- Keep fills atomic across order/execution/cash/position
+- Never call KIS trading endpoints
+
+Phase 6 does not implement WorkManager schedulers or historical backtest replay.
 
 ### Virtual Account
 
@@ -100,7 +105,7 @@ Maintains BJStock-owned cash, positions, and fills.
 
 Role:
 
-- Track virtual cash and holdings
+- Track virtual cash and holdings through `cash_ledger`
 - Remain independent from real brokerage accounts
 
 ### Performance Analytics

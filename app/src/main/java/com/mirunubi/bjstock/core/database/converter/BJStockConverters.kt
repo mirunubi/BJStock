@@ -3,6 +3,7 @@ package com.mirunubi.bjstock.core.database.converter
 import androidx.room.TypeConverter
 import com.mirunubi.bjstock.core.model.AiRecommendation
 import com.mirunubi.bjstock.core.model.Board
+import com.mirunubi.bjstock.core.model.CashLedgerEventType
 import com.mirunubi.bjstock.core.model.FactorCategory
 import com.mirunubi.bjstock.core.model.FactorValueType
 import com.mirunubi.bjstock.core.model.InstrumentType
@@ -83,6 +84,13 @@ class BJStockConverters {
 
     @TypeConverter
     fun codeToOrderStatus(value: String): OrderStatus = OrderStatus.valueOf(value)
+
+    @TypeConverter
+    fun cashLedgerEventTypeToCode(value: CashLedgerEventType): String = value.name
+
+    @TypeConverter
+    fun codeToCashLedgerEventType(value: String): CashLedgerEventType =
+        CashLedgerEventType.valueOf(value)
 
     @TypeConverter
     fun aiRecommendationToCode(value: AiRecommendation): String = value.name

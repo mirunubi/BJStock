@@ -4,14 +4,20 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.mirunubi.bjstock.core.database.converter.BJStockConverters
+import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
+import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
+import com.mirunubi.bjstock.core.database.dao.OrderDao
+import com.mirunubi.bjstock.core.database.dao.PortfolioDailySnapshotDao
+import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.entity.AiAdviceRequestEntity
 import com.mirunubi.bjstock.core.database.entity.AiAdviceResultEntity
+import com.mirunubi.bjstock.core.database.entity.CashLedgerEntity
 import com.mirunubi.bjstock.core.database.entity.ExecutionEntity
 import com.mirunubi.bjstock.core.database.entity.FactorDefinitionEntity
 import com.mirunubi.bjstock.core.database.entity.FactorValueEntity
@@ -45,8 +51,9 @@ import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
         PortfolioDailySnapshotEntity::class,
         AiAdviceRequestEntity::class,
         AiAdviceResultEntity::class,
+        CashLedgerEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(BJStockConverters::class)
@@ -57,10 +64,15 @@ abstract class BJStockDatabase : RoomDatabase() {
     abstract fun strategyDao(): StrategyDao
     abstract fun strategyRunDao(): StrategyRunDao
     abstract fun stockEvaluationDao(): StockEvaluationDao
+    abstract fun cashLedgerDao(): CashLedgerDao
+    abstract fun orderDao(): OrderDao
+    abstract fun executionDao(): ExecutionDao
+    abstract fun positionDao(): PositionDao
+    abstract fun portfolioDailySnapshotDao(): PortfolioDailySnapshotDao
 
     companion object {
         const val NAME = "bjstock.db"
-        const val VERSION = 3
-        const val ENTITY_COUNT = 16
+        const val VERSION = 4
+        const val ENTITY_COUNT = 17
     }
 }

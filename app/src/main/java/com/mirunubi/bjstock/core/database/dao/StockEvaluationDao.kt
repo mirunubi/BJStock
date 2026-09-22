@@ -48,4 +48,13 @@ interface StockEvaluationDao {
 
     @Query("SELECT COUNT(*) FROM stock_evaluation_details")
     suspend fun countDetails(): Int
+
+    @Query(
+        """
+        SELECT * FROM stock_evaluations
+        WHERE strategy_run_id = :strategyRunId
+        ORDER BY evaluation_date ASC, id ASC
+        """,
+    )
+    suspend fun findByRun(strategyRunId: Long): List<StockEvaluationEntity>
 }

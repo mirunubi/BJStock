@@ -14,6 +14,7 @@ import com.mirunubi.bjstock.core.factor.SystemFactorRegistryFactory
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.RunType
+import com.mirunubi.bjstock.core.paper.CashLedgerService
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -322,6 +323,7 @@ class StrategyServicesTest {
         return StrategyRunService(
             database.strategyDao(),
             database.strategyRunDao(),
+            CashLedgerService(database.cashLedgerDao()) { Instant.EPOCH },
             now = { Instant.EPOCH },
         ).createReadyRun(versionId, "Run", date, 10_000_000)
     }

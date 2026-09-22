@@ -79,6 +79,8 @@ Status: complete for build / JVM-Robolectric verification. Runtime (physical-dev
 
 Implement BJStock-owned virtual account, paper orders, and executions against `strategy_runs`.
 
+Status: complete for build / JVM-Robolectric verification. Runtime (physical-device end-to-end forward paper flow) is DEFERRED — physical device pending.
+
 ### Phase 7 — Performance Analytics
 
 Track forward-test results through portfolio snapshots and related metrics.
@@ -97,10 +99,10 @@ Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 5 — Strategy Weighting & Evaluation is build/unit complete.
+Phase 6 — Virtual Account & Paper Trading Engine is build/unit complete.
 
-Next: Phase 6 — Virtual Account & Paper Trading Engine.
+Next: Phase 7 — Performance Analytics & Forward Test Dashboard.
 
-Do not start Phase 6 until Phase 5 is accepted.
+Do not start Phase 7 until Phase 6 is accepted.
 
 Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.

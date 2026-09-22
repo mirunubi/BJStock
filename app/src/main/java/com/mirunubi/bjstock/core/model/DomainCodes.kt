@@ -57,9 +57,25 @@ enum class OrderType {
 
 enum class OrderStatus {
     CREATED,
+    PENDING_EXECUTION,
     VIRTUAL_FILLED,
     CANCELLED,
     REJECTED,
+}
+
+enum class CashLedgerEventType {
+    INITIAL_DEPOSIT,
+    BUY,
+    SELL,
+    COMMISSION,
+    TAX,
+    ADJUSTMENT,
+}
+
+object CashLedgerReferenceTypes {
+    const val STRATEGY_RUN = "STRATEGY_RUN"
+    const val ORDER = "ORDER"
+    const val EXECUTION = "EXECUTION"
 }
 
 enum class AiRecommendation {

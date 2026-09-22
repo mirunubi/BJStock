@@ -157,10 +157,13 @@ Evaluation → Evaluation Detail → Decision → Virtual Order
 - `orders`
 - `executions`
 - `positions`
+- `cash_ledger`
 
-`orders` / `executions` are the source of truth.
+`orders` / `executions` are the trade-history source of truth.
 
 `positions` is a current-state projection for fast lookup.
+
+`cash_ledger` is the cash-history source of truth; current cash is the latest `balance_after`.
 
 ### Performance
 

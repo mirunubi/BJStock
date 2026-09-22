@@ -75,4 +75,18 @@ interface MarketDailyBarDao {
         asOfDate: LocalDate,
         limit: Int,
     ): List<MarketDailyBarEntity>
+
+    @Query(
+        """
+        SELECT * FROM market_daily_bars
+        WHERE instrument_id = :instrumentId
+          AND trade_date > :afterDate
+        ORDER BY trade_date ASC
+        LIMIT 1
+        """,
+    )
+    suspend fun findNextTradingBar(
+        instrumentId: Long,
+        afterDate: LocalDate,
+    ): MarketDailyBarEntity?
 }

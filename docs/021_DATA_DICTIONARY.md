@@ -495,18 +495,54 @@ Virtual paper orders.
 | order_type | TEXT | MARKET, LIMIT |
 | requested_price | NUMERIC(18, 4) | nullable |
 | quantity | NUMERIC(20, 4) | > 0 |
-| status | TEXT | CREATED, VIRTUAL_FILLED, CANCELLED, REJECTED |
+| status | TEXT | CREATED, PENDING_EXECUTION, VIRTUAL_FILLED, CANCELLED, REJECTED |
 | created_at | TIMESTAMPTZ | |
-| executed_at / cancelled_at | TIMESTAMPTZ | nullable |
+| executed_at / cancelled_at | TIMESTAMPTZ | nullable; executed_at stores market fill date as UTC midnight |
 
 **Important Constraints**
 
 - `evaluation_id` nullable for future manual virtual orders
 - side/type/status CHECK lists
+- `quantity >= 0` (pending BUY may be 0 until fill)
 
 **Lifecycle**
 
-Insert CREATED, then VIRTUAL_FILLED, CANCELLED, or REJECTED. Do not delete after fills exist.
+Insert PENDING_EXECUTION (or REJECTED). Fill to VIRTUAL_FILLED after next open. Do not delete after fills exist.
+
+---
+
+## cash_ledger
+
+**Purpose**
+
+Append-only virtual cash events for a strategy run.
+
+**PK**
+
+- `id`
+
+**FK**
+
+- `strategy_run_id → strategy_runs.id` RESTRICT
+
+**Unique**
+
+- at most one `INITIAL_DEPOSIT` per run (partial unique index)
+
+**Main Columns**
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| event_type | TEXT | INITIAL_DEPOSIT, BUY, SELL, COMMISSION, TAX, ADJUSTMENT |
+| amount | NUMERIC(20, 4) | signed KRW delta |
+| balance_after | NUMERIC(20, 4) | >= 0 running cash |
+| reference_type / reference_id | TEXT / BIGINT | nullable audit pointer |
+| event_date | DATE | market/trading date of the event |
+| created_at | TIMESTAMPTZ | wall-clock insert time |
+
+**Lifecycle**
+
+Append only. Current cash is the latest `balance_after`.
 
 ---
 
