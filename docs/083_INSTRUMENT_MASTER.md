@@ -52,13 +52,25 @@ Flag offsets walk the official `field_specs` widths. KOSPI `ETP`/`SPAC`/`우선�
 
 MVP import accepts 6-digit numeric symbols only. Other code schemes are not guessed.
 
+Each source line is classified as one of:
+
+```text
+TARGET_VALID         6-digit numeric symbol with a name; persisted
+SKIPPED_UNSUPPORTED  well-formed row outside the MVP universe; not persisted
+MALFORMED            truncated or unparseable row
+```
+
+A row is `SKIPPED_UNSUPPORTED` when its short code matches `[0-9A-Z]{6,9}`, its standard code matches `[A-Z]{2}[0-9A-Z]{10}`, and its name is present. This covers ETN (`Q500067`), new alphanumeric codes (`0000D0`), fund/REIT (`F70100030`), warrant (`J0036221D`), and K-suffix preferred (`00088K`) rows. The real KOSPI master carries roughly 800 such rows out of about 2,600.
+
 ## Completeness
 
 A board sync fails, and existing rows are left unchanged, when:
 
-- first sync parses fewer than 100 rows
+- first sync parses fewer than 100 target rows
 - later syncs parse under 80% of that board's current active count
-- the invalid-line ratio exceeds 20%
+- the malformed-line ratio exceeds 20%
+
+Skipped-unsupported rows count toward neither the target minimums nor the malformed ratio.
 
 ## Persistence
 

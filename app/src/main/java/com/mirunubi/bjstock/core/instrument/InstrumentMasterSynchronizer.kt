@@ -38,8 +38,7 @@ class InstrumentMasterSynchronizer(
                 board = board,
                 startedAt = startedAt,
                 downloaded = false,
-                parsed = 0,
-                invalid = 0,
+                stats = null,
                 reason = error.publicMessage,
             )
         }
@@ -50,8 +49,7 @@ class InstrumentMasterSynchronizer(
                 board = board,
                 startedAt = startedAt,
                 downloaded = true,
-                parsed = parsed.stats.parsedRows,
-                invalid = parsed.stats.invalidRows,
+                stats = parsed.stats,
                 reason = completeness,
             )
         }
@@ -114,11 +112,13 @@ class InstrumentMasterSynchronizer(
         return InstrumentMasterSyncResult(
             board = board,
             downloaded = true,
+            total = parsed.stats.totalLines,
             parsed = parsed.stats.parsedRows,
+            skippedUnsupported = parsed.stats.skippedUnsupportedRows,
+            malformed = parsed.stats.malformedRows,
             inserted = inserted,
             updated = updated,
             deactivated = deactivated,
-            invalid = parsed.stats.invalidRows,
             startedAt = startedAt,
             completedAt = now(),
             success = true,
@@ -136,9 +136,9 @@ class InstrumentMasterSynchronizer(
             return "Incomplete master: parsed ${stats.parsedRows} below 80% of $existingActive active"
         }
         if (stats.totalLines > 0 &&
-            stats.invalidRows.toDouble() / stats.totalLines.toDouble() > policy.maxInvalidRatio
+            stats.malformedRows.toDouble() / stats.totalLines.toDouble() > policy.maxInvalidRatio
         ) {
-            return "Incomplete master: invalid ratio too high"
+            return "Incomplete master: malformed ratio too high"
         }
         return null
     }
@@ -147,8 +147,7 @@ class InstrumentMasterSynchronizer(
         board: Board,
         startedAt: Instant,
         downloaded: Boolean,
-        parsed: Int,
-        invalid: Int,
+        stats: InstrumentMasterParseStats?,
         reason: String,
     ): InstrumentMasterSyncResult {
         runCatching {
@@ -163,11 +162,13 @@ class InstrumentMasterSynchronizer(
         return InstrumentMasterSyncResult(
             board = board,
             downloaded = downloaded,
-            parsed = parsed,
+            total = stats?.totalLines ?: 0,
+            parsed = stats?.parsedRows ?: 0,
+            skippedUnsupported = stats?.skippedUnsupportedRows ?: 0,
+            malformed = stats?.malformedRows ?: 0,
             inserted = 0,
             updated = 0,
             deactivated = 0,
-            invalid = invalid,
             startedAt = startedAt,
             completedAt = now(),
             success = false,

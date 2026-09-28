@@ -25,22 +25,26 @@ class KisMstParser(
         val layout = KisMstTailLayout.forBoard(board)
         val bySymbol = LinkedHashMap<String, InstrumentMasterEntry>()
         var totalLines = 0
-        var invalidRows = 0
+        var skippedUnsupportedRows = 0
+        var malformedRows = 0
         var duplicateSymbols = 0
 
         for (line in splitLines(mstBytes)) {
             if (line.isEmpty()) continue
             totalLines += 1
-            val entry = parseLine(line, board, tailLen, layout)
-            if (entry == null) {
-                invalidRows += 1
-                continue
+            val outcome = parseLine(line, board, tailLen, layout)
+            when (outcome.category) {
+                MstRowCategory.SKIPPED_UNSUPPORTED -> skippedUnsupportedRows += 1
+                MstRowCategory.MALFORMED -> malformedRows += 1
+                MstRowCategory.TARGET_VALID -> {
+                    val entry = checkNotNull(outcome.entry)
+                    if (bySymbol.containsKey(entry.symbol)) {
+                        duplicateSymbols += 1
+                    } else {
+                        bySymbol[entry.symbol] = entry
+                    }
+                }
             }
-            if (bySymbol.containsKey(entry.symbol)) {
-                duplicateSymbols += 1
-                continue
-            }
-            bySymbol[entry.symbol] = entry
         }
 
         return InstrumentMasterParseResult(
@@ -48,38 +52,56 @@ class KisMstParser(
             stats = InstrumentMasterParseStats(
                 totalLines = totalLines,
                 parsedRows = bySymbol.size,
-                invalidRows = invalidRows,
+                skippedUnsupportedRows = skippedUnsupportedRows,
+                malformedRows = malformedRows,
                 duplicateSymbols = duplicateSymbols,
             ),
         )
     }
+
+    internal fun classifyLine(line: ByteArray, board: Board): MstRowOutcome =
+        parseLine(
+            line = line,
+            board = board,
+            tailLen = InstrumentMasterConfig.tailBytes(board),
+            layout = KisMstTailLayout.forBoard(board),
+        )
 
     private fun parseLine(
         line: ByteArray,
         board: Board,
         tailLen: Int,
         layout: KisMstTailLayout,
-    ): InstrumentMasterEntry? {
-        if (line.size <= tailLen + SYMBOL_END) return null
+    ): MstRowOutcome {
+        if (line.size <= tailLen + SYMBOL_END) return MstRowOutcome.MALFORMED
         val part1End = line.size - tailLen
-        if (part1End <= NAME_START) return null
+        if (part1End <= NAME_START) return MstRowOutcome.MALFORMED
         val symbol = decode(line, SYMBOL_START, SYMBOL_END).trim()
-        if (!MVP_LISTED_SYMBOL.matches(symbol)) return null
-        val standardCode = decode(line, STANDARD_START, STANDARD_END).trim().ifEmpty { null }
         val name = decode(line, NAME_START, part1End - 1).trim()
-        if (name.isEmpty()) return null
+        if (!MVP_LISTED_SYMBOL.matches(symbol)) {
+            val standardCode = decode(line, STANDARD_START, STANDARD_END).trim()
+            val wellFormed = SOURCE_SYMBOL.matches(symbol) &&
+                SOURCE_STANDARD_CODE.matches(standardCode) &&
+                name.isNotEmpty()
+            return if (wellFormed) MstRowOutcome.SKIPPED_UNSUPPORTED else MstRowOutcome.MALFORMED
+        }
+        val standardCode = decode(line, STANDARD_START, STANDARD_END).trim().ifEmpty { null }
+        if (name.isEmpty()) return MstRowOutcome.MALFORMED
         val tail = line.copyOfRange(part1End, line.size)
         val spac = layout.readFlag(tail, layout.spacOffset)
         val etp = layout.readFlag(tail, layout.etpOffset)
         val preferred = layout.readFlag(tail, layout.preferredOffset)
-        return InstrumentMasterEntry(
-            symbol = symbol,
-            standardCode = standardCode,
-            name = name,
-            market = InstrumentMasterConfig.MARKET_KRX,
-            board = board,
-            instrumentType = classify(spac, etp, preferred),
-            listedDate = parseListedDate(layout.readField(tail, layout.listedDateOffset, 8)),
+        return MstRowOutcome(
+            category = MstRowCategory.TARGET_VALID,
+            entry = InstrumentMasterEntry(
+                symbol = symbol,
+                standardCode = standardCode,
+                name = name,
+                market = InstrumentMasterConfig.MARKET_KRX,
+                board = board,
+                instrumentType = classify(spac, etp, preferred),
+                listedDate = parseListedDate(layout.readField(tail, layout.listedDateOffset, 8)),
+            ),
         )
     }
 
@@ -126,6 +148,11 @@ class KisMstParser(
     companion object {
         val CHARSET: Charset = Charset.forName("MS949")
         private val MVP_LISTED_SYMBOL = Regex("^\\d{6}$")
+
+        // Short-code shapes KRX publishes in the master (ETN Q-codes, new alphanumeric codes,
+        // fund/REIT F-codes, warrant J-codes, K-suffix preferred). Anything else is malformed.
+        private val SOURCE_SYMBOL = Regex("^[0-9A-Z]{6,9}$")
+        private val SOURCE_STANDARD_CODE = Regex("^[A-Z]{2}[0-9A-Z]{10}$")
         private val LISTED_DATE = DateTimeFormatter.BASIC_ISO_DATE
         private const val SYMBOL_START = 0
         private const val SYMBOL_END = 8
@@ -148,6 +175,16 @@ class KisMstParser(
                 InstrumentType.OTHER
             }
         }
+    }
+}
+
+internal data class MstRowOutcome(
+    val category: MstRowCategory,
+    val entry: InstrumentMasterEntry? = null,
+) {
+    companion object {
+        val SKIPPED_UNSUPPORTED = MstRowOutcome(MstRowCategory.SKIPPED_UNSUPPORTED)
+        val MALFORMED = MstRowOutcome(MstRowCategory.MALFORMED)
     }
 }
 

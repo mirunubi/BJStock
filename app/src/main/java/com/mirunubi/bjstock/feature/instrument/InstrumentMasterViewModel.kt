@@ -207,11 +207,13 @@ class InstrumentMasterViewModel @Inject constructor(
         val status = if (result.success) "SUCCESS" else "FAILED"
         return buildString {
             append("${result.board} $status")
-            append(" parsed=${result.parsed}")
+            append(" total=${result.total}")
+            append(" target=${result.parsed}")
+            append(" skippedUnsupported=${result.skippedUnsupported}")
+            append(" malformed=${result.malformed}")
             append(" inserted=${result.inserted}")
             append(" updated=${result.updated}")
             append(" deactivated=${result.deactivated}")
-            append(" invalid=${result.invalid}")
             result.failureReason?.let { append(" $it") }
         }
     }

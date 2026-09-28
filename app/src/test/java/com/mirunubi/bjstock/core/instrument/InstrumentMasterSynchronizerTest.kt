@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -177,12 +178,121 @@ class InstrumentMasterSynchronizerTest {
         assertEquals(0, result.deactivated)
     }
 
-    private fun synchronizer() = InstrumentMasterSynchronizer(
+    @Test
+    fun manyUnsupportedWellFormedRows_doNotTriggerMalformedRatio() = runBlocking {
+        val targets = (1..10).map { "%06d".format(it) }
+        val skipped = (1..40).map { index ->
+            MstFixtures.kospiLine("Q5%05d".format(index), "KRG5%07d0".format(index), "ETN$index")
+        }
+        downloader.bytes[Board.KOSPI] = MstFixtures.join(
+            *targets.map { MstFixtures.kospiLine(it, "KR7${it}0001", "종목$it") }.toTypedArray(),
+            *skipped.toTypedArray(),
+        )
+        val result = synchronizer().sync(Board.KOSPI)
+        assertTrue(result.failureReason, result.success)
+        assertEquals(50, result.total)
+        assertEquals(10, result.parsed)
+        assertEquals(40, result.skippedUnsupported)
+        assertEquals(0, result.malformed)
+        assertEquals(10, result.inserted)
+        assertEquals(10, database.instrumentDao().count())
+        assertNull(database.instrumentDao().findByMarketAndSymbol("KRX", "Q500001"))
+    }
+
+    @Test
+    fun malformedRowsAboveThreshold_stillFailWithoutWriting() = runBlocking {
+        downloader.bytes[Board.KOSPI] = MstFixtures.join(
+            MstFixtures.kospiLine("000001", "KR7000001001", "정상1"),
+            MstFixtures.kospiLine("000002", "KR7000002001", "정상2"),
+            MstFixtures.kospiLine("000003", "KR7000003001", "정상3"),
+            MstFixtures.kospiLine("12345", "KR7000000001", "깨짐1"),
+            MstFixtures.kospiLine("ab#123", "KR7000000002", "깨짐2"),
+        )
+        val result = synchronizer().sync(Board.KOSPI)
+        assertFalse(result.success)
+        assertEquals(2, result.malformed)
+        assertEquals("Incomplete master: malformed ratio too high", result.failureReason)
+        assertEquals(0, result.inserted)
+        assertEquals(0, database.instrumentDao().count())
+    }
+
+    @Test
+    fun firstSyncMinimum_countsTargetRowsOnly() = runBlocking {
+        val strict = policy.copy(firstSyncMinParsed = 3)
+        downloader.bytes[Board.KOSPI] = MstFixtures.join(
+            MstFixtures.kospiLine("000001", "KR7000001001", "정상1"),
+            MstFixtures.kospiLine("000002", "KR7000002001", "정상2"),
+            *(1..20).map { index ->
+                MstFixtures.kospiLine("Q5%05d".format(index), "KRG5%07d0".format(index), "ETN$index")
+            }.toTypedArray(),
+        )
+        val result = synchronizer(strict).sync(Board.KOSPI)
+        assertFalse(result.success)
+        assertEquals("Incomplete master: parsed 2 < 3", result.failureReason)
+        assertEquals(0, database.instrumentDao().count())
+    }
+
+    @Test
+    fun existingBoardEightyPercentGuard_ignoresSkippedRows() = runBlocking {
+        repeat(10) { index ->
+            database.instrumentDao().insert(
+                InstrumentEntity(
+                    market = "KRX",
+                    symbol = "%06d".format(index + 1),
+                    name = "기존$index",
+                    board = Board.KOSPI,
+                    createdAt = Instant.EPOCH,
+                    updatedAt = Instant.EPOCH,
+                ),
+            )
+        }
+        downloader.bytes[Board.KOSPI] = MstFixtures.join(
+            *(1..7).map { "%06d".format(it) }
+                .map { MstFixtures.kospiLine(it, "KR7${it}0001", "유지$it") }.toTypedArray(),
+            *(1..30).map { index ->
+                MstFixtures.kospiLine("Q5%05d".format(index), "KRG5%07d0".format(index), "ETN$index")
+            }.toTypedArray(),
+        )
+        val result = synchronizer().sync(Board.KOSPI)
+        assertFalse(result.success)
+        assertEquals("Incomplete master: parsed 7 below 80% of 10 active", result.failureReason)
+        assertEquals(0, result.deactivated)
+        assertEquals(10, database.instrumentDao().findActiveByMarketAndBoard("KRX", Board.KOSPI).size)
+    }
+
+    @Test
+    fun kospiSync_leavesKosdaqRowsIntact() = runBlocking {
+        downloader.bytes[Board.KOSDAQ] = MstFixtures.join(
+            MstFixtures.kosdaqLine("035720", "KR7035720002", "카카오"),
+            MstFixtures.kosdaqLine("0001A0", "KR70001A0000", "덕양에너젠"),
+        )
+        val kosdaq = synchronizer().sync(Board.KOSDAQ)
+        assertTrue(kosdaq.success)
+        assertEquals(1, kosdaq.inserted)
+        assertEquals(1, kosdaq.skippedUnsupported)
+
+        downloader.bytes[Board.KOSPI] = MstFixtures.join(
+            MstFixtures.kospiLine("005930", "KR7005930003", "삼성전자"),
+            MstFixtures.kospiLine("Q500067", "KRG500670675", "신한 ETN"),
+        )
+        val kospi = synchronizer().sync(Board.KOSPI)
+        assertTrue(kospi.success)
+        assertEquals(0, kospi.deactivated)
+
+        val samsung = database.instrumentDao().findByMarketAndSymbol("KRX", "005930")!!
+        assertEquals(Board.KOSPI, samsung.board)
+        assertEquals("KRX", samsung.market)
+        val kakao = database.instrumentDao().findByMarketAndSymbol("KRX", "035720")!!
+        assertEquals(Board.KOSDAQ, kakao.board)
+        assertTrue(kakao.isActive)
+    }
+
+    private fun synchronizer(syncPolicy: InstrumentMasterSyncPolicy = policy) = InstrumentMasterSynchronizer(
         downloader = downloader,
         parser = KisMstParser(),
         database = database,
         instrumentDao = database.instrumentDao(),
-        policy = policy,
+        policy = syncPolicy,
         now = { Instant.ofEpochMilli(1_000) },
     )
 }

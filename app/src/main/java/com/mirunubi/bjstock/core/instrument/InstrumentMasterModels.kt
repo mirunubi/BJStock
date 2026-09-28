@@ -14,10 +14,22 @@ data class InstrumentMasterEntry(
     val listedDate: LocalDate?,
 )
 
+enum class MstRowCategory {
+    /** Supported BJStock instrument (numeric 6-digit short code); eligible for persistence. */
+    TARGET_VALID,
+
+    /** Structurally valid source row whose security type is outside the supported universe. */
+    SKIPPED_UNSUPPORTED,
+
+    /** Broken, truncated, or unparseable source row. Counts toward the malformed-ratio guard. */
+    MALFORMED,
+}
+
 data class InstrumentMasterParseStats(
     val totalLines: Int,
     val parsedRows: Int,
-    val invalidRows: Int,
+    val skippedUnsupportedRows: Int,
+    val malformedRows: Int,
     val duplicateSymbols: Int,
 )
 
