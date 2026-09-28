@@ -11,8 +11,9 @@ import java.time.format.DateTimeParseException
  * Parses KIS MST fixed-width files by **byte offset**, not UTF-8/string index.
  *
  * Official sample (koreainvestment/open-trading-api) layout after CP949 decode:
- * - last 228 (KOSPI) / 222 (KOSDAQ) characters are the tail
- * - part1[0:9] short code, [9:21] standard code, [21:] Korean name
+ * - the sample slices `row[-228:]` / `row[-222:]` from lines that still end in `\n`, so the
+ *   data tail is 227 (KOSPI) / 221 (KOSDAQ) bytes once the newline is stripped
+ * - part1[0:9] short code, [9:21] standard code, [21:] Korean name (40 bytes)
  *
  * This parser applies the same windows on raw bytes so Korean multibyte names
  * are not sliced by UTF-16/UTF-8 code units.
@@ -88,6 +89,7 @@ class KisMstParser(
         val standardCode = decode(line, STANDARD_START, STANDARD_END).trim().ifEmpty { null }
         if (name.isEmpty()) return MstRowOutcome.MALFORMED
         val tail = line.copyOfRange(part1End, line.size)
+        val groupCode = layout.readField(tail, layout.groupCodeOffset, 2).trim().uppercase()
         val spac = layout.readFlag(tail, layout.spacOffset)
         val etp = layout.readFlag(tail, layout.etpOffset)
         val preferred = layout.readFlag(tail, layout.preferredOffset)
@@ -99,7 +101,7 @@ class KisMstParser(
                 name = name,
                 market = InstrumentMasterConfig.MARKET_KRX,
                 board = board,
-                instrumentType = classify(spac, etp, preferred),
+                instrumentType = classify(groupCode, spac, etp, preferred),
                 listedDate = parseListedDate(layout.readField(tail, layout.listedDateOffset, 8)),
             ),
         )
@@ -162,17 +164,28 @@ class KisMstParser(
         private const val LF: Byte = 0x0A
         private const val CR: Byte = 0x0D
 
-        internal fun classify(spac: String, etp: String, preferred: String): InstrumentType {
+        private const val GROUP_DOMESTIC_STOCK = "ST"
+        private val ETP_PRODUCT_CODE = Regex("^[1-9]$")
+
+        /**
+         * Uses master codes only, never the name:
+         * SPAC flag `Y` -> SPAC; ETP product code 1-9 -> ETP; any group other than `ST`
+         * (REIT, infra/mutual fund, DR, foreign stock, ...) -> OTHER; 우선주 code 1/2 -> PREFERRED_STOCK;
+         * 우선주 code 0 or blank -> COMMON_STOCK.
+         */
+        internal fun classify(
+            groupCode: String,
+            spac: String,
+            etp: String,
+            preferred: String,
+        ): InstrumentType {
             if (spac == "Y") return InstrumentType.SPAC
-            if (etp == "Y") return InstrumentType.ETP
-            if (preferred == "Y") return InstrumentType.PREFERRED_STOCK
-            val spacClear = spac.isEmpty() || spac == "N"
-            val etpClear = etp.isEmpty() || etp == "N"
-            val preferredClear = preferred.isEmpty() || preferred == "N"
-            return if (spacClear && etpClear && preferredClear) {
-                InstrumentType.COMMON_STOCK
-            } else {
-                InstrumentType.OTHER
+            if (ETP_PRODUCT_CODE.matches(etp)) return InstrumentType.ETP
+            if (groupCode != GROUP_DOMESTIC_STOCK) return InstrumentType.OTHER
+            return when (preferred) {
+                "1", "2" -> InstrumentType.PREFERRED_STOCK
+                "", "0" -> InstrumentType.COMMON_STOCK
+                else -> InstrumentType.OTHER
             }
         }
     }
@@ -189,6 +202,8 @@ internal data class MstRowOutcome(
 }
 
 internal data class KisMstTailLayout(
+    val tailLength: Int,
+    val groupCodeOffset: Int,
     val etpOffset: Int,
     val spacOffset: Int,
     val listedDateOffset: Int,
@@ -245,6 +260,8 @@ internal data class KisMstTailLayout(
             1, 1,
         )
 
+        private const val GROUP_CODE_INDEX = 0
+
         private val KOSPI = fromWidths(
             widths = KOSPI_WIDTHS,
             etpIndex = 12,
@@ -274,6 +291,8 @@ internal data class KisMstTailLayout(
                 cursor += width
             }
             return KisMstTailLayout(
+                tailLength = cursor,
+                groupCodeOffset = offsets[GROUP_CODE_INDEX],
                 etpOffset = offsets[etpIndex],
                 spacOffset = offsets[spacIndex],
                 listedDateOffset = offsets[listedDateIndex],

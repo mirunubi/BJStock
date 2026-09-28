@@ -38,17 +38,30 @@ Core part1 window (official sample):
 ```text
 0..8    단축코드
 9..20   표준코드
-21..    한글 종목명 (remainder of part1)
+21..60  한글 종목명 (40 bytes)
 ```
 
-Tail lengths from the official sample:
+Tail lengths after the line's newline is stripped (each equals the sum of the official `field_specs` widths):
 
 ```text
-KOSPI  228 bytes
-KOSDAQ 222 bytes
+KOSPI  227 bytes   (line 288 = part1 61 + tail 227)
+KOSDAQ 221 bytes   (line 282 = part1 61 + tail 221)
 ```
 
-Flag offsets walk the official `field_specs` widths. KOSPI `ETP`/`SPAC`/`우선주` are Y/N flags. KOSDAQ `기업인수목적회사여부` is treated as Y/N. KOSDAQ `ETP 상품구분코드` and `우선주 구분 코드` are codes, not documented booleans; only `Y` is treated as a positive match. Any other non-empty code stays `OTHER`.
+The official sample slices `row[-228:]` / `row[-222:]` from lines that still end in `\n`; BJStock strips the newline first, so its tail is one byte shorter.
+
+Field offsets walk the `field_specs` widths from tail byte 0. `instrument_type` uses master codes only, never the name, in this order:
+
+```text
+SPAC flag = Y                      -> SPAC
+ETP 상품구분코드 = 1..9             -> ETP
+그룹코드 != ST                      -> OTHER   (RT REIT, IF/MF fund, DR, FS foreign stock, ...)
+우선주 구분코드 = 1 or 2            -> PREFERRED_STOCK
+우선주 구분코드 = 0 or blank        -> COMMON_STOCK
+anything else                      -> OTHER
+```
+
+`listed_date` is the 8-digit `상장일자` field (e.g. 005930 = 1975-06-11).
 
 MVP import accepts 6-digit numeric symbols only. Other code schemes are not guessed.
 

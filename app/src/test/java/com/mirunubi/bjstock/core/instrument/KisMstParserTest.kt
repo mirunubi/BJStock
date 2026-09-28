@@ -188,34 +188,131 @@ class KisMstParserTest {
     }
 
     @Test
-    fun spacPreferredAndEtpFlags_classifyInPriorityOrder() {
-        val spac = parser.parse(
-            MstFixtures.join(MstFixtures.kospiLine("123456", "KR7123450001", "스팩", spac = "Y", etp = "Y")),
-            Board.KOSPI,
-        ).entries.single()
-        assertEquals(InstrumentType.SPAC, spac.instrumentType)
+    fun spacEtpAndPreferredCodes_classifyInPriorityOrder() {
+        fun typeOf(line: ByteArray) = parser.parse(MstFixtures.join(line), Board.KOSPI).entries.single().instrumentType
 
-        val etp = parser.parse(
-            MstFixtures.join(MstFixtures.kospiLine("069500", "KR7069500007", "ETF", etp = "Y")),
-            Board.KOSPI,
-        ).entries.single()
-        assertEquals(InstrumentType.ETP, etp.instrumentType)
-
-        val preferred = parser.parse(
-            MstFixtures.join(MstFixtures.kospiLine("005935", "KR7005931001", "우선주", preferred = "Y")),
-            Board.KOSPI,
-        ).entries.single()
-        assertEquals(InstrumentType.PREFERRED_STOCK, preferred.instrumentType)
+        assertEquals(
+            InstrumentType.SPAC,
+            typeOf(MstFixtures.kospiLine("123456", "KR7123450001", "스팩", spac = "Y", etp = "2")),
+        )
+        assertEquals(
+            InstrumentType.ETP,
+            typeOf(MstFixtures.kospiLine("069500", "KR7069500007", "ETF", groupCode = "EF", etp = "2")),
+        )
+        assertEquals(
+            InstrumentType.ETP,
+            typeOf(MstFixtures.kospiLine("069501", "KR7069501007", "ETF1", groupCode = "EF", etp = "1")),
+        )
+        assertEquals(
+            InstrumentType.PREFERRED_STOCK,
+            typeOf(MstFixtures.kospiLine("005935", "KR7005931001", "구형우선주", preferred = "1")),
+        )
+        assertEquals(
+            InstrumentType.PREFERRED_STOCK,
+            typeOf(MstFixtures.kospiLine("000087", "KR7000082008", "신형우선주", preferred = "2")),
+        )
+        assertEquals(
+            InstrumentType.COMMON_STOCK,
+            typeOf(MstFixtures.kospiLine("005930", "KR7005930003", "보통주", preferred = "0")),
+        )
     }
 
     @Test
-    fun kosdaqEtpProductCode_otherThanY_isNotGuessed() {
-        val result = parser.parse(
-            MstFixtures.join(
-                MstFixtures.kosdaqLine("069500", "KR7069500007", "상품", etp = "1"),
-            ),
-            Board.KOSDAQ,
-        ).entries.single()
-        assertEquals(InstrumentType.OTHER, result.instrumentType)
+    fun nonStockGroups_areOther_evenWithCommonCodes() {
+        listOf("RT", "IF", "MF", "DR", "FS", "EF", "").forEach { group ->
+            val type = parser.parse(
+                MstFixtures.join(MstFixtures.kospiLine("088260", "KR7088260005", "비주식", groupCode = group)),
+                Board.KOSPI,
+            ).entries.single().instrumentType
+            assertEquals("group '$group'", InstrumentType.OTHER, type)
+        }
+    }
+
+    @Test
+    fun legacyYesNoAndUnknownCodes_areNotGuessed() {
+        fun typeOf(line: ByteArray) = parser.parse(MstFixtures.join(line), Board.KOSDAQ).entries.single().instrumentType
+
+        assertEquals(InstrumentType.OTHER, typeOf(MstFixtures.kosdaqLine("111111", "KR7111111001", "A", preferred = "Y")))
+        assertEquals(InstrumentType.OTHER, typeOf(MstFixtures.kosdaqLine("222222", "KR7222222001", "B", preferred = "9")))
+        assertEquals(InstrumentType.COMMON_STOCK, typeOf(MstFixtures.kosdaqLine("333333", "KR7333333001", "C", etp = "Y")))
+        assertEquals(InstrumentType.COMMON_STOCK, typeOf(MstFixtures.kosdaqLine("444444", "KR7444444001", "D", etp = "0")))
+    }
+
+    @Test
+    fun tailBytes_equalOfficialFieldWidthSums() {
+        assertEquals(227, InstrumentMasterConfig.KOSPI_TAIL_BYTES)
+        assertEquals(221, InstrumentMasterConfig.KOSDAQ_TAIL_BYTES)
+        assertEquals(InstrumentMasterConfig.KOSPI_TAIL_BYTES, KisMstTailLayout.forBoard(Board.KOSPI).tailLength)
+        assertEquals(InstrumentMasterConfig.KOSDAQ_TAIL_BYTES, KisMstTailLayout.forBoard(Board.KOSDAQ).tailLength)
+    }
+
+    @Test
+    fun realKospiLines_parseTypeAndListedDateAtCorrectOffsets() {
+        val expected = listOf(
+            Triple(RealMstLines.KOSPI_005930, "삼성전자", InstrumentType.COMMON_STOCK) to LocalDate.of(1975, 6, 11),
+            Triple(RealMstLines.KOSPI_000660, "SK하이닉스", InstrumentType.COMMON_STOCK) to LocalDate.of(1996, 12, 26),
+            Triple(RealMstLines.KOSPI_005935, "삼성전자우", InstrumentType.PREFERRED_STOCK) to LocalDate.of(1989, 9, 25),
+            Triple(RealMstLines.KOSPI_000087, "하이트진로2우B", InstrumentType.PREFERRED_STOCK) to LocalDate.of(2011, 9, 26),
+            Triple(RealMstLines.KOSPI_069500, "KODEX 200", InstrumentType.ETP) to LocalDate.of(2002, 10, 14),
+            Triple(RealMstLines.KOSPI_088260_REIT, "이리츠코크렙", InstrumentType.OTHER) to LocalDate.of(2018, 6, 27),
+        )
+        expected.forEach { (sample, listed) ->
+            val (base64, name, type) = sample
+            val bytes = RealMstLines.decode(base64)
+            assertEquals(288, bytes.size)
+            val outcome = parser.classifyLine(bytes, Board.KOSPI)
+            assertEquals(name, MstRowCategory.TARGET_VALID, outcome.category)
+            val entry = outcome.entry!!
+            assertEquals(name, entry.name)
+            assertEquals(name, type, entry.instrumentType)
+            assertEquals(name, listed, entry.listedDate)
+            assertEquals(Board.KOSPI, entry.board)
+            assertEquals(InstrumentMasterConfig.MARKET_KRX, entry.market)
+        }
+    }
+
+    @Test
+    fun realKospiLongName_keepsFinalByteOfFortyByteNameField() {
+        val bytes = RealMstLines.decode(RealMstLines.KOSPI_276970_LONG_NAME)
+        val entry = parser.classifyLine(bytes, Board.KOSPI).entry!!
+        assertEquals("276970", entry.symbol)
+        assertEquals("KODEX 미국S&P500배당귀족커버드콜(합성 H)", entry.name)
+        assertEquals(40, entry.name.toByteArray(KisMstParser.CHARSET).size)
+        assertEquals(InstrumentType.ETP, entry.instrumentType)
+        assertEquals(LocalDate.of(2017, 8, 10), entry.listedDate)
+    }
+
+    @Test
+    fun realKosdaqLines_parseTypeAndListedDateAtCorrectOffsets() {
+        val expected = listOf(
+            Triple(RealMstLines.KOSDAQ_247540, "에코프로비엠", InstrumentType.COMMON_STOCK) to LocalDate.of(2019, 3, 5),
+            Triple(RealMstLines.KOSDAQ_466690_SPAC, "키움히어로제1호스팩", InstrumentType.SPAC) to LocalDate.of(2025, 12, 12),
+            Triple(RealMstLines.KOSDAQ_900110_FOREIGN, "딥커머스", InstrumentType.OTHER) to LocalDate.of(2010, 4, 23),
+        )
+        expected.forEach { (sample, listed) ->
+            val (base64, name, type) = sample
+            val bytes = RealMstLines.decode(base64)
+            assertEquals(282, bytes.size)
+            val entry = parser.classifyLine(bytes, Board.KOSDAQ).entry!!
+            assertEquals(name, entry.name)
+            assertEquals(name, type, entry.instrumentType)
+            assertEquals(name, listed, entry.listedDate)
+            assertEquals(Board.KOSDAQ, entry.board)
+        }
+    }
+
+    @Test
+    fun realLines_parseAsFileWithSkippedAndMalformedCounts() {
+        val file = MstFixtures.join(
+            RealMstLines.decode(RealMstLines.KOSPI_005930),
+            RealMstLines.decode(RealMstLines.KOSPI_069500),
+            RealMstLines.decode(RealMstLines.KOSPI_276970_LONG_NAME),
+            MstFixtures.kospiLine("Q500067", "KRG500670675", "신한 ETN"),
+        )
+        val result = parser.parse(file, Board.KOSPI)
+        assertEquals(4, result.stats.totalLines)
+        assertEquals(3, result.stats.parsedRows)
+        assertEquals(1, result.stats.skippedUnsupportedRows)
+        assertEquals(0, result.stats.malformedRows)
     }
 }

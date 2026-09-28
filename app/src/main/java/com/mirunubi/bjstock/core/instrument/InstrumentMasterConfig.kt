@@ -8,8 +8,8 @@ object InstrumentMasterConfig {
         "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip"
     const val KOSDAQ_URL =
         "https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip"
-    const val KOSPI_TAIL_BYTES = 228
-    const val KOSDAQ_TAIL_BYTES = 222
+    const val KOSPI_TAIL_BYTES = 227
+    const val KOSDAQ_TAIL_BYTES = 221
     const val FIRST_SYNC_MIN_PARSED = 100
     const val EXISTING_MIN_RATIO = 0.80
     const val MAX_INVALID_RATIO = 0.20
