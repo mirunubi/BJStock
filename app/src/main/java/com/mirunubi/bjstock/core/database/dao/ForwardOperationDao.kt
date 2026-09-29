@@ -50,6 +50,37 @@ interface ForwardOperationDao {
         elapsedMs: Long,
     ): Int
 
+    @Query(
+        """
+        SELECT * FROM forward_operations
+        WHERE status = 'RUNNING' AND started_at < :processStartCutoff
+        ORDER BY started_at ASC, id ASC
+        """,
+    )
+    suspend fun findRunningStartedBefore(processStartCutoff: Instant): List<ForwardOperationEntity>
+
+    /**
+     * RUNNING -> FAILED for an operation abandoned by an earlier process. Counts are left as stored and
+     * elapsed_ms stays NULL: the real execution duration is unknowable. Returns 0 if the row is not RUNNING.
+     */
+    @Query(
+        """
+        UPDATE forward_operations SET
+            status = 'FAILED',
+            finished_at = :finishedAt,
+            final_code = :finalCode,
+            safe_message = :safeMessage,
+            elapsed_ms = NULL
+        WHERE id = :id AND status = 'RUNNING'
+        """,
+    )
+    suspend fun markInterrupted(
+        id: Long,
+        finishedAt: Instant,
+        finalCode: String,
+        safeMessage: String,
+    ): Int
+
     @Query("SELECT * FROM forward_operations ORDER BY started_at DESC, id DESC LIMIT :limit")
     suspend fun findRecent(limit: Int = 20): List<ForwardOperationEntity>
 

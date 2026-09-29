@@ -27,6 +27,25 @@ Works even when Auto is OFF.
 
 Run Now, the Worker, and Retry Failed Cycle share one execution guard. If another Forward Test operation is already running, the new request does not execute and shows `ALREADY_RUNNING`; each request is recorded in `forward_operations` (`docs/150` 20.4).
 
+## Interrupted Operation (App Killed)
+
+If Android kills the app while a Forward Test operation is running, its `forward_operations` row is left `RUNNING`. On the next app start, before the Auto schedule is re-applied, BJStock closes every `RUNNING` row that was started before the current process started (strict process-start cutoff; rows of the current process are never touched):
+
+```text
+status       FAILED
+final_code   PROCESS_INTERRUPTED
+message      Operation was interrupted before completion and recovered on app start
+elapsed_ms   (empty — real duration unknown)
+```
+
+- One `OPERATION_FINISHED` event is appended in the same transaction; earlier events of that operation stay as they were. A cycle that was started but never finished is not marked finished by recovery.
+- Recovery does not run a Forward Test by itself. Market dates not yet processed are picked up by the next Worker run or Run Now through the normal catch-up.
+- If WorkManager redelivers the interrupted Worker attempt, it gets `retry`; the next attempt runs normally under a new attempt key. A later Run Now is unaffected.
+- Recovery is idempotent: restarting the app again changes nothing.
+- The Auto schedule itself (periodic work, constraints, Auto ON / OFF, 18:00 cutoff) is unchanged.
+
+Details: `docs/150` 20.8.
+
 ## Status Labels
 
 | Status | Meaning |

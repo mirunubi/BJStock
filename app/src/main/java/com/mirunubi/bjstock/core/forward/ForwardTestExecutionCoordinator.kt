@@ -151,11 +151,15 @@ class ForwardTestExecutionCoordinator(
         )
     }
 
-    /** The same operation key never executes twice; the stored row decides the outcome. */
+    /**
+     * The same operation key never executes twice; the stored row decides the outcome. A row closed as
+     * PROCESS_INTERRUPTED answers RETRY so WorkManager's next attempt runs under its own attempt key.
+     */
     private suspend fun replay(existing: StartOperationResult.AlreadyExists): ForwardOperationOutcome {
         val row = operationLog.findOperation(existing.operationId)
         val finalCode = row?.finalCode
         val retryable = finalCode == ForwardOutcomeReason.ALREADY_RUNNING.name ||
+            finalCode == ForwardOutcomeReason.PROCESS_INTERRUPTED.name ||
             AppErrorMapper.fromForwardErrorCodeName(finalCode).isRetryableAutomatically
         val disposition = when (existing.status) {
             ForwardOperationStatus.RUNNING -> WorkerDisposition.RETRY

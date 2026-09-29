@@ -3,7 +3,9 @@ package com.mirunubi.bjstock.core.forward
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.mirunubi.bjstock.core.audit.ForwardOperationKeys
 import com.mirunubi.bjstock.core.audit.ForwardOperationLogService
+import com.mirunubi.bjstock.core.audit.StartOperationRequest
 import com.mirunubi.bjstock.core.audit.currentForwardOperationId
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.entity.ForwardOperationEntity
@@ -330,6 +332,74 @@ class ForwardTestExecutionCoordinatorTest {
         assertEquals(1, executor.forwardCalls.get())
     }
 
+    // --- interrupted operation recovery (Gate 7A) ---
+
+    @Test
+    fun recoveryAlone_executesNothing_andStartsNoOperation() = runBlocking<Unit> {
+        val orphan = startWorkerInPreviousProcess(attempt = 0)
+
+        assertEquals(listOf(orphan), operationLog.recoverInterruptedOperations(NOW.plusMillis(1)))
+
+        assertEquals(0, executor.forwardCalls.get())
+        assertEquals(0, executor.retryCalls.get())
+        assertFalse(coordinator.isExecutionActive)
+        assertEquals(1, database.forwardOperationDao().countAll())
+        assertEquals(ForwardOperationStatus.FAILED, onlyOperation().status)
+    }
+
+    @Test
+    fun workerRedelivery_ofProcessInterruptedOperation_retries_andNextAttemptExecutesNormally() = runBlocking<Unit> {
+        val orphan = startWorkerInPreviousProcess(attempt = 0)
+        operationLog.recoverInterruptedOperations(NOW.plusMillis(1))
+
+        val replay = coordinator.runWorker(WORK_ID, 0)
+
+        assertTrue(replay.replayed)
+        assertEquals(orphan, replay.operationId)
+        assertEquals(ForwardOperationStatus.FAILED, replay.status)
+        assertEquals(ForwardOutcomeReason.PROCESS_INTERRUPTED.name, replay.finalCode)
+        assertEquals(WorkerDisposition.RETRY, replay.disposition)
+        assertEquals(0, executor.forwardCalls.get())
+
+        executor.forward = { _, observer -> reportOf(observer, processed(1)) }
+        val next = coordinator.runWorker(WORK_ID, 1)
+
+        assertFalse(next.replayed)
+        assertEquals(ForwardOperationStatus.SUCCEEDED, next.status)
+        assertEquals(WorkerDisposition.SUCCESS, next.disposition)
+        assertEquals("worker:$WORK_ID:2026-09-30:1", operationLog.findOperation(next.operationId)!!.operationKey)
+        assertEquals(listOf(THROUGH), executor.forwardDates)
+        assertEquals(1, executor.forwardCalls.get())
+    }
+
+    @Test
+    fun manualInvocation_afterRecovery_isUnaffected() = runBlocking<Unit> {
+        startWorkerInPreviousProcess(attempt = 0)
+        operationLog.recoverInterruptedOperations(NOW.plusMillis(1))
+        executor.forward = { _, observer -> reportOf(observer, processed(1)) }
+
+        val manual = coordinator.runManualNow()
+
+        assertFalse(manual.replayed)
+        assertEquals(ForwardOperationStatus.SUCCEEDED, manual.status)
+        assertEquals("manual:req-1", operationLog.findOperation(manual.operationId)!!.operationKey)
+        assertEquals(1, executor.forwardCalls.get())
+        assertEquals(2, database.forwardOperationDao().countAll())
+    }
+
+    @Test
+    fun workerRedelivery_ofStillRunningOperation_remainsRetry_andIsNotRecoveredByCurrentCutoff() = runBlocking<Unit> {
+        val running = startWorkerInPreviousProcess(attempt = 0)
+
+        assertEquals(emptyList<Long>(), operationLog.recoverInterruptedOperations(NOW))
+        val replay = coordinator.runWorker(WORK_ID, 0)
+
+        assertEquals(running, replay.operationId)
+        assertEquals(ForwardOperationStatus.RUNNING, replay.status)
+        assertEquals(WorkerDisposition.RETRY, replay.disposition)
+        assertEquals(0, executor.forwardCalls.get())
+    }
+
     @Test
     fun manualTaps_eachGetTheirOwnRow() = runBlocking<Unit> {
         coordinator.runManualNow()
@@ -544,6 +614,18 @@ class ForwardTestExecutionCoordinatorTest {
 
     private suspend fun onlyOperation(): ForwardOperationEntity =
         database.forwardOperationDao().findRecent().single()
+
+    /** A Worker operation that an earlier process started at [NOW] and never finished. */
+    private suspend fun startWorkerInPreviousProcess(attempt: Int): Long =
+        operationLog.startOperation(
+            StartOperationRequest(
+                operationKey = ForwardOperationKeys.worker(WORK_ID, THROUGH, attempt),
+                trigger = ForwardOperationTrigger.WORKER,
+                throughDate = THROUGH,
+                workId = WORK_ID,
+                workAttempt = attempt,
+            ),
+        ).operationId
 
     private suspend fun assertAlreadyRunning(
         outcome: ForwardOperationOutcome,

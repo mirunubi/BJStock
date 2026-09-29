@@ -4,11 +4,14 @@ import androidx.room.withTransaction
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.entity.ForwardOperationEntity
 import com.mirunubi.bjstock.core.database.entity.OperationalEventEntity
+import com.mirunubi.bjstock.core.error.AppErrorCode
+import com.mirunubi.bjstock.core.error.IntegrityViolationException
 import com.mirunubi.bjstock.core.error.SafeAppError
 import com.mirunubi.bjstock.core.error.SafeLogText
 import com.mirunubi.bjstock.core.model.ForwardOperationKind
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
+import com.mirunubi.bjstock.core.model.ForwardOutcomeReason
 import com.mirunubi.bjstock.core.model.OperationalEventType
 import java.time.Instant
 import java.time.LocalDate
@@ -123,6 +126,45 @@ class ForwardOperationLogService(
         safeMessage = error.safeMessage,
     )
 
+    /**
+     * Closes operations left RUNNING by an earlier process (docs/150 §20.8): RUNNING -> FAILED /
+     * PROCESS_INTERRUPTED plus the missing OPERATION_FINISHED. Only rows with `started_at` strictly before
+     * [processStartCutoff] qualify, so operations of the current process are never touched. All selected rows
+     * commit together with their finish events, or nothing changes. Earlier events are left as they are.
+     */
+    suspend fun recoverInterruptedOperations(processStartCutoff: Instant): List<Long> = database.withTransaction {
+        val orphans = operationDao.findRunningStartedBefore(processStartCutoff)
+        if (orphans.isEmpty()) return@withTransaction emptyList()
+        val recoveredAt = now()
+        orphans.map { orphan ->
+            if (eventDao.countByOperationAndType(orphan.id, OperationalEventType.OPERATION_FINISHED) > 0) {
+                throw IntegrityViolationException(AppErrorCode.DATA_INTEGRITY_ERROR, RUNNING_OPERATION_ALREADY_FINISHED)
+            }
+            val updated = operationDao.markInterrupted(
+                id = orphan.id,
+                finishedAt = recoveredAt,
+                finalCode = ForwardOutcomeReason.PROCESS_INTERRUPTED.name,
+                safeMessage = PROCESS_INTERRUPTED_MESSAGE,
+            )
+            check(updated == 1) { "RUNNING operation was not updated" }
+            val eventId = eventDao.insert(
+                OperationalEventEntity(
+                    eventKey = OperationalEventKeys.operationFinished(orphan.id),
+                    operationId = orphan.id,
+                    marketDate = orphan.throughDate,
+                    eventType = OperationalEventType.OPERATION_FINISHED,
+                    result = ForwardOperationStatus.FAILED.name,
+                    reasonCode = ForwardOutcomeReason.PROCESS_INTERRUPTED.name,
+                    safeMessage = PROCESS_INTERRUPTED_MESSAGE,
+                    elapsedMs = null,
+                    createdAt = recoveredAt,
+                ),
+            )
+            check(eventId > 0L) { "finish event was not appended" }
+            orphan.id
+        }
+    }
+
     suspend fun appendOperationalEvent(event: OperationalEventInput): AppendEventResult {
         require(event.eventType !in LIFECYCLE_TYPES) {
             "operation lifecycle events are written by start/finishOperation only"
@@ -188,8 +230,11 @@ class ForwardOperationLogService(
         }
     }
 
-    private companion object {
-        val LIFECYCLE_TYPES = setOf(
+    companion object {
+        const val PROCESS_INTERRUPTED_MESSAGE = "Operation was interrupted before completion and recovered on app start"
+        const val RUNNING_OPERATION_ALREADY_FINISHED = "RUNNING_OPERATION_ALREADY_FINISHED"
+
+        private val LIFECYCLE_TYPES = setOf(
             OperationalEventType.OPERATION_STARTED,
             OperationalEventType.OPERATION_FINISHED,
         )

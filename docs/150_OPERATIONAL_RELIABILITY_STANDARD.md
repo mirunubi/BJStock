@@ -20,9 +20,10 @@ This standard is written to be **portable later to CatchMenu and other projects*
 | `FILLED_ORDER_WITHOUT_EXECUTION` (`FINANCIAL_INTEGRITY`) | Implemented — Gate 6.2 (20.7) |
 | Atomic run-end finalization (cancellations + audits + run `COMPLETED`) | Implemented — Gate 6.1 (20.6) |
 | Legacy `REJECTED` / `CANCELLED` order audit reconciliation | Implemented — Room v11 / PostgreSQL `0013`, data-only (Gate 6.1, 20.6) |
-| Scheduler rework, retention/archive, Operations UI, orphan-operation reconciliation | **Not implemented** — later Phase 11 gates |
+| Interrupted (orphan `RUNNING`) operation recovery on app start | Implemented — Gate 7A (20.8) |
+| Scheduler rework, retention/archive, Operations UI | **Not implemented** — later Phase 11 gates |
 
-Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, 6.1, and 6.2.
+Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, 6.1, 6.2, and 7A.
 
 ---
 
@@ -622,7 +623,7 @@ Unchanged:
 | No single-flight between Run Now and Worker | 7 | **RESOLVED** — Phase 11 / Gate 5 (see 20.4.2); also covers Retry Failed Cycle |
 | Orchestrator returns only the last Run's result | 5, 6 | **RESOLVED** — Phase 11 / Gate 5: aggregate outcome across all runs (see 20.4.5) |
 | A non-retryable block stops later Runs | 5, 6 | **Retained by decision** (Gate 5): later runs are recorded `SKIPPED` / `PRIOR_RUN_BLOCKED`; changing isolation needs its own gate |
-| Orphan `RUNNING` operation after process death (no reconciliation; replay of the same key does not re-execute) | 7, 12 | scheduler / reconciliation gate |
+| Orphan `RUNNING` operation after process death (no reconciliation; replay of the same key does not re-execute) | 7, 12 | **RESOLVED** — Phase 11 / Gate 7A: closed as `FAILED` / `PROCESS_INTERRUPTED` on app start (see 20.8) |
 | `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 3, commit `f2abe55` (see 20.3.1) |
 | Gateway collapses KIS `BUSINESS` / `MALFORMED_RESPONSE` / `MAPPING_FAILURE` / local `INVALID_SYMBOL` / `INVALID_DATE_RANGE` into retryable `NETWORK_FAILURE`; `api_error_logs.error_type` misleading (`NETWORK_TIMEOUT` for local and unexpected failures, `KIS_BUSINESS_ERROR` for rate limit and local validation); gateway appends a duplicate row for failures the repository already recorded | 4.3, 6, 9 | **RESOLVED** — Phase 11 / Gate 4 (see 20.3.2) |
 | **OPEN / DEFERRED:** `KisMarketRepositoryImpl` catch-all may classify an unexpected local defect as `MALFORMED_RESPONSE`. The gateway preserves the repository-provided classification. Repository-level refinement needs its own impact analysis | 4.3, 6 | later bounded gate |
@@ -717,7 +718,7 @@ Future canonical key: `worker:<schedule_instance_id>:<attempt>`, with `schedule_
 
 | Event | Coverage |
 | --- | --- |
-| `OPERATION_STARTED` / `OPERATION_FINISHED` | every invocation, including `ALREADY_RUNNING`, failures, and cancellation; finish carries status, safe code / message, counts, `elapsed_ms` |
+| `OPERATION_STARTED` / `OPERATION_FINISHED` | every invocation, including `ALREADY_RUNNING`, failures, and cancellation; finish carries status, safe code / message, counts, `elapsed_ms` (NULL for an operation recovered as `PROCESS_INTERRUPTED`, 20.8) |
 | `RUN_RESULT` | exactly one per selected run: `PROCESSED`, `SKIPPED`, `BLOCKED`, `FAILED`, or `NO_OP`, with a reason code (`ForwardOutcomeReason` name or, for failures, the canonical error code) |
 | `MARKET_SYNC_RESULT` | exactly one per attempted run sync: `SUCCESS` / `FAILED`, failure code, `market_date` = through date, message with requested start / through and inserted / updated / unchanged counts, `elapsed_ms`. No payload |
 | `CYCLE_STARTED` / `CYCLE_FINISHED` | one pair per cycle attempt (`attempt` = `forward_test_cycles.attempt_count`), with run, cycle, `market_date`; finish carries `COMPLETE` / `FAILED`, reason code, stage, `elapsed_ms`. An exception inside a cycle writes `CYCLE_FINISHED` `FAILED` with the canonical code before propagating |
@@ -756,7 +757,7 @@ The coordinator runs the executor inside `withContext(ForwardOperationContext(op
 
 - **Audit atomicity** (section 11): unchanged by Gate 5; resolved in Gate 6 (20.5).
 - **Scheduler redesign**: periodic work, immediate first execution on Auto ON, and the interim Worker key remain until the scheduler gate.
-- **Orphan `RUNNING` operations**: if the process dies mid-operation the row stays `RUNNING`; a redelivery of the same Worker key returns `retry` without re-executing, and a new period / tap creates a new row. Reconciliation is a later gate.
+- **Orphan `RUNNING` operations**: if the process dies mid-operation the row stays `RUNNING`; a redelivery of the same Worker key returns `retry` without re-executing, and a new period / tap creates a new row. **RESOLVED in Gate 7A (20.8).**
 - **Retry precedence**: when an earlier run was retryable-blocked and a later run succeeded, the Worker now returns `retry` (previously the last run's success decided). Non-retryable blocks still decide `failure` first.
 - **Retention / archive / Operations UI**: not implemented.
 
@@ -806,7 +807,7 @@ Current paper trading has exactly one `VIRTUAL_FILLED` execution per order (full
 
 #### 20.5.6 Remaining gaps (not resolved by Gate 6)
 
-- Orphan `RUNNING` operations and post-process-death reconciliation (20.4.9).
+- Orphan `RUNNING` operations and post-process-death reconciliation (20.4.9). **RESOLVED in Gate 7A (20.8).**
 - Scheduler redesign and archive / retention / Operations UI.
 - **RESOLVED in Gate 6.1 (20.6.2):** `finalizeRunEnd` committed cancellations and the run `COMPLETED` transition separately.
 - **RESOLVED in Gate 6.1 (20.6.1):** financial conflicts used `DATA_INTEGRITY_ERROR` (reported as `CRITICAL`). `LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` now carry `FINANCIAL_INTEGRITY`; `DUPLICATE_EXECUTION` is intentionally not added.
@@ -873,7 +874,7 @@ Existing audit rows are never updated, including restored rows whose `decision_s
 
 #### 20.6.6 Remaining gaps (not resolved by Gate 6.1)
 
-- Orphan `RUNNING` operations, scheduler redesign, archive / retention, Operations UI (20.4.9, 20.5.6).
+- Scheduler redesign, archive / retention, Operations UI (20.4.9, 20.5.6). Orphan `RUNNING` operations were resolved later in Gate 7A (20.8).
 - `market_date` of reconciled terminal-order audits stays NULL (not persisted on the order).
 
 ### 20.7 Execution invariant taxonomy (Phase 11 / Gate 6.2)
@@ -890,6 +891,79 @@ Three separate financial-integrity concepts, each with its own code (all `INVARI
 
 Gate 6.1 decisions kept unchanged: reconciled terminal-order audits keep `market_date` NULL when the historical market date cannot be proven (never inferred from `created_at` / `cancelled_at` / `updated_at`); the `SUM(amount)` check before each ledger append stays; `finalizeRunEnd` keeps one shared timestamp for cancellation and run completion.
 
+### 20.8 Interrupted operation recovery (Phase 11 / Gate 7A)
+
+#### 20.8.1 Definition
+
+An **interrupted (orphan) operation** is a `forward_operations` row with `status = RUNNING` that was started by an earlier app process which ended (for example killed by Android) before the operation reached a terminal result. It is an operational outcome, not a KIS, trading, domain, or user-cancellation failure, so it is recorded with the `ForwardOutcomeReason` `PROCESS_INTERRUPTED`, not an `AppErrorCode`.
+
+#### 20.8.2 Process-start cutoff
+
+`BJStockApplication` captures `processStartCutoff = Instant.now()` truncated to milliseconds when the Application object is constructed, before any work of the process can start. Recovery selects only:
+
+```text
+status = 'RUNNING' AND started_at < processStartCutoff   (strict)
+```
+
+A `RUNNING` row started at or after the cutoff belongs to the current process (for example a Worker that WorkManager launched during startup) and is never touched. Truncation matters because `started_at` is stored as epoch millis: an operation started by this process is always stored at or after the cutoff. No "older than N minutes" timeout is used.
+
+#### 20.8.3 Terminalization
+
+`ForwardOperationLogService.recoverInterruptedOperations(processStartCutoff)`, per orphan:
+
+| Field | Value |
+| --- | --- |
+| `status` | `RUNNING` → `FAILED` |
+| `final_code` | `PROCESS_INTERRUPTED` |
+| `safe_message` | fixed: "Operation was interrupted before completion and recovered on app start" (never `Throwable.message`) |
+| `finished_at` | recovery time |
+| `elapsed_ms` | NULL |
+| `runs_considered` / `runs_processed` / `runs_skipped` / `cycles_completed` / `cycles_failed` | preserved as stored; never recomputed or fabricated |
+
+`elapsed_ms` stays NULL because the real execution duration is unknowable after process death; the time until the app restarted must not be presented as execution duration.
+
+Each recovered operation gets one `OPERATION_FINISHED` event under the normal key `op:<operation_id>:finished`: `result = FAILED`, `reason_code = PROCESS_INTERRUPTED`, the same fixed message, `elapsed_ms` NULL, `market_date` = the operation through-date, `created_at` = recovery time.
+
+#### 20.8.4 Atomicity and idempotency
+
+All selected orphans and their `OPERATION_FINISHED` events commit in **one** Room transaction, or nothing changes: there is never a `FAILED` row without its finish event, or a finish event on a still-`RUNNING` row. A failure (event insert, row update, or the invariant below) rolls back every transition of that recovery pass; the next app start retries. A second pass selects nothing (rows are no longer `RUNNING`) and creates no duplicate finish event.
+
+#### 20.8.5 Inconsistent evidence
+
+A row that is `RUNNING` but already has an `OPERATION_FINISHED` event is a data-integrity inconsistency. Recovery never overwrites or ignores it: it aborts with `IntegrityViolationException` (`DATA_INTEGRITY_ERROR`, reason `RUNNING_OPERATION_ALREADY_FINISHED`) and nothing changes. None of the real Phase 10 evidence databases contains `forward_operations` (all are Room v7), so no such row exists there.
+
+#### 20.8.6 Existing events
+
+Events written before the interruption (`OPERATION_STARTED`, `MARKET_SYNC_RESULT`, `RUN_RESULT`, `CYCLE_STARTED`, ...) are never deleted or rewritten. Recovery appends only the missing `OPERATION_FINISHED`. A `CYCLE_STARTED` without `CYCLE_FINISHED` legitimately remains; no `CYCLE_FINISHED` or `RUN_RESULT` is fabricated. Cycle rows (`forward_test_cycles`) and business data are not touched; the orchestrator's existing cycle rules handle them on the next execution.
+
+#### 20.8.7 Startup ordering
+
+```text
+process start (cutoff captured)
+  ↓
+recover interrupted operations
+  ↓
+reconcile persisted Auto schedule (ForwardTestScheduler.reconcileOnAppStart, unchanged)
+  ↓
+background maintenance (7-day API error cleanup)
+```
+
+The sequence runs on the application IO scope (`runAppStartSequence`). A recovery failure is contained and never prevents schedule reconciliation. Only the ordering changed: what `reconcileOnAppStart` schedules, the `PeriodicWorkRequest`, its constraints, backoff, Auto ON / OFF behavior, and first-run behavior are unchanged. Because the sequence is asynchronous, the cutoff rule (20.8.2) is what protects work started by the current process. Recovery itself never executes a Forward Test and never starts an operation.
+
+#### 20.8.8 Worker replay
+
+A Worker invocation whose key resolves to an existing row with `status = FAILED` and `final_code = PROCESS_INTERRUPTED` returns `WorkerDisposition.RETRY`. The same key is never re-executed; WorkManager's next attempt gets the next attempt identity through the existing Gate 5 key `worker:<work_id>:<through_date>:<attempt>` (unchanged in Gate 7A; `schedule_instance_id` belongs to Gate 7B) and executes normally. A redelivery that arrives before recovery still sees `RUNNING` and also returns `RETRY` (20.4.9). Manual operations need no replay: each tap gets a new UUID key.
+
+#### 20.8.9 Schema
+
+No Room or PostgreSQL schema change. `PROCESS_INTERRUPTED` is stored in the existing free-text `final_code` / `reason_code`. The PostgreSQL CHECKs allow it: `ck_forward_operations_finished_consistency` only ties `RUNNING` to `finished_at IS NULL`, and `elapsed_ms` is nullable.
+
+#### 20.8.10 Remaining gaps (not resolved by Gate 7A)
+
+- Scheduler redesign (Gate 7B): periodic work, immediate first execution on Auto ON, interim Worker key, `schedule_instance_id`.
+- A recovery pass aborted by the inconsistency in 20.8.5 is contained at startup but not yet surfaced to the user (no Operations UI).
+- Archive / retention, Operations UI.
+
 ---
 
 ## Related
@@ -899,4 +973,4 @@ Gate 6.1 decisions kept unchanged: reconciled terminal-order audits keep `market
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-163)
+- `docs/060_DECISION_LOG.md` (D-143 – D-164)

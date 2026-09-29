@@ -339,6 +339,10 @@ class OperationalReliabilityMigrationTest {
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM trade_audit_logs WHERE decision_source = ''"))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM forward_operations"))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM operational_events"))
+            val recovery = com.mirunubi.bjstock.core.audit.ForwardOperationLogService(database) { Instant.EPOCH }
+            assertEquals(emptyList<Long>(), recovery.recoverInterruptedOperations(Instant.parse("2100-01-01T00:00:00Z")))
+            assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM forward_operations"))
+            assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM operational_events"))
             assertEquals(
                 before.getValue("trade_audit_logs"),
                 scalar(db, "SELECT COUNT(*) FROM trade_audit_logs WHERE operation_id IS NULL"),

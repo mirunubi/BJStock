@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.mirunubi.bjstock.core.database.entity.OperationalEventEntity
+import com.mirunubi.bjstock.core.model.OperationalEventType
 
 /** Append-only: no update or delete. */
 @Dao
@@ -23,6 +24,9 @@ interface OperationalEventDao {
         """,
     )
     suspend fun findByOperation(operationId: Long): List<OperationalEventEntity>
+
+    @Query("SELECT COUNT(*) FROM operational_events WHERE operation_id = :operationId AND event_type = :eventType")
+    suspend fun countByOperationAndType(operationId: Long, eventType: OperationalEventType): Int
 
     @Query("SELECT COUNT(*) FROM operational_events")
     suspend fun countAll(): Int

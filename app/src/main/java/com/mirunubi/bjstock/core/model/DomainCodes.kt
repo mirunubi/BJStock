@@ -192,6 +192,9 @@ enum class ForwardOutcomeReason {
     PRIOR_RUN_BLOCKED,
     ALREADY_RUNNING,
     CANCELLED,
+
+    /** Left RUNNING by an earlier app process that ended before a terminal result; closed on app start. */
+    PROCESS_INTERRUPTED,
     TARGET_CYCLE_NOT_FOUND,
     TARGET_CYCLE_NOT_FAILED,
     TARGET_CYCLE_RUN_MISMATCH,
