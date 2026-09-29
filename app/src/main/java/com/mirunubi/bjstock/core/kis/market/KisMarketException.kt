@@ -4,6 +4,7 @@ enum class KisMarketErrorKind {
     AUTHENTICATION,
     HTTP,
     BUSINESS,
+    RATE_LIMITED,
     NETWORK_TIMEOUT,
     MALFORMED_RESPONSE,
     INVALID_SYMBOL,
@@ -15,6 +16,7 @@ data class KisMarketErrorAudit(
     val msgCd: String? = null,
     val httpCode: Int? = null,
     val msg1: String? = null,
+    val rtCd: String? = null,
 )
 
 class KisMarketException(

@@ -8,7 +8,9 @@ object KisApiErrorMapper {
         KisMarketErrorKind.NETWORK_TIMEOUT -> ApiErrorType.NETWORK_TIMEOUT
         KisMarketErrorKind.HTTP -> ApiErrorType.HTTP_ERROR
         KisMarketErrorKind.AUTHENTICATION -> ApiErrorType.AUTH_ERROR
-        KisMarketErrorKind.BUSINESS -> ApiErrorType.KIS_BUSINESS_ERROR
+        KisMarketErrorKind.BUSINESS,
+        KisMarketErrorKind.RATE_LIMITED,
+        -> ApiErrorType.KIS_BUSINESS_ERROR
         KisMarketErrorKind.MALFORMED_RESPONSE,
         KisMarketErrorKind.MAPPING_FAILURE,
         -> ApiErrorType.MALFORMED_RESPONSE
@@ -20,6 +22,7 @@ object KisApiErrorMapper {
     fun isRetryable(kind: KisMarketErrorKind): Boolean = when (kind) {
         KisMarketErrorKind.NETWORK_TIMEOUT,
         KisMarketErrorKind.HTTP,
+        KisMarketErrorKind.RATE_LIMITED,
         -> true
         KisMarketErrorKind.AUTHENTICATION,
         KisMarketErrorKind.BUSINESS,

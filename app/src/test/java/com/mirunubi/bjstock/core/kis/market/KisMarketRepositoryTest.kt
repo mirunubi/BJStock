@@ -1,14 +1,20 @@
 package com.mirunubi.bjstock.core.kis.market
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.KisApiErrorMapper
+import com.mirunubi.bjstock.core.database.dao.ApiErrorLogDao
+import com.mirunubi.bjstock.core.database.entity.ApiErrorLogEntity
 import com.mirunubi.bjstock.core.kis.InMemoryKisSecretStore
 import com.mirunubi.bjstock.core.kis.KisAuthRepository
 import com.mirunubi.bjstock.core.kis.KisEnvironment
 import com.mirunubi.bjstock.core.kis.KisToken
 import com.mirunubi.bjstock.core.kis.RecordingKisAuthLogger
+import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.network.kis.KisAuthApi
 import com.mirunubi.bjstock.core.network.kis.KisMarketApi
 import com.mirunubi.bjstock.core.network.kis.KisReadOnlyInterceptor
+import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
@@ -20,6 +26,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -193,7 +200,143 @@ class KisMarketRepositoryTest {
         assertNull(bars.single().tradingValue)
     }
 
-    private fun repository(callTimeoutMillis: Long = 5_000): KisMarketRepositoryImpl {
+    @Test
+    fun dailyBars_http500WithEgw00201_isRateLimitedWithParsedBody() = runBlocking {
+        enqueueError(500, RATE_LIMIT_BODY)
+        val error = runCatching { dailyBars(repository()) }.exceptionOrNull()
+        assertEquals(KisMarketErrorKind.RATE_LIMITED, (error as KisMarketException).kind)
+        assertEquals("EGW00201", error.audit?.msgCd)
+        assertEquals("1", error.audit?.rtCd)
+        assertEquals(500, error.audit?.httpCode)
+        assertEquals("초당 거래건수를 초과하였습니다.", error.audit?.msg1)
+        assertEquals(1, server.requestCount)
+        assertTrue(logger.messages.any { it.contains("500") && it.contains("EGW00201") })
+        logger.assertNoSecrets(SECRET_VALUES)
+    }
+
+    @Test
+    fun dailyBars_http200RtCdNotZeroWithEgw00201_isRateLimited() = runBlocking {
+        enqueueJson(RATE_LIMIT_BODY)
+        val error = runCatching { dailyBars(repository()) }.exceptionOrNull()
+        assertEquals(KisMarketErrorKind.RATE_LIMITED, (error as KisMarketException).kind)
+        assertEquals("EGW00201", error.audit?.msgCd)
+    }
+
+    @Test
+    fun dailyBars_http500WithOtherMsgCd_staysGenericHttpWithBusinessCode() = runBlocking {
+        enqueueError(500, """{"rt_cd":"1","msg_cd":"EGW00500","msg1":"TEST server error"}""")
+        val error = runCatching { dailyBars(repository()) }.exceptionOrNull()
+        assertEquals(KisMarketErrorKind.HTTP, (error as KisMarketException).kind)
+        assertEquals("연결 실패", error.publicMessage)
+        assertEquals("EGW00500", error.audit?.msgCd)
+        assertEquals(500, error.audit?.httpCode)
+    }
+
+    @Test
+    fun dailyBars_http500MalformedBody_preservesGenericHttpError() = runBlocking {
+        val bodies = listOf(
+            "",
+            "error",
+            "<html><body>Internal Server Error</body></html>",
+            "{\"rt_cd\":\"1\",\"msg_cd\":",
+            "[\"EGW00201\"]",
+            "\"EGW00201\"",
+            "{\"msg_cd\":{\"nested\":true}}",
+            "x".repeat(10_000),
+        )
+        bodies.forEach { body ->
+            enqueueError(500, body)
+            val error = runCatching { dailyBars(repository()) }.exceptionOrNull()
+            assertEquals(body.take(40), KisMarketErrorKind.HTTP, (error as KisMarketException).kind)
+            assertEquals("연결 실패", error.publicMessage)
+            assertEquals(500, error.audit?.httpCode)
+            assertNull(error.audit?.msgCd)
+        }
+        logger.assertNoSecrets(SECRET_VALUES)
+    }
+
+    @Test
+    fun dailyBars_http401WithBody_staysAuthentication() = runBlocking {
+        enqueueError(401, """{"rt_cd":"1","msg_cd":"EGW00123","msg1":"TEST expired"}""")
+        val error = runCatching { dailyBars(repository()) }.exceptionOrNull()
+        assertEquals(KisMarketErrorKind.AUTHENTICATION, (error as KisMarketException).kind)
+        assertEquals(401, error.audit?.httpCode)
+    }
+
+    @Test
+    fun apiErrorLog_recordsMsgCdAsBusinessCodeWithSafeMessageOnly() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        enqueueError(500, RATE_LIMIT_BODY)
+        runCatching { dailyBars(repository(apiErrorLog = ApiErrorLogService(dao))) }
+        val row = dao.rows.single()
+        assertEquals("KIS_DAILY_PRICE", row.operation)
+        assertEquals(ApiErrorType.KIS_BUSINESS_ERROR, row.errorType)
+        assertEquals(500, row.httpStatus)
+        assertEquals("EGW00201", row.businessCode)
+        assertTrue(row.retryable)
+        assertEquals("KIS 요청 한도 초과: 초당 거래건수를 초과하였습니다.", row.safeMessage)
+        assertRowHasNoSecrets(row)
+
+        enqueueError(500, """{"rt_cd":"1","msg_cd":"EGW00500"}""")
+        runCatching { dailyBars(repository(apiErrorLog = ApiErrorLogService(dao))) }
+        val generic = dao.rows.last()
+        assertEquals(ApiErrorType.HTTP_ERROR, generic.errorType)
+        assertEquals("EGW00500", generic.businessCode)
+        assertEquals("연결 실패", generic.safeMessage)
+        assertRowHasNoSecrets(generic)
+    }
+
+    @Test
+    fun apiErrorLog_secretLikeMsg1_isOmitted() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        enqueueError(
+            500,
+            """{"rt_cd":"1","msg_cd":"EGW00201","msg1":"appsecret TEST_APP_SECRET authorization Bearer TEST_ACCESS_TOKEN"}""",
+        )
+        runCatching { dailyBars(repository(apiErrorLog = ApiErrorLogService(dao))) }
+        val row = dao.rows.single()
+        assertEquals("EGW00201", row.businessCode)
+        assertEquals("secure error details omitted", row.safeMessage)
+        assertRowHasNoSecrets(row)
+        logger.assertNoSecrets(SECRET_VALUES)
+    }
+
+    @Test
+    fun rateLimitedKind_mapsToExistingBusinessErrorTypeAndIsRetryable() {
+        assertEquals(
+            ApiErrorType.KIS_BUSINESS_ERROR,
+            KisApiErrorMapper.fromMarketKind(KisMarketErrorKind.RATE_LIMITED),
+        )
+        assertTrue(KisApiErrorMapper.isRetryable(KisMarketErrorKind.RATE_LIMITED))
+        assertTrue(KisRequestPolicy.isRateLimit("EGW00201"))
+        assertFalse(KisRequestPolicy.isRateLimit("EGW00500"))
+        assertFalse(KisRequestPolicy.isRateLimit(null))
+    }
+
+    private suspend fun dailyBars(repository: KisMarketRepositoryImpl) = repository.inquireDailyBars(
+        symbol = "005930",
+        startDate = LocalDate.of(2026, 9, 16),
+        endDate = LocalDate.of(2026, 9, 18),
+    )
+
+    private fun assertRowHasNoSecrets(row: ApiErrorLogEntity) {
+        val joined = listOf(row.operation, row.safeMessage, row.businessCode.orEmpty()).joinToString(" ")
+        SECRET_VALUES.forEach { secret -> assertFalse(joined.contains(secret)) }
+    }
+
+    private fun enqueueError(code: Int, body: String) {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(code)
+                .setHeader("Content-Type", "application/json")
+                .setBody(body),
+        )
+    }
+
+    private fun repository(
+        callTimeoutMillis: Long = 5_000,
+        apiErrorLog: ApiErrorLogService? = null,
+    ): KisMarketRepositoryImpl {
         val json = Json { ignoreUnknownKeys = true }
         val client = OkHttpClient.Builder()
             .addInterceptor(KisReadOnlyInterceptor())
@@ -221,6 +364,7 @@ class KisMarketRepositoryTest {
             authRepository = auth,
             credentialStore = store,
             logger = logger,
+            apiErrorLog = apiErrorLog,
             today = { today },
             baseUrl = { server.url("/").toString().trimEnd('/') },
         )
@@ -302,10 +446,33 @@ class KisMarketRepositoryTest {
 
     companion object {
         private const val NOW = 1_700_000_000_000L
+        private const val RATE_LIMIT_BODY =
+            """{"rt_cd":"1","msg_cd":"EGW00201","msg1":"초당 거래건수를 초과하였습니다."}"""
         private val SECRET_VALUES = listOf(
             "TEST_APP_KEY",
             "TEST_APP_SECRET",
             "TEST_ACCESS_TOKEN",
         )
     }
+}
+
+private class InMemoryApiErrorLogDao : ApiErrorLogDao {
+    val rows = mutableListOf<ApiErrorLogEntity>()
+
+    override suspend fun insert(entity: ApiErrorLogEntity): Long {
+        val row = entity.copy(id = rows.size + 1L)
+        rows += row
+        return row.id
+    }
+
+    override suspend fun findSince(since: Instant, limit: Int): List<ApiErrorLogEntity> =
+        rows.filter { !it.occurredAt.isBefore(since) }.take(limit)
+
+    override suspend fun deleteOlderThan(cutoff: Instant): Int {
+        val before = rows.size
+        rows.removeAll { it.occurredAt.isBefore(cutoff) }
+        return before - rows.size
+    }
+
+    override suspend fun countAll(): Int = rows.size
 }

@@ -3,6 +3,7 @@ package com.mirunubi.bjstock.core.di
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
+import com.mirunubi.bjstock.core.kis.KisSettingsStore
 import com.mirunubi.bjstock.core.kis.market.KisMarketRepository
 import com.mirunubi.bjstock.core.marketdata.FetchAndPersistDailyBarsUseCase
 import com.mirunubi.bjstock.core.marketdata.MarketDataLocalRepository
@@ -42,9 +43,11 @@ object MarketDataModule {
     fun provideSyncHistoricalDailyBarsUseCase(
         marketRepository: KisMarketRepository,
         localRepository: MarketDataLocalRepository,
+        settingsStore: KisSettingsStore,
     ): SyncHistoricalDailyBarsUseCase = SyncHistoricalDailyBarsUseCase(
         marketRepository = marketRepository,
         localRepository = localRepository,
+        environment = { settingsStore.selectedEnvironment() },
     )
 
     @Provides

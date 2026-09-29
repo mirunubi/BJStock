@@ -8,6 +8,7 @@ import com.mirunubi.bjstock.core.kis.KisAuthRepository
 import com.mirunubi.bjstock.core.kis.KisCredentialStore
 import com.mirunubi.bjstock.core.kis.KisEnvironmentConfig
 import com.mirunubi.bjstock.core.model.ApiErrorProvider
+import com.mirunubi.bjstock.core.network.kis.KisErrorBodyDto
 import com.mirunubi.bjstock.core.network.kis.KisMarketApi
 import com.mirunubi.bjstock.core.network.kis.KisMarketHeaders
 import java.io.IOException
@@ -16,6 +17,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import retrofit2.HttpException
 
 class KisMarketRepositoryImpl(
@@ -106,14 +108,36 @@ class KisMarketRepositoryImpl(
         }
         if (rtCd != "0") {
             logger.info("KIS business error: ${msgCd ?: "unknown"}")
-            val error = KisMarketException(
-                kind = KisMarketErrorKind.BUSINESS,
-                publicMessage = "KIS 응답 오류",
-                audit = KisMarketErrorAudit(msgCd = msgCd, msg1 = msg1),
-            )
+            val audit = KisMarketErrorAudit(msgCd = msgCd, msg1 = msg1, rtCd = rtCd)
+            val error = if (KisRequestPolicy.isRateLimit(msgCd)) {
+                rateLimited(audit)
+            } else {
+                KisMarketException(
+                    kind = KisMarketErrorKind.BUSINESS,
+                    publicMessage = "KIS 응답 오류",
+                    audit = audit,
+                )
+            }
             recordError(operation, error)
             throw error
         }
+    }
+
+    private fun rateLimited(audit: KisMarketErrorAudit) = KisMarketException(
+        kind = KisMarketErrorKind.RATE_LIMITED,
+        publicMessage = "KIS 요청 한도 초과",
+        audit = audit,
+    )
+
+    private fun parseErrorBody(error: HttpException): KisErrorBodyDto? = try {
+        val raw = error.response()?.errorBody()?.string()
+        if (raw.isNullOrBlank() || raw.length > MAX_ERROR_BODY_CHARS) {
+            null
+        } else {
+            errorBodyJson.decodeFromString(KisErrorBodyDto.serializer(), raw)
+        }
+    } catch (_: Exception) {
+        null
     }
 
     private suspend fun <T> execute(
@@ -152,17 +176,25 @@ class KisMarketRepositoryImpl(
         } catch (error: CancellationException) {
             throw error
         } catch (error: HttpException) {
-            val wrapped = if (error.code() == 401) {
-                KisMarketException(
+            val body = parseErrorBody(error)
+            val audit = KisMarketErrorAudit(
+                msgCd = body?.msgCd,
+                httpCode = error.code(),
+                msg1 = body?.msg1,
+                rtCd = body?.rtCd,
+            )
+            logger.info("KIS HTTP error: ${error.code()} ${body?.msgCd ?: "unknown"}")
+            val wrapped = when {
+                error.code() == 401 -> KisMarketException(
                     kind = KisMarketErrorKind.AUTHENTICATION,
                     publicMessage = "인증 필요",
-                    audit = KisMarketErrorAudit(httpCode = 401),
+                    audit = audit,
                 )
-            } else {
-                KisMarketException(
+                KisRequestPolicy.isRateLimit(body?.msgCd) -> rateLimited(audit)
+                else -> KisMarketException(
                     kind = KisMarketErrorKind.HTTP,
                     publicMessage = "연결 실패",
-                    audit = KisMarketErrorAudit(httpCode = error.code()),
+                    audit = audit,
                 )
             }
             recordError(operation, wrapped)
@@ -207,11 +239,22 @@ class KisMarketRepositoryImpl(
                 provider = ApiErrorProvider.KIS,
                 operation = operation,
                 errorType = KisApiErrorMapper.fromMarketKind(error.kind),
-                safeMessage = error.publicMessage,
+                safeMessage = diagnosticMessage(error),
                 retryable = KisApiErrorMapper.isRetryable(error.kind),
                 httpStatus = error.audit?.httpCode,
                 businessCode = error.audit?.msgCd,
             )
         }
+    }
+
+    private fun diagnosticMessage(error: KisMarketException): String {
+        val detail = error.audit?.msg1?.trim()?.take(MAX_MSG1_CHARS)
+        return if (detail.isNullOrEmpty()) error.publicMessage else "${error.publicMessage}: $detail"
+    }
+
+    private companion object {
+        const val MAX_ERROR_BODY_CHARS = 4_096
+        const val MAX_MSG1_CHARS = 200
+        val errorBodyJson = Json { ignoreUnknownKeys = true }
     }
 }

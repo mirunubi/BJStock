@@ -26,6 +26,12 @@ Provider: `KIS`
 
 Types: `NETWORK_TIMEOUT`, `HTTP_ERROR`, `AUTH_ERROR`, `KIS_BUSINESS_ERROR`, `MALFORMED_RESPONSE`, `MASTER_DOWNLOAD_ERROR`
 
+## KIS error body
+
+For non-2xx KIS market-data responses the JSON body (`rt_cd`, `msg_cd`, `msg1`, max 4 KB) is parsed when possible. `msg_cd` is stored in `business_code`; `msg1` (max 200 chars) is appended to the public message in `safe_message` and still passes through `sanitize`. Unparseable bodies keep the generic `HTTP_ERROR` with a null `business_code`.
+
+`EGW00201` (rate limit) is logged as `KIS_BUSINESS_ERROR`, retryable, with the HTTP status preserved.
+
 ## Hooks
 
 KIS OAuth, current/daily price, forward sync / historical sync, instrument master download.

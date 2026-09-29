@@ -33,6 +33,13 @@ data class KisDailyChartResponseDto(
 )
 
 @Serializable
+data class KisErrorBodyDto(
+    @SerialName("rt_cd") val rtCd: String? = null,
+    @SerialName("msg_cd") val msgCd: String? = null,
+    @SerialName("msg1") val msg1: String? = null,
+)
+
+@Serializable
 data class KisDailyBarOutputDto(
     @SerialName("stck_bsop_date") val tradeDate: String? = null,
     @SerialName("stck_oprc") val openPrice: String? = null,

@@ -30,9 +30,22 @@ KIS daily history can silently truncate around 100 rows per call. 90 calendar da
 
 The next chunk starts at `previousEnd + 1 day`. Chunks do not overlap and do not skip dates.
 
-Calls are sequential. There is no parallel fan-out and no hardcoded KIS rate-limit number.
+Calls are sequential. There is no parallel fan-out.
 
-This phase has no WorkManager, alarm, scheduler, or retry loop. Timeout / HTTP / KIS business errors fail the sync.
+## Pacing and rate limit (Phase 10.3)
+
+Back-to-back chunk calls intermittently returned HTTP 500 on the physical device. Consecutive chunk requests are now paced with a coroutine `delay` (`KisRequestPolicy`):
+
+| Environment | Minimum interval between chunk requests |
+|---|---|
+| PRODUCTION | 100 ms |
+| VIRTUAL | 500 ms |
+
+The first request is not delayed.
+
+KIS `msg_cd = EGW00201` (초당 거래건수 초과), whether delivered as HTTP 500 or as `rt_cd != 0`, is the only retried error: wait 61 s, retry the same chunk, at most 3 attempts per chunk. Every attempt still writes its own `api_error_logs` row.
+
+There is no WorkManager, alarm, scheduler, or generic retry loop. Timeout, generic HTTP 500 (no `EGW00201`), auth, malformed response, and KIS business errors fail the sync immediately. Merged chunk results are only persisted after every chunk succeeds.
 
 ## Incremental sync
 
