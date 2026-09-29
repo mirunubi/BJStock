@@ -26,6 +26,7 @@ import com.mirunubi.bjstock.core.forward.ForwardTestOrchestrator
 import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
 import com.mirunubi.bjstock.core.model.ForwardCycleStatus
 import com.mirunubi.bjstock.core.model.RunStatus
+import com.mirunubi.bjstock.core.strategy.ActiveStrategyVersion
 import com.mirunubi.bjstock.core.strategy.StrategyRunService
 import com.mirunubi.bjstock.core.theme.ThemeService
 import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
@@ -34,6 +35,7 @@ import com.mirunubi.bjstock.core.audit.TradeAuditLogService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,6 +80,11 @@ data class ForwardTestUiState(
     val instrumentSearchResults: List<InstrumentEntity> = emptyList(),
     val activeThemes: List<ThemeEntity> = emptyList(),
     val tradeTimeline: List<TradeAuditLogEntity> = emptyList(),
+    val activeVersions: List<ActiveStrategyVersion> = emptyList(),
+    val draftVersionId: Long? = null,
+    val draftRunName: String = "",
+    val draftStartDate: String = "",
+    val draftInitialCash: String = "100000000",
     val message: String? = null,
     val loading: Boolean = false,
 )
@@ -101,11 +108,53 @@ class ForwardTestViewModel @Inject constructor(
     val uiState: StateFlow<ForwardTestUiState> = _uiState.asStateFlow()
 
     init {
+        _uiState.update { it.copy(draftStartDate = clock.nowSeoul().toLocalDate().toString()) }
         viewModelScope.launch { reloadRuns() }
     }
 
     fun selectRun(runId: Long) {
         viewModelScope.launch { loadDashboard(runId) }
+    }
+
+    fun onDraftVersionSelected(strategyVersionId: Long) =
+        _uiState.update { it.copy(draftVersionId = strategyVersionId) }
+
+    fun onDraftRunNameChanged(value: String) = _uiState.update { it.copy(draftRunName = value) }
+
+    fun onDraftStartDateChanged(value: String) = _uiState.update { it.copy(draftStartDate = value) }
+
+    fun onDraftInitialCashChanged(value: String) = _uiState.update { it.copy(draftInitialCash = value) }
+
+    fun createDraftRun() {
+        val state = _uiState.value
+        val versionId = state.draftVersionId ?: run {
+            _uiState.update { it.copy(message = "Select an ACTIVE strategy version") }
+            return
+        }
+        val startDate = parseDate(state.draftStartDate) ?: run {
+            _uiState.update { it.copy(message = "Start date YYYY-MM-DD") }
+            return
+        }
+        val initialCash = parseWon(state.draftInitialCash) ?: run {
+            _uiState.update { it.copy(message = "Initial cash must be a positive KRW amount") }
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                runService.createDraftRun(
+                    strategyVersionId = versionId,
+                    runName = state.draftRunName,
+                    startDate = startDate,
+                    initialCashWon = initialCash,
+                )
+            }.onSuccess { runId ->
+                _uiState.update { it.copy(draftRunName = "") }
+                reloadRuns(selectRunId = runId)
+                _uiState.update { it.copy(message = "Draft run $runId created") }
+            }.onFailure { e ->
+                _uiState.update { it.copy(message = e.message) }
+            }
+        }
     }
 
     fun toggleAuto(enabled: Boolean) {
@@ -214,14 +263,19 @@ class ForwardTestViewModel @Inject constructor(
         }
     }
 
-    private suspend fun reloadRuns() {
+    private suspend fun reloadRuns(selectRunId: Long? = null) {
         val runs = repository.loadAllRuns().sortedBy { it.id }
+        val activeVersions = runService.listActiveVersions()
         _uiState.update {
             it.copy(
                 runs = runs,
                 compareCandidates = runs,
-                selectedRunId = it.selectedRunId ?: runs.firstOrNull()?.id,
+                selectedRunId = selectRunId ?: it.selectedRunId ?: runs.firstOrNull()?.id,
                 autoEnabled = scheduler.isAutoEnabled(),
+                activeVersions = activeVersions,
+                draftVersionId = it.draftVersionId
+                    ?.takeIf { id -> activeVersions.any { v -> v.strategyVersionId == id } }
+                    ?: activeVersions.firstOrNull()?.strategyVersionId,
             )
         }
         _uiState.value.selectedRunId?.let { loadDashboard(it) }
@@ -343,6 +397,15 @@ class ForwardTestViewModel @Inject constructor(
     }
 
     companion object {
+        fun parseDate(raw: String): LocalDate? = try {
+            LocalDate.parse(raw.trim())
+        } catch (_: DateTimeParseException) {
+            null
+        }
+
+        fun parseWon(raw: String): Long? =
+            raw.trim().replace(",", "").toLongOrNull()?.takeIf { it > 0L }
+
         fun formatPercent(rate: BigDecimal?): String =
             rate?.let { PerformanceMath.formatSignedPercent(it) } ?: "N/A"
 

@@ -87,6 +87,15 @@ fun ForwardTestDashboardScreen(
                 }
             }
 
+            CreateDraftRunSection(
+                state = state,
+                onSelectVersion = viewModel::onDraftVersionSelected,
+                onRunNameChange = viewModel::onDraftRunNameChanged,
+                onStartDateChange = viewModel::onDraftStartDateChanged,
+                onInitialCashChange = viewModel::onDraftInitialCashChanged,
+                onCreate = viewModel::createDraftRun,
+            )
+
             OrchestrationSection(
                 state = state,
                 onToggleAuto = viewModel::toggleAuto,
@@ -135,6 +144,71 @@ fun ForwardTestDashboardScreen(
                     PolicySection(state.policy)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CreateDraftRunSection(
+    state: ForwardTestUiState,
+    onSelectVersion: (Long) -> Unit,
+    onRunNameChange: (String) -> Unit,
+    onStartDateChange: (String) -> Unit,
+    onInitialCashChange: (String) -> Unit,
+    onCreate: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Create Draft Run", style = MaterialTheme.typography.titleMedium)
+            if (state.activeVersions.isEmpty()) {
+                Text("No ACTIVE strategy version")
+                return@Column
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                state.activeVersions.forEach { version ->
+                    FilterChip(
+                        selected = state.draftVersionId == version.strategyVersionId,
+                        onClick = { onSelectVersion(version.strategyVersionId) },
+                        label = { Text("${version.strategyName} v${version.versionNo}") },
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = state.draftRunName,
+                onValueChange = onRunNameChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Run name") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.draftStartDate,
+                onValueChange = onStartDateChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Start date (YYYY-MM-DD)") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.draftInitialCash,
+                onValueChange = onInitialCashChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Initial cash (KRW)") },
+                singleLine = true,
+            )
+            TextButton(
+                onClick = onCreate,
+                enabled = !state.loading && state.draftRunName.isNotBlank(),
+            ) {
+                Text("Create Draft Run")
+            }
+            Text(
+                "Funding and trading policy are fixed at READY",
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }

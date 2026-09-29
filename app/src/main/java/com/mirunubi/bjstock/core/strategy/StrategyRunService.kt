@@ -19,7 +19,6 @@ import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.RunType
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import com.mirunubi.bjstock.core.paper.CashLedgerService
-import com.mirunubi.bjstock.core.paper.MissingTradingPolicyException
 import com.mirunubi.bjstock.core.paper.PaperTradingPolicy
 import com.mirunubi.bjstock.core.paper.PaperTradingPolicyService
 import java.time.Instant
@@ -98,14 +97,19 @@ class StrategyRunService(
         }
     }
 
+    /**
+     * Inserts the run row only. The trading-policy snapshot and INITIAL_DEPOSIT are
+     * created by [markReady].
+     */
     suspend fun createDraftRun(
         strategyVersionId: Long,
         runName: String,
         startDate: LocalDate,
         initialCashWon: Long,
-        policyTemplate: PaperTradingPolicy = defaultPolicyTemplate(),
         endDate: LocalDate? = null,
     ): Long {
+        val name = runName.trim()
+        require(name.isNotEmpty()) { "run_name must not be blank" }
         require(initialCashWon > 0L) { "initial_cash must be > 0" }
         val version = strategyDao.findVersionById(strategyVersionId)
             ?: throw StrategyVersionException(
@@ -118,32 +122,33 @@ class StrategyRunService(
                 "draft strategy runs require an ACTIVE strategy version",
             )
         }
-        return database.withTransaction {
-            val runId = strategyRunDao.insert(
-                StrategyRunEntity(
-                    runName = runName,
-                    strategyVersionId = strategyVersionId,
-                    runType = RunType.PAPER,
-                    startDate = startDate,
-                    endDate = endDate,
-                    initialCash = initialCashWon,
-                    status = RunStatus.DRAFT,
-                    createdAt = now(),
-                    updatedAt = now(),
-                ),
-            )
-            policyService.createSnapshot(
-                strategyRunId = runId,
-                template = policyTemplate,
-            )
-            cashLedger.appendInitialDeposit(
-                strategyRunId = runId,
-                amountWon = initialCashWon,
-                eventDate = startDate,
-            )
-            runId
-        }
+        return strategyRunDao.insert(
+            StrategyRunEntity(
+                runName = name,
+                strategyVersionId = strategyVersionId,
+                runType = RunType.PAPER,
+                startDate = startDate,
+                endDate = endDate,
+                initialCash = initialCashWon,
+                status = RunStatus.DRAFT,
+                createdAt = now(),
+                updatedAt = now(),
+            ),
+        )
     }
+
+    suspend fun listActiveVersions(): List<ActiveStrategyVersion> =
+        strategyDao.findAllStrategies().flatMap { strategy ->
+            strategyDao.findVersionsByStrategy(strategy.id)
+                .filter { it.status == StrategyVersionStatus.ACTIVE }
+                .map { version ->
+                    ActiveStrategyVersion(
+                        strategyVersionId = version.id,
+                        strategyName = strategy.strategyName,
+                        versionNo = version.versionNo,
+                    )
+                }
+        }
 
     suspend fun addInstrument(strategyRunId: Long, instrumentId: Long) {
         val run = requireDraft(strategyRunId)
@@ -219,7 +224,14 @@ class StrategyRunService(
         }
     }
 
-    suspend fun markReady(strategyRunId: Long) {
+    /**
+     * DRAFT → READY. Creates the trading-policy snapshot and INITIAL_DEPOSIT in the same
+     * transaction as the status change.
+     */
+    suspend fun markReady(
+        strategyRunId: Long,
+        policyTemplate: PaperTradingPolicy = defaultPolicyTemplate(),
+    ) {
         val run = strategyRunDao.findById(strategyRunId)
             ?: throw StrategyVersionException(StrategyErrorKind.NOT_FOUND, "run $strategyRunId")
         if (run.status != RunStatus.DRAFT) {
@@ -237,14 +249,6 @@ class StrategyRunService(
             throw StrategyVersionException(
                 StrategyErrorKind.VERSION_NOT_ACTIVE,
                 "strategy version must be ACTIVE",
-            )
-        }
-        try {
-            policyService.requireByRun(strategyRunId)
-        } catch (_: MissingTradingPolicyException) {
-            throw StrategyVersionException(
-                StrategyErrorKind.INVALID_STATE,
-                ForwardErrorCode.MISSING_TRADING_POLICY.name,
             )
         }
         if (run.initialCash <= 0L) {
@@ -297,7 +301,25 @@ class StrategyRunService(
                 )
             }
         }
-        strategyRunDao.updateStatus(strategyRunId, RunStatus.READY, now())
+        database.withTransaction {
+            val current = strategyRunDao.findById(strategyRunId)
+            if (current?.status != RunStatus.DRAFT) {
+                throw StrategyVersionException(
+                    StrategyErrorKind.INVALID_STATE,
+                    "only DRAFT runs can become READY",
+                )
+            }
+            policyService.createSnapshot(
+                strategyRunId = strategyRunId,
+                template = policyTemplate,
+            )
+            cashLedger.appendInitialDeposit(
+                strategyRunId = strategyRunId,
+                amountWon = current.initialCash,
+                eventDate = current.startDate,
+            )
+            strategyRunDao.updateStatus(strategyRunId, RunStatus.READY, now())
+        }
     }
 
     private fun maxRequiredHistory(factorCodes: List<String>): Int {
@@ -335,3 +357,9 @@ class StrategyRunService(
 
     suspend fun findAll() = strategyRunDao.findAll()
 }
+
+data class ActiveStrategyVersion(
+    val strategyVersionId: Long,
+    val strategyName: String,
+    val versionNo: Int,
+)
