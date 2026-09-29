@@ -247,6 +247,29 @@ class AuditAtomicityFinancialIdempotencyTest {
         assertEquals(OrderStatus.PENDING_EXECUTION, database.orderDao().findById(order.id)!!.status)
     }
 
+    @Test
+    fun filledOrderWithoutExecution_abortsWithItsOwnInvariantCode_andMutatesNothing() = runBlocking<Unit> {
+        val order = createPendingBuy()
+        database.orderDao().update(database.orderDao().findById(order.id)!!.copy(status = OrderStatus.VIRTUAL_FILLED))
+        val auditsBefore = database.tradeAuditLogDao().countByRun(runId)
+
+        val failure = runCatching {
+            Harness().fills.executeBuy(order, monday, 50_000, 1, 0)
+        }.exceptionOrNull() as IntegrityViolationException
+        assertEquals(AppErrorCode.FILLED_ORDER_WITHOUT_EXECUTION, failure.code)
+        assertEquals("FILLED_ORDER_WITHOUT_EXECUTION", failure.reasonCode)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, failure.severity)
+        val mapped = AppErrorMapper.fromThrowable(failure)
+        assertEquals(AppErrorCode.FILLED_ORDER_WITHOUT_EXECUTION, mapped.code)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, mapped.severity)
+
+        assertEquals(0, database.executionDao().countByOrderId(order.id))
+        assertEquals(1, database.cashLedgerDao().countByRun(runId))
+        assertNull(database.positionDao().find(runId, instrumentId))
+        assertEquals(OrderStatus.VIRTUAL_FILLED, database.orderDao().findById(order.id)!!.status)
+        assertEquals(auditsBefore, database.tradeAuditLogDao().countByRun(runId))
+    }
+
     // 7
     @Test
     fun duplicateLedgerEventKey_neverCausesSecondCashMutation() = runBlocking<Unit> {

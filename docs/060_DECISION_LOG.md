@@ -652,3 +652,7 @@ Legacy `REJECTED` / `CANCELLED` orders without audit get exactly one reconciliat
 
 `decision_source` stays `SIGNAL_RULE` / `FACTOR_STRATEGY`; `LEGACY_UNKNOWN` is not added and the PostgreSQL CHECK is unchanged (human decision). A restored `EVALUATION_DECIDED` uses the proven source (`RULE_TRIGGERED` present → `SIGNAL_RULE`; version without enabled signal rules → `FACTOR_STRATEGY`) or NULL with `reason_code = LEGACY_AUDIT_RESTORED`. Live rows never use NULL. Existing audit rows, including restored NULL-source rows, are never rewritten.
 
+## D-163
+
+Phase 11 / Gate 6.2: a `VIRTUAL_FILLED` order with no execution under its `execution_key` raises the new catalog code `FILLED_ORDER_WITHOUT_EXECUTION` (`INVARIANT`, `FINANCIAL_INTEGRITY`, retry `NONE`, user action required, `ABORT_OPERATION`, audit required) instead of `EXECUTION_IDEMPOTENCY_CONFLICT`. It is a broken persisted invariant, not a replay conflict: no existing execution identity exists to conflict with. `EXECUTION_IDEMPOTENCY_CONFLICT` stays limited to an existing `execution_key` whose immutable facts (order association, order state, quantity, price, costs) differ; an exact replay remains idempotent success. `LEDGER_MISMATCH` stays the cash / ledger inconsistency code. No schema change. Refines the classification in D-159.
+

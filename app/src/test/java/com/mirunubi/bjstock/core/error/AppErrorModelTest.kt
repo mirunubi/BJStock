@@ -67,7 +67,11 @@ class AppErrorModelTest {
 
     @Test
     fun financialIntegrityCodes_areClassifiedAndPreservedByTheMapper() {
-        listOf(AppErrorCode.LEDGER_MISMATCH, AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT).forEach { code ->
+        listOf(
+            AppErrorCode.LEDGER_MISMATCH,
+            AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT,
+            AppErrorCode.FILLED_ORDER_WITHOUT_EXECUTION,
+        ).forEach { code ->
             assertClassification(code, ErrorCategory.INVARIANT, ErrorSeverity.FINANCIAL_INTEGRITY, RetryPolicy.NONE, OperationAction.ABORT_OPERATION)
             assertTrue(code.name, code.userActionRequired)
             assertTrue(code.name, code.auditRequired)
@@ -82,6 +86,11 @@ class AppErrorModelTest {
         val execution = SafeAppError.fromThrowable(IntegrityViolationException.executionConflict("EXECUTION_REPLAY_MISMATCH"))
         assertEquals(AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT, execution.code)
         assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, execution.severity)
+
+        val missing = SafeAppError.fromThrowable(IntegrityViolationException.filledOrderWithoutExecution())
+        assertEquals(AppErrorCode.FILLED_ORDER_WITHOUT_EXECUTION, missing.code)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, missing.severity)
+        assertEquals(AppErrorCode.FILLED_ORDER_WITHOUT_EXECUTION, AppErrorCode.fromCode("FILLED_ORDER_WITHOUT_EXECUTION"))
 
         val invariant = IntegrityViolationException.invariant("AUDIT_EVENT_KEY_CONFLICT")
         assertEquals(ErrorSeverity.CRITICAL, SafeAppError.fromThrowable(invariant).severity)

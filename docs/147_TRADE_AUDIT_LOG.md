@@ -93,3 +93,11 @@ Live rows carry run, instrument, evaluation, order, market date (fill date for r
 ## Idempotency conflict vs exact replay (financial rows)
 
 An exact replay of a fill or ledger event (same key, identical facts) is normal idempotent success. Conflicting facts under the same key abort with `EXECUTION_IDEMPOTENCY_CONFLICT` or `LEDGER_MISMATCH` (severity `FINANCIAL_INTEGRITY`); a ledger whose latest balance differs from the sum of its amounts also raises `LEDGER_MISMATCH` (`docs/150` 20.6.1).
+
+The three financial-integrity codes are distinct (`docs/150` 20.7):
+
+- `LEDGER_MISMATCH`: cash / ledger financial inconsistency.
+- `EXECUTION_IDEMPOTENCY_CONFLICT`: the same logical execution identity (`execution_key`) conflicts on replay.
+- `FILLED_ORDER_WITHOUT_EXECUTION`: the persisted order / execution invariant is broken (order `VIRTUAL_FILLED`, no execution under its key).
+
+All three abort the fill transaction before any write, so no `EXECUTION_FILLED` or other audit row is appended for the failed attempt.

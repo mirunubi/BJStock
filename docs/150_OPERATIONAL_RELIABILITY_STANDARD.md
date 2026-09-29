@@ -17,11 +17,12 @@ This standard is written to be **portable later to CatchMenu and other projects*
 | Audit atomicity (evaluation, order create / skip / reject / cancel, fill) | Implemented — Gate 6 (20.5) |
 | Canonical `executions.execution_key` / `cash_ledger.event_key` | Implemented — Room v10 / PostgreSQL `0012` (Gate 6, 20.5) |
 | `LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` (`FINANCIAL_INTEGRITY`) | Implemented — Gate 6.1 (20.6) |
+| `FILLED_ORDER_WITHOUT_EXECUTION` (`FINANCIAL_INTEGRITY`) | Implemented — Gate 6.2 (20.7) |
 | Atomic run-end finalization (cancellations + audits + run `COMPLETED`) | Implemented — Gate 6.1 (20.6) |
 | Legacy `REJECTED` / `CANCELLED` order audit reconciliation | Implemented — Room v11 / PostgreSQL `0013`, data-only (Gate 6.1, 20.6) |
 | Scheduler rework, retention/archive, Operations UI, orphan-operation reconciliation | **Not implemented** — later Phase 11 gates |
 
-Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, and 6.1.
+Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, 6.1, and 6.2.
 
 ---
 
@@ -151,6 +152,7 @@ Only codes needed by existing Forward Test / KIS / paper-trading paths, plus `UN
 | `DATA_INTEGRITY_ERROR` | INVARIANT | CRITICAL | NONE | yes | ABORT_OPERATION | no |
 | `LEDGER_MISMATCH` | INVARIANT | FINANCIAL_INTEGRITY | NONE | yes | ABORT_OPERATION | yes |
 | `EXECUTION_IDEMPOTENCY_CONFLICT` | INVARIANT | FINANCIAL_INTEGRITY | NONE | yes | ABORT_OPERATION | yes |
+| `FILLED_ORDER_WITHOUT_EXECUTION` | INVARIANT | FINANCIAL_INTEGRITY | NONE | yes | ABORT_OPERATION | yes |
 | `INTERNAL_INVARIANT_VIOLATION` | INVARIANT | CRITICAL | NONE | yes | ABORT_OPERATION | no |
 | `UNEXPECTED_EXCEPTION` | UNEXPECTED | ERROR | NONE | no | ABORT_OPERATION | no |
 
@@ -165,9 +167,9 @@ Reserved for the idempotency / audit-atomicity gates. Added to `AppErrorCode` on
 | `INVALID_STATE_TRANSITION` | INVARIANT | CRITICAL | NONE | ABORT_OPERATION |
 | `DB_CONSTRAINT_VIOLATION` | INVARIANT | CRITICAL | NONE | ABORT_OPERATION |
 
-Gate 6.1 moved `LEDGER_MISMATCH` into 4.1 and added `EXECUTION_IDEMPOTENCY_CONFLICT` there. `DUPLICATE_EXECUTION` is **not** added: an exact replay of the same `execution_key` with identical financial facts is normal idempotent success, not an error (20.6.1).
+Gate 6.1 moved `LEDGER_MISMATCH` into 4.1 and added `EXECUTION_IDEMPOTENCY_CONFLICT` there. `DUPLICATE_EXECUTION` is **not** added: an exact replay of the same `execution_key` with identical financial facts is normal idempotent success, not an error (20.6.1). Gate 6.2 added `FILLED_ORDER_WITHOUT_EXECUTION` (20.7).
 
-`IntegrityViolationException` carries only a code; its severity is always the catalog severity of that code, so `SafeAppError.severity` reports `FINANCIAL_INTEGRITY` for the two financial codes and `CRITICAL` for audit-key conflicts (`INTERNAL_INVARIANT_VIOLATION`).
+`IntegrityViolationException` carries only a code; its severity is always the catalog severity of that code, so `SafeAppError.severity` reports `FINANCIAL_INTEGRITY` for the three financial codes and `CRITICAL` for audit-key conflicts (`INTERNAL_INVARIANT_VIOLATION`).
 
 ### 4.3 Mapping from existing BJStock codes
 
@@ -188,7 +190,7 @@ Gate 6.1 moved `LEDGER_MISMATCH` into 4.1 and added `EXECUTION_IDEMPOTENCY_CONFL
 | `KisAuthException` other / no HTTP code | `AUTH_REQUIRED` (typed kind needed; see 20.3) |
 | `HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND` | `DATA_INTEGRITY_ERROR` |
 | `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` | `INTERNAL_INVARIANT_VIOLATION` |
-| `IntegrityViolationException` | its `code` (`LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` / `INTERNAL_INVARIANT_VIOLATION`), severity preserved |
+| `IntegrityViolationException` | its `code` (`LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` / `FILLED_ORDER_WITHOUT_EXECUTION` / `INTERNAL_INVARIANT_VIOLATION`), severity preserved |
 | `java.net.SocketTimeoutException` | `NETWORK_TIMEOUT` |
 | other `java.io.IOException` | `NETWORK_UNAVAILABLE` |
 | anything else | `UNEXPECTED_EXCEPTION` |
@@ -787,7 +789,7 @@ Ledger rows are written only where they existed before: commission / tax rows on
 
 #### 20.5.3 Replay and conflicts
 
-- Fill replay: inside the transaction the order is re-read and the execution is looked up by key. Same order state and identical fill (order, price, quantity, commission, tax, slippage, `executed_at`) → `ALREADY_FILLED` with no financial mutation. Any disagreement (key present but order not `VIRTUAL_FILLED`, filled order without execution, different values) → `EXECUTION_IDEMPOTENCY_CONFLICT` (severity `FINANCIAL_INTEGRITY`; Gate 6 used `DATA_INTEGRITY_ERROR`), and the transaction aborts.
+- Fill replay: inside the transaction the order is re-read and the execution is looked up by key. Same order state and identical fill (order, price, quantity, commission, tax, slippage, `executed_at`) → `ALREADY_FILLED` with no financial mutation. Any disagreement under an existing key (order not `VIRTUAL_FILLED`, different values) → `EXECUTION_IDEMPOTENCY_CONFLICT`; an order already `VIRTUAL_FILLED` with no execution under its key → `FILLED_ORDER_WITHOUT_EXECUTION` (Gate 6.2, 20.7). Both are severity `FINANCIAL_INTEGRITY` (Gate 6 used `DATA_INTEGRITY_ERROR`), and the transaction aborts.
 - Ledger replay: same key with identical run, type, amount, date, and reference → existing row, no cash mutation; different content → `LEDGER_MISMATCH` / `LEDGER_EVENT_KEY_CONFLICT`, abort.
 - Audit replay: same key with the same run, event type, and evaluation / order / execution ids → existing row; otherwise `AUDIT_EVENT_KEY_CONFLICT` (`INTERNAL_INVARIANT_VIOLATION`), abort.
 - Nothing is caught to continue; the coordinator finishes the operation `FAILED` with the mapped code (20.4.8).
@@ -817,13 +819,14 @@ Current paper trading has exactly one `VIRTUAL_FILLED` execution per order (full
 | Situation | Result |
 | --- | --- |
 | Same `execution_key`, identical order state and fill facts | `ALREADY_FILLED`, no mutation (normal, not an error) |
-| Same `execution_key`, persisted facts differ from the attempted logical fill (values, order not `VIRTUAL_FILLED`, quantity differs), or order `VIRTUAL_FILLED` without an execution under its key | `EXECUTION_IDEMPOTENCY_CONFLICT` (`EXECUTION_REPLAY_MISMATCH` / `EXECUTION_ORDER_STATE_MISMATCH` / `FILLED_ORDER_WITHOUT_EXECUTION`) |
+| Same `execution_key`, persisted facts differ from the attempted logical fill (values, order not `VIRTUAL_FILLED`, quantity differs) | `EXECUTION_IDEMPOTENCY_CONFLICT` (`EXECUTION_REPLAY_MISMATCH` / `EXECUTION_ORDER_STATE_MISMATCH`) |
+| Order `VIRTUAL_FILLED` without an execution under its key | `FILLED_ORDER_WITHOUT_EXECUTION` (Gate 6.2, 20.7) |
 | Same ledger `event_key`, identical facts | existing row, no cash mutation |
 | Same ledger `event_key`, conflicting values | `LEDGER_MISMATCH` (`LEDGER_EVENT_KEY_CONFLICT`) |
 | Latest `balance_after` ≠ sum of `amount` for the run, checked before every ledger append | `LEDGER_MISMATCH` (`LEDGER_BALANCE_MISMATCH`); nothing is appended |
 | Running reconstruction disagrees with a row's `balance_after`, or goes negative (`CashLedgerService.reconstructCash`) | `LEDGER_MISMATCH` (`LEDGER_RECONSTRUCTION_MISMATCH`) |
 
-Both codes: category `INVARIANT`, severity `FINANCIAL_INTEGRITY`, retry `NONE`, user action required, operation action `ABORT_OPERATION` (the catalog convention for every `INVARIANT` code), audit required. `AppErrorMapper` keeps the exception's code, so `SafeAppError.severity` reports `FINANCIAL_INTEGRITY` instead of collapsing to `CRITICAL`. The exception message is only the canonical reason code. The ledger balance check adds one `SUM(amount)` read per append; cash arithmetic is unchanged.
+All three codes: category `INVARIANT`, severity `FINANCIAL_INTEGRITY`, retry `NONE`, user action required, operation action `ABORT_OPERATION` (the catalog convention for every `INVARIANT` code), audit required. `AppErrorMapper` keeps the exception's code, so `SafeAppError.severity` reports `FINANCIAL_INTEGRITY` instead of collapsing to `CRITICAL`. The exception message is only the canonical reason code. The ledger balance check adds one `SUM(amount)` read per append; cash arithmetic is unchanged.
 
 #### 20.6.2 Run-end finalization boundary
 
@@ -873,6 +876,20 @@ Existing audit rows are never updated, including restored rows whose `decision_s
 - Orphan `RUNNING` operations, scheduler redesign, archive / retention, Operations UI (20.4.9, 20.5.6).
 - `market_date` of reconciled terminal-order audits stays NULL (not persisted on the order).
 
+### 20.7 Execution invariant taxonomy (Phase 11 / Gate 6.2)
+
+Three separate financial-integrity concepts, each with its own code (all `INVARIANT`, `FINANCIAL_INTEGRITY`, retry `NONE`, user action required, `ABORT_OPERATION`, audit required):
+
+| Code | Meaning | Raised when |
+| --- | --- | --- |
+| `LEDGER_MISMATCH` | cash / ledger financial inconsistency | ledger key conflict, balance ≠ sum of amounts, reconstruction mismatch (20.6.1) |
+| `EXECUTION_IDEMPOTENCY_CONFLICT` | the same logical execution identity conflicts on replay | an execution already exists under the `execution_key`, but the order association, order state, quantity, price, or other immutable fill facts differ |
+| `FILLED_ORDER_WITHOUT_EXECUTION` | the persisted order / execution invariant is broken | the order is `VIRTUAL_FILLED` and no execution exists under its `execution_key` |
+
+`FILLED_ORDER_WITHOUT_EXECUTION` is not an idempotency conflict: there is no existing execution identity to conflict with. `VirtualFillService` raises it inside the fill transaction before any mutation, so no execution, ledger row, position, order change, or audit is written. `EXECUTION_IDEMPOTENCY_CONFLICT` is not broadened. An exact replay (same key, identical facts) remains `ALREADY_FILLED` with no mutation and no error. No schema change: error codes are persisted only as free text (`final_code`, `reason_code`), and `api_error_logs.error_type` maps the new code to the existing `LOCAL_INVARIANT`.
+
+Gate 6.1 decisions kept unchanged: reconciled terminal-order audits keep `market_date` NULL when the historical market date cannot be proven (never inferred from `created_at` / `cancelled_at` / `updated_at`); the `SUM(amount)` check before each ledger append stays; `finalizeRunEnd` keeps one shared timestamp for cancellation and run completion.
+
 ---
 
 ## Related
@@ -882,4 +899,4 @@ Existing audit rows are never updated, including restored rows whose `decision_s
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-162)
+- `docs/060_DECISION_LOG.md` (D-143 – D-163)

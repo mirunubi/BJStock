@@ -119,6 +119,11 @@ enum class AppErrorCode(
         OperationAction.ABORT_OPERATION, true,
         "Paper fill conflicts with the recorded execution",
     ),
+    FILLED_ORDER_WITHOUT_EXECUTION(
+        ErrorCategory.INVARIANT, ErrorSeverity.FINANCIAL_INTEGRITY, RetryPolicy.NONE, true,
+        OperationAction.ABORT_OPERATION, true,
+        "Filled paper order has no recorded execution",
+    ),
     INTERNAL_INVARIANT_VIOLATION(
         ErrorCategory.INVARIANT, ErrorSeverity.CRITICAL, RetryPolicy.NONE, true,
         OperationAction.ABORT_OPERATION, false,

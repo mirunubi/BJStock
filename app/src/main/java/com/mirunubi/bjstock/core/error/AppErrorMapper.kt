@@ -96,7 +96,8 @@ object AppErrorMapper {
                     attempt = attempt,
                 ),
             )
-            // Keeps the specific code: LEDGER_MISMATCH / EXECUTION_IDEMPOTENCY_CONFLICT carry FINANCIAL_INTEGRITY.
+            // Keeps the specific code: LEDGER_MISMATCH / EXECUTION_IDEMPOTENCY_CONFLICT /
+            // FILLED_ORDER_WITHOUT_EXECUTION carry FINANCIAL_INTEGRITY.
             is IntegrityViolationException -> SafeAppError(
                 code = throwable.code,
                 diagnostics = SafeDiagnostics(

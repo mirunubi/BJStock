@@ -52,6 +52,7 @@ object KisApiErrorMapper {
         AppErrorCode.DATA_INTEGRITY_ERROR,
         AppErrorCode.LEDGER_MISMATCH,
         AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT,
+        AppErrorCode.FILLED_ORDER_WITHOUT_EXECUTION,
         AppErrorCode.INTERNAL_INVARIANT_VIOLATION,
         -> ApiErrorType.LOCAL_INVARIANT
         AppErrorCode.UNEXPECTED_EXCEPTION -> ApiErrorType.UNEXPECTED

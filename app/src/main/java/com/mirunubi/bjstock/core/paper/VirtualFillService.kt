@@ -292,7 +292,7 @@ class VirtualFillService(
         val existing = executionDao.findByExecutionKey(requested.executionKey)
         if (existing == null) {
             if (current.status == OrderStatus.VIRTUAL_FILLED) {
-                throw IntegrityViolationException.executionConflict("FILLED_ORDER_WITHOUT_EXECUTION")
+                throw IntegrityViolationException.filledOrderWithoutExecution()
             }
             return null
         }
