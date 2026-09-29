@@ -2,6 +2,10 @@ package com.mirunubi.bjstock.core.forward
 
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.audit.KisApiErrorMapper
+import com.mirunubi.bjstock.core.error.AppErrorCode
+import com.mirunubi.bjstock.core.error.AppErrorMapper
+import com.mirunubi.bjstock.core.error.ErrorCategory
+import com.mirunubi.bjstock.core.error.SafeAppError
 import com.mirunubi.bjstock.core.kis.KisCredentialStore
 import com.mirunubi.bjstock.core.kis.KisSettingsStore
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorKind
@@ -46,17 +50,7 @@ class KisForwardMarketDataGateway(
                     syncFromLatest(instrumentId, throughDate)
                 }
             } catch (ex: HistoricalSyncException) {
-                recordSyncError(ex)
-                return MarketSyncOutcome(
-                    success = false,
-                    errorCode = when (ex.kind) {
-                        HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND ->
-                            ForwardErrorCode.DATA_INTEGRITY_ERROR.name
-                        else -> ForwardErrorCode.NETWORK_FAILURE.name
-                    },
-                    errorMessage = ForwardTestOrchestrator.sanitizeError(ex.publicMessage),
-                    retryable = ex.kind != HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND,
-                )
+                return historicalSyncFailure(ex, OPERATION_HISTORICAL_SYNC)
             } catch (ex: KisMarketException) {
                 recordMarketError(ex)
                 val auth = ex.kind == KisMarketErrorKind.AUTHENTICATION
@@ -71,15 +65,7 @@ class KisForwardMarketDataGateway(
                     retryable = !auth,
                 )
             } catch (ex: Exception) {
-                recordGenericError(ex.message ?: "network failure")
-                return MarketSyncOutcome(
-                    success = false,
-                    errorCode = ForwardErrorCode.NETWORK_FAILURE.name,
-                    errorMessage = ForwardTestOrchestrator.sanitizeError(
-                        ex.message ?: "network failure",
-                    ),
-                    retryable = true,
-                )
+                return unrecognisedFailure(ex, OPERATION_FORWARD_SYNC)
             }
         }
         return MarketSyncOutcome(success = true)
@@ -93,7 +79,7 @@ class KisForwardMarketDataGateway(
         for (instrumentId in instrumentIds.sorted()) {
             try {
                 historicalSync(instrumentId, from, startDate)
-            } catch (ex: Exception) {
+            } catch (ex: KisMarketException) {
                 recordGenericError(ex.message ?: "history prepare failed")
                 return MarketSyncOutcome(
                     success = false,
@@ -103,9 +89,48 @@ class KisForwardMarketDataGateway(
                     ),
                     retryable = true,
                 )
+            } catch (ex: HistoricalSyncException) {
+                return historicalSyncFailure(ex, OPERATION_FORWARD_SYNC)
+            } catch (ex: Exception) {
+                return unrecognisedFailure(ex, OPERATION_FORWARD_SYNC)
             }
         }
         return MarketSyncOutcome(success = true)
+    }
+
+    private suspend fun historicalSyncFailure(
+        ex: HistoricalSyncException,
+        operation: String,
+    ): MarketSyncOutcome {
+        val code = AppErrorMapper.fromHistoricalSyncErrorKind(ex.kind)
+        recordSyncError(ex, code, operation)
+        return MarketSyncOutcome(
+            success = false,
+            errorCode = code.name,
+            errorMessage = ForwardTestOrchestrator.sanitizeError(ex.publicMessage),
+            retryable = code.isRetryableAutomatically,
+        )
+    }
+
+    /** [Throwable.message] is never used; only the canonical safe message and class name. */
+    private suspend fun unrecognisedFailure(ex: Exception, operation: String): MarketSyncOutcome {
+        val error = AppErrorMapper.fromThrowable(ex, logicalEndpoint = operation)
+        val message = listOfNotNull(
+            error.safeMessage,
+            error.diagnostics.exceptionType?.let { "($it)" },
+        ).joinToString(" ")
+        val retryable = error.code.isRetryableAutomatically
+        recordUnrecognisedError(error, message, retryable, operation)
+        return MarketSyncOutcome(
+            success = false,
+            errorCode = if (error.category == ErrorCategory.TRANSIENT) {
+                ForwardErrorCode.NETWORK_FAILURE.name
+            } else {
+                error.code.name
+            },
+            errorMessage = message,
+            retryable = retryable,
+        )
     }
 
     private suspend fun recordMarketError(ex: KisMarketException) {
@@ -123,18 +148,41 @@ class KisForwardMarketDataGateway(
         }
     }
 
-    private suspend fun recordSyncError(ex: HistoricalSyncException) {
+    private suspend fun recordSyncError(
+        ex: HistoricalSyncException,
+        code: AppErrorCode,
+        operation: String,
+    ) {
         val log = apiErrorLog ?: return
         runCatching {
             log.record(
                 provider = ApiErrorProvider.KIS,
-                operation = "KIS_HISTORICAL_SYNC",
+                operation = operation,
                 errorType = when (ex.kind) {
                     HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND -> ApiErrorType.KIS_BUSINESS_ERROR
                     else -> ApiErrorType.NETWORK_TIMEOUT
                 },
                 safeMessage = ex.publicMessage,
-                retryable = ex.kind != HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND,
+                retryable = code.isRetryableAutomatically,
+            )
+        }
+    }
+
+    private suspend fun recordUnrecognisedError(
+        error: SafeAppError,
+        message: String,
+        retryable: Boolean,
+        operation: String,
+    ) {
+        val log = apiErrorLog ?: return
+        runCatching {
+            log.record(
+                provider = ApiErrorProvider.KIS,
+                operation = operation,
+                errorType = ApiErrorType.NETWORK_TIMEOUT,
+                safeMessage = message,
+                retryable = retryable,
+                httpStatus = error.diagnostics.httpStatus,
             )
         }
     }
@@ -150,5 +198,10 @@ class KisForwardMarketDataGateway(
                 retryable = true,
             )
         }
+    }
+
+    private companion object {
+        const val OPERATION_FORWARD_SYNC = "KIS_FORWARD_SYNC"
+        const val OPERATION_HISTORICAL_SYNC = "KIS_HISTORICAL_SYNC"
     }
 }

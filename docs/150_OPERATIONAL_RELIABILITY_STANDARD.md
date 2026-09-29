@@ -580,10 +580,25 @@ Correlation columns:
 | Auto ON can execute immediately (periodic work, no initial delay) | 5, 7 | scheduler + single-flight |
 | No single-flight between Run Now and Worker | 7 | scheduler + single-flight |
 | Orchestrator returns only the last Run's result; a non-retryable block stops later Runs | 5, 6 | instrumentation + isolation |
-| `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | instrumentation + isolation |
+| `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 3, commit `<pending>` (see 20.3.1) |
 | API error logging wrapped in discarded `runCatching` | 6 | instrumentation + isolation |
 | `KisAuthException` has no typed kind; token network failure surfaces as auth failure | 4.3 | audit atomicity + retry |
 | Audit written outside business transaction; `ORDER_REJECTED` / `ORDER_CANCELLED` not emitted | 11 | audit atomicity + retry |
+
+#### 20.3.1 Resolved: forward gateway classification (Phase 11 / Gate 3)
+
+`syncUniverseTo` and `prepareHistory` route local and unrecognised failures through `AppErrorMapper`:
+
+| Gateway input | `MarketSyncOutcome.errorCode` | Category | `retryable` |
+| --- | --- | --- | --- |
+| `HistoricalSyncErrorKind.INVALID_DATE_RANGE` | `INTERNAL_INVARIANT_VIOLATION` | INVARIANT | false |
+| `HistoricalSyncErrorKind.NO_LATEST_BAR` | `INTERNAL_INVARIANT_VIOLATION` | INVARIANT | false |
+| `HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND` | `DATA_INTEGRITY_ERROR` (unchanged) | INVARIANT | false |
+| unrecognised exception | `UNEXPECTED_EXCEPTION` | UNEXPECTED | false |
+| raw `SocketTimeoutException` / `IOException` | `NETWORK_FAILURE` (unchanged) | TRANSIENT | true |
+| `CancellationException` | rethrown, never classified | — | — |
+
+`retryable` equals `AppErrorCode.isRetryableAutomatically`. The unrecognised-exception message is the catalog safe message plus the exception simple class name; `Throwable.message` is never used. `KisMarketException` branches are unchanged. Worker retry logic is unchanged: it still returns `Result.retry()` only when `retryable` is true.
 | Executions / cash ledger lack canonical unique event keys | 12 | schema + idempotency |
 | KIS `msg1` free text appended to `api_error_logs.safe_message` | 17 | instrumentation + isolation |
 | Retention / archive / purge jobs absent | 13–16 | archive / retention / redaction |
