@@ -177,6 +177,9 @@ enum class ApiErrorType {
     KIS_BUSINESS_ERROR,
     MALFORMED_RESPONSE,
     MASTER_DOWNLOAD_ERROR,
+    RATE_LIMIT,
+    LOCAL_INVARIANT,
+    UNEXPECTED,
 }
 
 enum class Board {

@@ -36,10 +36,10 @@ object AppErrorMapper {
     fun fromKisMarketErrorKind(kind: KisMarketErrorKind): AppErrorCode = when (kind) {
         KisMarketErrorKind.AUTHENTICATION -> AppErrorCode.AUTH_REQUIRED
         KisMarketErrorKind.HTTP -> AppErrorCode.KIS_SERVER_ERROR
-        KisMarketErrorKind.BUSINESS,
+        KisMarketErrorKind.BUSINESS -> AppErrorCode.KIS_BUSINESS_ERROR
         KisMarketErrorKind.INVALID_SYMBOL,
         KisMarketErrorKind.INVALID_DATE_RANGE,
-        -> AppErrorCode.KIS_BUSINESS_ERROR
+        -> AppErrorCode.INTERNAL_INVARIANT_VIOLATION
         KisMarketErrorKind.RATE_LIMITED -> AppErrorCode.KIS_RATE_LIMIT
         KisMarketErrorKind.NETWORK_TIMEOUT -> AppErrorCode.NETWORK_TIMEOUT
         KisMarketErrorKind.MALFORMED_RESPONSE,

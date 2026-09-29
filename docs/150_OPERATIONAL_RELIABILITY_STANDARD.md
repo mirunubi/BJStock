@@ -168,7 +168,8 @@ Reserved for the idempotency / audit-atomicity gates. Added to `AppErrorCode` on
 | other `ForwardErrorCode.*` | same name |
 | `KisMarketErrorKind.AUTHENTICATION` | `AUTH_REQUIRED` |
 | `KisMarketErrorKind.HTTP` | `KIS_SERVER_ERROR` |
-| `KisMarketErrorKind.BUSINESS` / `INVALID_SYMBOL` / `INVALID_DATE_RANGE` | `KIS_BUSINESS_ERROR` |
+| `KisMarketErrorKind.BUSINESS` (provider `rt_cd != 0`, not rate limit) | `KIS_BUSINESS_ERROR` |
+| `KisMarketErrorKind.INVALID_SYMBOL` / `INVALID_DATE_RANGE` (local validation before the request) | `INTERNAL_INVARIANT_VIOLATION` |
 | `KisMarketErrorKind.RATE_LIMITED` | `KIS_RATE_LIMIT` |
 | `KisMarketErrorKind.NETWORK_TIMEOUT` | `NETWORK_TIMEOUT` |
 | `KisMarketErrorKind.MALFORMED_RESPONSE` / `MAPPING_FAILURE` | `KIS_MALFORMED_RESPONSE` |
@@ -555,7 +556,8 @@ This phase does **not** implement broker trading (D-002, D-036, D-038 remain). T
 | `ForwardOperationEntity` / `OperationalEventEntity` + DAOs | `core/database` |
 | `ForwardOperationLogService` (`startOperation`, `finishOperation`, `appendOperationalEvent`) | `core/audit/ForwardOperationLogService.kt` |
 | Room v8 + `MIGRATION_7_8` | `core/database/BJStockMigrations.kt` |
-| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql` |
+| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql`, `0010_api_error_type_taxonomy.sql` |
+| `ApiErrorType` ↔ `AppErrorCode` mapping | `core/audit/KisApiErrorMapper.kt` |
 
 Correlation columns:
 
@@ -580,10 +582,15 @@ Correlation columns:
 | Auto ON can execute immediately (periodic work, no initial delay) | 5, 7 | scheduler + single-flight |
 | No single-flight between Run Now and Worker | 7 | scheduler + single-flight |
 | Orchestrator returns only the last Run's result; a non-retryable block stops later Runs | 5, 6 | instrumentation + isolation |
-| `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 3, commit `<pending>` (see 20.3.1) |
+| `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 3, commit `f2abe55` (see 20.3.1) |
+| Gateway collapses KIS `BUSINESS` / `MALFORMED_RESPONSE` / `MAPPING_FAILURE` / local `INVALID_SYMBOL` / `INVALID_DATE_RANGE` into retryable `NETWORK_FAILURE`; `api_error_logs.error_type` misleading (`NETWORK_TIMEOUT` for local and unexpected failures, `KIS_BUSINESS_ERROR` for rate limit and local validation); gateway appends a duplicate row for failures the repository already recorded | 4.3, 6, 9 | **RESOLVED** — Phase 11 / Gate 4 (see 20.3.2) |
+| **OPEN / DEFERRED:** `KisMarketRepositoryImpl` catch-all may classify an unexpected local defect as `MALFORMED_RESPONSE`. The gateway preserves the repository-provided classification. Repository-level refinement needs its own impact analysis | 4.3, 6 | later bounded gate |
 | API error logging wrapped in discarded `runCatching` | 6 | instrumentation + isolation |
 | `KisAuthException` has no typed kind; token network failure surfaces as auth failure | 4.3 | audit atomicity + retry |
 | Audit written outside business transaction; `ORDER_REJECTED` / `ORDER_CANCELLED` not emitted | 11 | audit atomicity + retry |
+| Executions / cash ledger lack canonical unique event keys | 12 | schema + idempotency |
+| KIS `msg1` free text appended to `api_error_logs.safe_message` | 17 | instrumentation + isolation |
+| Retention / archive / purge jobs absent | 13–16 | archive / retention / redaction |
 
 #### 20.3.1 Resolved: forward gateway classification (Phase 11 / Gate 3)
 
@@ -598,10 +605,30 @@ Correlation columns:
 | raw `SocketTimeoutException` / `IOException` | `NETWORK_FAILURE` (unchanged) | TRANSIENT | true |
 | `CancellationException` | rethrown, never classified | — | — |
 
-`retryable` equals `AppErrorCode.isRetryableAutomatically`. The unrecognised-exception message is the catalog safe message plus the exception simple class name; `Throwable.message` is never used. `KisMarketException` branches are unchanged. Worker retry logic is unchanged: it still returns `Result.retry()` only when `retryable` is true.
-| Executions / cash ledger lack canonical unique event keys | 12 | schema + idempotency |
-| KIS `msg1` free text appended to `api_error_logs.safe_message` | 17 | instrumentation + isolation |
-| Retention / archive / purge jobs absent | 13–16 | archive / retention / redaction |
+`retryable` equals `AppErrorCode.isRetryableAutomatically`. The unrecognised-exception message is the catalog safe message plus the exception simple class name; `Throwable.message` is never used. `KisMarketException` branches were unchanged in Gate 3 (aligned in Gate 4, 20.3.2). Worker retry logic is unchanged: it still returns `Result.retry()` only when `retryable` is true.
+
+#### 20.3.2 Resolved: KIS error semantics and API error taxonomy (Phase 11 / Gate 4)
+
+Final `api_error_logs.error_type` taxonomy (PostgreSQL `0010`, Kotlin `ApiErrorType`): `NETWORK_TIMEOUT`, `HTTP_ERROR`, `AUTH_ERROR`, `KIS_BUSINESS_ERROR`, `MALFORMED_RESPONSE`, `MASTER_DOWNLOAD_ERROR`, `RATE_LIMIT`, `LOCAL_INVARIANT`, `UNEXPECTED`. The first six are unchanged; historical rows are never rewritten. `AppErrorCode` remains the detailed source; `error_type` is derived from it (`KisApiErrorMapper.fromAppErrorCode`).
+
+| Source | `AppErrorCode` | `error_type` | Forward `errorCode` | `retryable` |
+| --- | --- | --- | --- | --- |
+| Local `INVALID_DATE_RANGE` (sync use case or repository pre-request) | `INTERNAL_INVARIANT_VIOLATION` | `LOCAL_INVARIANT` | `INTERNAL_INVARIANT_VIOLATION` | false |
+| `NO_LATEST_BAR` | `INTERNAL_INVARIANT_VIOLATION` | `LOCAL_INVARIANT` | `INTERNAL_INVARIANT_VIOLATION` | false |
+| Local `INVALID_SYMBOL` (not 6 digits, before the request) | `INTERNAL_INVARIANT_VIOLATION` | `LOCAL_INVARIANT` | `INTERNAL_INVARIANT_VIOLATION` | false |
+| `INSTRUMENT_NOT_FOUND` | `DATA_INTEGRITY_ERROR` | `LOCAL_INVARIANT` | `DATA_INTEGRITY_ERROR` | false |
+| Unrecognised gateway exception | `UNEXPECTED_EXCEPTION` | `UNEXPECTED` | `UNEXPECTED_EXCEPTION` | false |
+| Provider `rt_cd != 0` (incl. provider symbol rejection), not `EGW00201` | `KIS_BUSINESS_ERROR` | `KIS_BUSINESS_ERROR` | `KIS_BUSINESS_ERROR` | false |
+| Provider payload malformed / numeric `MAPPING_FAILURE` | `KIS_MALFORMED_RESPONSE` | `MALFORMED_RESPONSE` | `KIS_MALFORMED_RESPONSE` | false |
+| `EGW00201` after the bounded retry (3 attempts, 61 s wait) | `KIS_RATE_LIMIT` | `RATE_LIMIT` | `NETWORK_FAILURE` | true |
+| Transport timeout | `NETWORK_TIMEOUT` | `NETWORK_TIMEOUT` | `NETWORK_FAILURE` | true |
+| Network unavailable / HTTP 5xx / other non-2xx | `KIS_SERVER_ERROR` | `HTTP_ERROR` | `NETWORK_FAILURE` | true |
+| HTTP 401 / token or credential failure | `AUTH_REQUIRED` | `AUTH_ERROR` | `AUTH_REQUIRED` | false |
+| `CancellationException` | rethrown, never classified or recorded | — | — | — |
+
+Default retry semantics: only `TRANSIENT` codes and `KIS_SERVER_ERROR` retry automatically (`AppErrorCode.isRetryableAutomatically`); every other external, local, security, and unexpected failure is non-retryable. Retryable forward results keep the legacy `NETWORK_FAILURE` code; non-retryable results carry the canonical code name.
+
+Duplicate provider/API error logging must not occur merely because multiple architecture layers observe the same exception. `KisMarketRepositoryImpl` records each provider/transport failure attempt once (a rate-limited retry sequence therefore records one row per attempt). The gateway records only failures that originate at or above it: local `INVALID_SYMBOL` / `INVALID_DATE_RANGE`, `MAPPING_FAILURE`, local sync invariants, and unrecognised exceptions.
 
 ---
 

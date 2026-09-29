@@ -444,6 +444,8 @@ Phase 4 persistence:
 
 CHECK vocabularies enforced in Kotlin enums / application services. Trade audit is append-only; API errors use rolling 7-day cleanup.
 
+`0010_api_error_type_taxonomy.sql` replaces `ck_api_error_logs_error_type` so it matches `ApiErrorType` exactly (adds `RATE_LIMIT`, `LOCAL_INVARIANT`, `UNEXPECTED`). No Room change: `error_type` is TEXT without a CHECK in SQLite.
+
 ---
 
 ## forward_operations / operational_events / operation_id correlation

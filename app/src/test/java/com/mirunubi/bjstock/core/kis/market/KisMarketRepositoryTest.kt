@@ -270,7 +270,7 @@ class KisMarketRepositoryTest {
         runCatching { dailyBars(repository(apiErrorLog = ApiErrorLogService(dao))) }
         val row = dao.rows.single()
         assertEquals("KIS_DAILY_PRICE", row.operation)
-        assertEquals(ApiErrorType.KIS_BUSINESS_ERROR, row.errorType)
+        assertEquals(ApiErrorType.RATE_LIMIT, row.errorType)
         assertEquals(500, row.httpStatus)
         assertEquals("EGW00201", row.businessCode)
         assertTrue(row.retryable)
@@ -302,9 +302,9 @@ class KisMarketRepositoryTest {
     }
 
     @Test
-    fun rateLimitedKind_mapsToExistingBusinessErrorTypeAndIsRetryable() {
+    fun rateLimitedKind_mapsToRateLimitTypeAndIsRetryable() {
         assertEquals(
-            ApiErrorType.KIS_BUSINESS_ERROR,
+            ApiErrorType.RATE_LIMIT,
             KisApiErrorMapper.fromMarketKind(KisMarketErrorKind.RATE_LIMITED),
         )
         assertTrue(KisApiErrorMapper.isRetryable(KisMarketErrorKind.RATE_LIMITED))

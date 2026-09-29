@@ -98,7 +98,9 @@ class KisForwardMarketDataGatewayClassificationTest {
         val outcome = sync()
         assertFailure(outcome, AppErrorCode.INTERNAL_INVARIANT_VIOLATION.name, retryable = false)
         assertCanonical(outcome, AppErrorCode.INTERNAL_INVARIANT_VIOLATION, ErrorCategory.INVARIANT)
-        assertFalse(apiErrors().single().retryable)
+        val logged = apiErrors().single()
+        assertFalse(logged.retryable)
+        assertEquals(ApiErrorType.LOCAL_INVARIANT, logged.errorType)
     }
 
     @Test
@@ -111,7 +113,9 @@ class KisForwardMarketDataGatewayClassificationTest {
         val outcome = sync()
         assertFailure(outcome, AppErrorCode.INTERNAL_INVARIANT_VIOLATION.name, retryable = false)
         assertCanonical(outcome, AppErrorCode.INTERNAL_INVARIANT_VIOLATION, ErrorCategory.INVARIANT)
-        assertFalse(apiErrors().single().retryable)
+        val logged = apiErrors().single()
+        assertFalse(logged.retryable)
+        assertEquals(ApiErrorType.LOCAL_INVARIANT, logged.errorType)
     }
 
     @Test
@@ -123,6 +127,7 @@ class KisForwardMarketDataGatewayClassificationTest {
         assertEquals("Unexpected error (IllegalArgumentException)", outcome.errorMessage)
         val logged = apiErrors().single()
         assertFalse(logged.retryable)
+        assertEquals(ApiErrorType.UNEXPECTED, logged.errorType)
         assertEquals("Unexpected error (IllegalArgumentException)", logged.safeMessage)
     }
 
@@ -133,12 +138,15 @@ class KisForwardMarketDataGatewayClassificationTest {
         assertFailure(outcome, ForwardErrorCode.NETWORK_FAILURE.name, retryable = true)
         assertEquals("연결 실패", outcome.errorMessage)
         assertCanonical(outcome, AppErrorCode.NETWORK_UNAVAILABLE, ErrorCategory.TRANSIENT)
-        assertEquals(ApiErrorType.NETWORK_TIMEOUT, apiErrors().single().errorType)
+        assertTrue("repository records provider failures", apiErrors().isEmpty())
 
         marketRepository.failure = SocketTimeoutException("read timed out")
         val raw = sync()
         assertFailure(raw, ForwardErrorCode.NETWORK_FAILURE.name, retryable = true)
         assertEquals("Network request timed out (SocketTimeoutException)", raw.errorMessage)
+        val logged = apiErrors().single()
+        assertEquals(ApiErrorType.NETWORK_TIMEOUT, logged.errorType)
+        assertTrue(logged.retryable)
     }
 
     @Test
@@ -163,10 +171,8 @@ class KisForwardMarketDataGatewayClassificationTest {
         )
         val outcome = sync()
         assertFailure(outcome, ForwardErrorCode.NETWORK_FAILURE.name, retryable = true)
-        val logged = apiErrors().single()
-        assertEquals(ApiErrorType.HTTP_ERROR, logged.errorType)
-        assertEquals(503, logged.httpStatus)
-        assertTrue(logged.retryable)
+        assertEquals("연결 실패", outcome.errorMessage)
+        assertTrue("repository records provider failures", apiErrors().isEmpty())
     }
 
     @Test
@@ -180,10 +186,7 @@ class KisForwardMarketDataGatewayClassificationTest {
         assertEquals(KisRequestPolicy.RATE_LIMIT_MAX_ATTEMPTS, marketRepository.calls)
         assertFailure(outcome, ForwardErrorCode.NETWORK_FAILURE.name, retryable = true)
         assertEquals("KIS 요청 한도 초과", outcome.errorMessage)
-        val logged = apiErrors().single()
-        assertEquals(ApiErrorType.KIS_BUSINESS_ERROR, logged.errorType)
-        assertEquals("EGW00201", logged.businessCode)
-        assertTrue(logged.retryable)
+        assertTrue("repository records provider failures", apiErrors().isEmpty())
     }
 
     @Test
