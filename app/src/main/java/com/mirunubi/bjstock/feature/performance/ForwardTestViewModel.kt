@@ -57,9 +57,20 @@ data class UniverseInstrumentView(
     val name: String,
 )
 
+data class ReadyConfirmation(
+    val runId: Long,
+    val runName: String,
+    val strategyLabel: String,
+    val startDate: LocalDate,
+    val initialCash: Long,
+    val universeCount: Int,
+)
+
 data class ForwardTestUiState(
     val runs: List<StrategyRunEntity> = emptyList(),
     val selectedRunId: Long? = null,
+    val selectedRunStatus: RunStatus? = null,
+    val readyConfirmation: ReadyConfirmation? = null,
     val summary: RunPerformanceSummary? = null,
     val dailySeries: List<DailyPerformancePoint> = emptyList(),
     val monthly: List<MonthlyPerformance> = emptyList(),
@@ -87,7 +98,10 @@ data class ForwardTestUiState(
     val draftInitialCash: String = "100000000",
     val message: String? = null,
     val loading: Boolean = false,
-)
+) {
+    val canMarkReady: Boolean
+        get() = selectedRunStatus == RunStatus.DRAFT
+}
 
 @HiltViewModel
 class ForwardTestViewModel @Inject constructor(
@@ -154,6 +168,48 @@ class ForwardTestViewModel @Inject constructor(
             }.onFailure { e ->
                 _uiState.update { it.copy(message = e.message) }
             }
+        }
+    }
+
+    fun requestMarkReady() {
+        val runId = _uiState.value.selectedRunId ?: return
+        viewModelScope.launch {
+            val run = runService.findById(runId)
+            if (run?.status != RunStatus.DRAFT) {
+                _uiState.update { it.copy(message = "Only DRAFT runs can be marked READY") }
+                return@launch
+            }
+            val (strategyName, versionLabel) = repository.loadStrategyLabel(run)
+            val confirmation = ReadyConfirmation(
+                runId = run.id,
+                runName = run.runName,
+                strategyLabel = "$strategyName $versionLabel",
+                startDate = run.startDate,
+                initialCash = run.initialCash,
+                universeCount = universeDao.findByRun(runId).size,
+            )
+            _uiState.update { it.copy(readyConfirmation = confirmation) }
+        }
+    }
+
+    fun cancelMarkReady() = _uiState.update { it.copy(readyConfirmation = null) }
+
+    fun confirmMarkReady() {
+        val confirmation = _uiState.value.readyConfirmation ?: return
+        val runId = confirmation.runId
+        _uiState.update { it.copy(readyConfirmation = null, loading = true, message = null) }
+        viewModelScope.launch {
+            runCatching { runService.markReady(runId) }
+                .onSuccess {
+                    reloadRuns(selectRunId = runId)
+                    _uiState.update { it.copy(message = "Run $runId is READY") }
+                }
+                .onFailure { e ->
+                    loadDashboard(runId)
+                    _uiState.update {
+                        it.copy(message = "Mark Ready failed: ${e.message ?: e::class.simpleName}")
+                    }
+                }
         }
     }
 
@@ -345,6 +401,7 @@ class ForwardTestViewModel @Inject constructor(
                 lastCompleteDate = lastComplete,
                 latestMarketDate = latestMarket,
                 opsStatus = opsStatus,
+                selectedRunStatus = run?.status,
                 universe = universeViews,
                 universeEditable = run?.status == RunStatus.DRAFT,
                 cycleHistory = cycles,

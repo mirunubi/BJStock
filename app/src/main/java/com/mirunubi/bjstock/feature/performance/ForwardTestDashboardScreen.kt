@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -50,6 +51,14 @@ fun ForwardTestDashboardScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val summary = state.summary
 
+    state.readyConfirmation?.let { confirmation ->
+        MarkReadyDialog(
+            confirmation = confirmation,
+            onConfirm = viewModel::confirmMarkReady,
+            onDismiss = viewModel::cancelMarkReady,
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -86,6 +95,8 @@ fun ForwardTestDashboardScreen(
                     )
                 }
             }
+
+            SelectedRunSection(state = state, onMarkReady = viewModel::requestMarkReady)
 
             CreateDraftRunSection(
                 state = state,
@@ -146,6 +157,58 @@ fun ForwardTestDashboardScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SelectedRunSection(
+    state: ForwardTestUiState,
+    onMarkReady: () -> Unit,
+) {
+    val status = state.selectedRunStatus ?: return
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Selected run ${state.selectedRunId}: $status", style = MaterialTheme.typography.titleSmall)
+        if (state.canMarkReady) {
+            TextButton(onClick = onMarkReady, enabled = !state.loading) {
+                Text("Mark Ready")
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarkReadyDialog(
+    confirmation: ReadyConfirmation,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mark run READY?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Run ${confirmation.runId}: ${confirmation.runName}")
+                Text("Strategy ${confirmation.strategyLabel}")
+                Text("Start date ${confirmation.startDate}")
+                Text("Initial cash ${ForwardTestViewModel.formatWon(confirmation.initialCash)}")
+                Text("Universe ${confirmation.universeCount} instrument(s)")
+                Text(
+                    "READY freezes the run universe and configuration, and creates the " +
+                        "trading-policy snapshot and INITIAL_DEPOSIT.",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Mark Ready") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
