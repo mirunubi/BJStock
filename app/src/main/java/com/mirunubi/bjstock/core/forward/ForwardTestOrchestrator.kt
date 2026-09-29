@@ -246,7 +246,7 @@ class ForwardTestOrchestrator(
             if (cycle.attempted) cyclesCompleted += 1
             processed += marketDate
             if (run.endDate != null && marketDate == run.endDate) {
-                finalizeRunEnd(runId)
+                finalizeRunEnd(runId, marketDate)
                 break
             }
         }
@@ -545,12 +545,8 @@ class ForwardTestOrchestrator(
         )
     }
 
-    private suspend fun finalizeRunEnd(runId: Long) {
-        for (order in orderDao.findByRunAndStatus(runId, OrderStatus.PENDING_EXECUTION)) {
-            orderDao.update(
-                order.copy(status = OrderStatus.CANCELLED, cancelledAt = now()),
-            )
-        }
+    private suspend fun finalizeRunEnd(runId: Long, endDate: LocalDate) {
+        processPending.cancelPendingAtRunEnd(runId, endDate, now())
         strategyRunDao.updateStatus(runId, RunStatus.COMPLETED, now())
     }
 

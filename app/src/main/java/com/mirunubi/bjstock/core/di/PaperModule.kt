@@ -64,12 +64,14 @@ object PaperModule {
     @Provides
     @Singleton
     fun provideProcessEvaluationUseCase(
+        database: BJStockDatabase,
         evaluationDao: StockEvaluationDao,
         strategyRunDao: StrategyRunDao,
         orderDao: OrderDao,
         positionDao: PositionDao,
         audit: TradeAuditLogService,
     ): ProcessEvaluationUseCase = ProcessEvaluationUseCase(
+        database = database,
         evaluationDao = evaluationDao,
         strategyRunDao = strategyRunDao,
         orderDao = orderDao,

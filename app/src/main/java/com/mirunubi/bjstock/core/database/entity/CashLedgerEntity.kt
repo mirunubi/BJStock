@@ -26,6 +26,7 @@ import java.time.LocalDate
             value = ["strategy_run_id", "event_type"],
             name = "idx_cash_ledger_run_event_type",
         ),
+        Index(value = ["event_key"], unique = true, name = "uq_cash_ledger_event_key"),
     ],
 )
 data class CashLedgerEntity(
@@ -46,4 +47,7 @@ data class CashLedgerEntity(
     val eventDate: LocalDate,
     @ColumnInfo(name = "created_at")
     val createdAt: Instant = Instant.now(),
+    /** Canonical cash event identity, e.g. `execution:<id>:buy-principal`. */
+    @ColumnInfo(name = "event_key")
+    val eventKey: String,
 )

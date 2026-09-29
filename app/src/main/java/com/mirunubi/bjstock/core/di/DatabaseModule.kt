@@ -52,6 +52,7 @@ object DatabaseModule {
                 BJStockMigrations.MIGRATION_6_7,
                 BJStockMigrations.MIGRATION_7_8,
                 BJStockMigrations.MIGRATION_8_9,
+                BJStockMigrations.MIGRATION_9_10,
             )
             .build()
     }

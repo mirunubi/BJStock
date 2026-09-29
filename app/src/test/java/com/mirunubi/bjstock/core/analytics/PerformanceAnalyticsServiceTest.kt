@@ -22,6 +22,7 @@ import com.mirunubi.bjstock.core.model.SellPolicy
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import com.mirunubi.bjstock.core.paper.CreateDailySnapshotUseCase
 import com.mirunubi.bjstock.core.paper.MarketExecutionTime
+import com.mirunubi.bjstock.core.paper.VirtualFillService
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -359,6 +360,7 @@ class PerformanceAnalyticsServiceTest {
                 slippage = 0,
                 executedAt = MarketExecutionTime.of(date),
                 createdAt = Instant.EPOCH,
+                executionKey = VirtualFillService.executionKey(orderId),
             ),
         )
     }

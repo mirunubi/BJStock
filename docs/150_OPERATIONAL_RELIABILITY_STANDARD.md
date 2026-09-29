@@ -14,9 +14,11 @@ This standard is written to be **portable later to CatchMenu and other projects*
 | `operation_id` on `trade_audit_logs` / `api_error_logs` | Implemented — populated for rows written inside an operation (Gate 5) |
 | `ForwardOperationLogService` | Implemented — wired through `ForwardTestExecutionCoordinator` for Run Now, Worker, Retry Failed Cycle (Gate 5, 20.4) |
 | Single-flight between Forward Test entry points | Implemented — Gate 5 (20.4) |
-| Scheduler rework, audit atomicity, retention/archive, Operations UI | **Not implemented** — later Phase 11 gates |
+| Audit atomicity (evaluation, order create / skip / reject / cancel, fill) | Implemented — Gate 6 (20.5) |
+| Canonical `executions.execution_key` / `cash_ledger.event_key` | Implemented — Room v10 / PostgreSQL `0012` (Gate 6, 20.5) |
+| Scheduler rework, retention/archive, Operations UI, orphan-operation reconciliation | **Not implemented** — later Phase 11 gates |
 
-Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gate 5.
+Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5 and 6.
 
 ---
 
@@ -160,6 +162,8 @@ Reserved for the idempotency / audit-atomicity gates. Added to `AppErrorCode` on
 | `DB_CONSTRAINT_VIOLATION` | INVARIANT | CRITICAL | NONE | ABORT_OPERATION |
 | `LEDGER_MISMATCH` | INVARIANT | FINANCIAL_INTEGRITY | NONE | ABORT_OPERATION |
 
+Gate 6 does not add these codes. Canonical-key conflicts raise `IntegrityViolationException` carrying an existing code plus a severity: execution / ledger conflicts → `DATA_INTEGRITY_ERROR` with severity `FINANCIAL_INTEGRITY`; audit key conflicts → `INTERNAL_INVARIANT_VIOLATION` (`CRITICAL`). `SafeAppError.severity` still reports the catalog severity of the code (`CRITICAL`).
+
 ### 4.3 Mapping from existing BJStock codes
 
 | Existing | Canonical |
@@ -179,6 +183,7 @@ Reserved for the idempotency / audit-atomicity gates. Added to `AppErrorCode` on
 | `KisAuthException` other / no HTTP code | `AUTH_REQUIRED` (typed kind needed; see 20.3) |
 | `HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND` | `DATA_INTEGRITY_ERROR` |
 | `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` | `INTERNAL_INVARIANT_VIOLATION` |
+| `IntegrityViolationException` | its `code` (`DATA_INTEGRITY_ERROR` / `INTERNAL_INVARIANT_VIOLATION`) |
 | `java.net.SocketTimeoutException` | `NETWORK_TIMEOUT` |
 | other `java.io.IOException` | `NETWORK_UNAVAILABLE` |
 | anything else | `UNEXPECTED_EXCEPTION` |
@@ -385,17 +390,18 @@ They are financial / domain state. Log cleanup, rotation, archive, and purge **m
 
 ## 11. Audit Atomicity
 
-Gate 1 finding: business state and its required audit event are currently written separately.
+Gate 1 finding: business state and its required audit event were written separately. **Resolved in Phase 11 / Gate 6 for the flows below** (details in 20.5).
 
-| Flow | Current |
-| --- | --- |
-| evaluation | `persistSnapshot` commits, then `writeAudit` |
-| order creation | order insert, then `ORDER_CREATED` |
-| order rejection | status → REJECTED; **no** `ORDER_REJECTED` emitted |
-| order cancellation | status → CANCELLED at run end; **no** `ORDER_CANCELLED` emitted |
-| execution fill | fill transaction commits, then `EXECUTION_FILLED` appended outside it |
+| Flow | Before Gate 6 | After Gate 6 |
+| --- | --- | --- |
+| evaluation | `persistSnapshot` commits, then `writeAudit` | evaluation + details + `RULE_TRIGGERED` + `EVALUATION_DECIDED` in one transaction |
+| order creation | order insert, then `ORDER_CREATED` | order + `ORDER_CREATED` in one transaction |
+| order skip | skip audit written after position read | position read + `ORDER_SKIPPED` in one transaction; no order row |
+| order rejection | status → REJECTED; **no** `ORDER_REJECTED` emitted | REJECTED + `ORDER_REJECTED` in one transaction |
+| order cancellation | status → CANCELLED at run end; **no** `ORDER_CANCELLED` emitted | CANCELLED + `ORDER_CANCELLED` in one transaction per order |
+| execution fill | fill transaction commits, then `EXECUTION_FILLED` appended outside it | `EXECUTION_FILLED` inside the fill transaction |
 
-Required future contract:
+Contract:
 
 - Where feasible, business mutation and required audit write commit in the **same Room transaction**. At minimum: evaluation, order creation, order rejection, order cancellation, execution fill.
 - If the same transaction is impossible, rerun / reconciliation must restore the missing audit using the deterministic `event_key`.
@@ -421,11 +427,13 @@ Current protections (preserved):
 | `trade_audit_logs` | `event_key` |
 | `forward_operations` | `operation_key` |
 | `operational_events` | `event_key` |
+| `executions` | `execution_key` (Gate 6) |
+| `cash_ledger` | `event_key` (Gate 6) |
 
-Current gaps:
+Previous gaps, **resolved in Phase 11 / Gate 6** (20.5):
 
-- `executions`: no DB unique guarantee per canonical paper order.
-- `cash_ledger`: no canonical unique financial-event key.
+- `executions`: no DB unique guarantee per canonical paper order → `execution_key` `paper:order:<order_id>:fill:1`.
+- `cash_ledger`: no canonical unique financial-event key → `event_key`.
 
 Rules:
 
@@ -571,8 +579,9 @@ This phase does **not** implement broker trading (D-002, D-036, D-038 remain). T
 | `ForwardOperationLogService` (`startOperation`, `finishOperation`, `appendOperationalEvent`) | `core/audit/ForwardOperationLogService.kt` |
 | `ForwardOperationContext` (operation id as a coroutine-context element) | `core/audit/ForwardOperationContext.kt` |
 | `ForwardTestExecutionCoordinator` (Gate 5) | `core/forward/ForwardTestExecutionCoordinator.kt` |
-| Room v8 + `MIGRATION_7_8`; Room v9 + `MIGRATION_8_9` (`operation_kind`) | `core/database/BJStockMigrations.kt` |
-| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql`, `0010_api_error_type_taxonomy.sql`, `0011_forward_operation_kind.sql` |
+| Room v8 + `MIGRATION_7_8`; Room v9 + `MIGRATION_8_9` (`operation_kind`); Room v10 + `MIGRATION_9_10` (financial event keys) | `core/database/BJStockMigrations.kt` |
+| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql`, `0010_api_error_type_taxonomy.sql`, `0011_forward_operation_kind.sql`, `0012_financial_event_keys.sql` |
+| `IntegrityViolationException` (Gate 6) | `core/error/IntegrityViolationException.kt` |
 | `ApiErrorType` ↔ `AppErrorCode` mapping | `core/audit/KisApiErrorMapper.kt` |
 
 Correlation columns:
@@ -596,7 +605,7 @@ Unchanged:
 - Trading math (fills, sizing, commission / tax, snapshots) is untouched.
 - `api_error_logs` still uses the 7-day rolling cleanup (D-141). The 90-day target applies when the lifecycle gate lands.
 - `trade_audit_logs` is still never deleted (D-138). The 400-day hot / 5-year archive target applies only after verified archiving exists.
-- Audit writes are still outside the business transaction (section 11).
+- Audit writes were still outside the business transaction after Gate 5 (section 11); resolved in Gate 6 (20.5).
 
 ### 20.3 Known deviations to close in later gates
 
@@ -612,8 +621,8 @@ Unchanged:
 | **OPEN / DEFERRED:** `KisMarketRepositoryImpl` catch-all may classify an unexpected local defect as `MALFORMED_RESPONSE`. The gateway preserves the repository-provided classification. Repository-level refinement needs its own impact analysis | 4.3, 6 | later bounded gate |
 | API error logging / 7-day cleanup wrapped in discarded `runCatching` (still present after Gate 5) | 6 | instrumentation + isolation |
 | `KisAuthException` has no typed kind; token network failure surfaces as auth failure | 4.3 | audit atomicity + retry |
-| Audit written outside business transaction; `ORDER_REJECTED` / `ORDER_CANCELLED` not emitted | 11 | audit atomicity + retry |
-| Executions / cash ledger lack canonical unique event keys | 12 | schema + idempotency |
+| Audit written outside business transaction; `ORDER_REJECTED` / `ORDER_CANCELLED` not emitted | 11 | **RESOLVED** — Phase 11 / Gate 6 for evaluation, order create / skip / reject / cancel, and fill (see 20.5) |
+| Executions / cash ledger lack canonical unique event keys | 12 | **RESOLVED** — Phase 11 / Gate 6, Room v10 / PostgreSQL `0012` (see 20.5) |
 | KIS `msg1` free text appended to `api_error_logs.safe_message` | 17 | instrumentation + isolation |
 | Retention / archive / purge jobs absent | 13–16 | archive / retention / redaction |
 
@@ -738,11 +747,63 @@ The coordinator runs the executor inside `withContext(ForwardOperationContext(op
 
 #### 20.4.9 Remaining gaps (not resolved by Gate 5)
 
-- **Audit atomicity** (section 11): unchanged; audit rows are still written outside the business transaction.
+- **Audit atomicity** (section 11): unchanged by Gate 5; resolved in Gate 6 (20.5).
 - **Scheduler redesign**: periodic work, immediate first execution on Auto ON, and the interim Worker key remain until the scheduler gate.
 - **Orphan `RUNNING` operations**: if the process dies mid-operation the row stays `RUNNING`; a redelivery of the same Worker key returns `retry` without re-executing, and a new period / tap creates a new row. Reconciliation is a later gate.
 - **Retry precedence**: when an earlier run was retryable-blocked and a later run succeeded, the Worker now returns `retry` (previously the last run's success decided). Non-retryable blocks still decide `failure` first.
 - **Retention / archive / Operations UI**: not implemented.
+
+### 20.5 Audit atomicity and financial idempotency (Phase 11 / Gate 6)
+
+#### 20.5.1 Transaction boundaries
+
+| Logical operation | One Room transaction | Owner |
+| --- | --- | --- |
+| Evaluation | `stock_evaluations` + `stock_evaluation_details` + `RULE_TRIGGERED` (rule decisions) + `EVALUATION_DECIDED` | `StrategyEvaluationRepository.persistSnapshot` (audit via `inSameTransaction`, called by `EvaluateStrategyRunUseCase`) |
+| Order decision | existing-order check + position read + either (`orders` row + `ORDER_CREATED`) or `ORDER_SKIPPED` | `ProcessEvaluationUseCase` |
+| Rejection | re-read order + `REJECTED` (quantity 0) + `ORDER_REJECTED` | `VirtualFillService.reject` |
+| Cancellation | re-read order + `CANCELLED` (`cancelled_at` from the orchestrator clock) + `ORDER_CANCELLED`, one transaction per order | `VirtualFillService.cancelPending`, via `ProcessPendingOrdersUseCase.cancelPendingAtRunEnd` from `finalizeRunEnd` |
+| Execution | re-read order + replay check + `executions` + cash ledger group + `positions` + order `VIRTUAL_FILLED` + `EXECUTION_FILLED` | `VirtualFillService.executeBuy` / `executeSell` |
+
+Outside the execution transaction, by design: `portfolio_daily_snapshots` (recomputed from committed state, unique per run/date) and the run status update to `COMPLETED` in `finalizeRunEnd`. Snapshot, order, fill price, sizing, fee / tax, and slippage math are unchanged.
+
+Crash windows closed: evaluation committed without `EVALUATION_DECIDED`; order committed without `ORDER_CREATED`; fill committed without `EXECUTION_FILLED`; rejection / cancellation without any audit. An injected failure at any audit or ledger insert rolls back the whole logical operation (`AuditAtomicityFinancialIdempotencyTest`).
+
+#### 20.5.2 Canonical financial keys
+
+| Table | Key | Constraint |
+| --- | --- | --- |
+| `executions` | `paper:order:<order_id>:fill:1` | `execution_key` TEXT NOT NULL, `uq_executions_execution_key` |
+| `cash_ledger` | `run:<run>:initial-deposit` | `event_key` TEXT NOT NULL, `uq_cash_ledger_event_key` |
+| `cash_ledger` | `execution:<id>:buy-principal`, `execution:<id>:buy-commission` | same |
+| `cash_ledger` | `execution:<id>:sell-proceeds`, `execution:<id>:sell-commission`, `execution:<id>:sell-tax` | same |
+
+Ledger rows are written only where they existed before: commission / tax rows only when the amount is > 0. One execution produces exactly one ledger group, referenced by `reference_type = EXECUTION`, `reference_id = executions.id`.
+
+#### 20.5.3 Replay and conflicts
+
+- Fill replay: inside the transaction the order is re-read and the execution is looked up by key. Same order state and identical fill (order, price, quantity, commission, tax, slippage, `executed_at`) → `ALREADY_FILLED` with no financial mutation. Any disagreement (key present but order not `VIRTUAL_FILLED`, filled order without execution, different values) → `IntegrityViolationException.financial` (`DATA_INTEGRITY_ERROR`, severity `FINANCIAL_INTEGRITY`), and the transaction aborts.
+- Ledger replay: same key with identical run, type, amount, date, and reference → existing row, no cash mutation; different content → `LEDGER_EVENT_KEY_CONFLICT`, abort.
+- Audit replay: same key with the same run, event type, and evaluation / order / execution ids → existing row; otherwise `AUDIT_EVENT_KEY_CONFLICT` (`INTERNAL_INVARIANT_VIOLATION`), abort.
+- Nothing is caught to continue; the coordinator finishes the operation `FAILED` with the mapped code (20.4.8).
+
+#### 20.5.4 Legacy reconciliation
+
+- Missing `EVALUATION_DECIDED` / `ORDER_CREATED` / `EXECUTION_FILLED` rows are appended on the replay paths (`ALREADY_EVALUATED`, `ORDER_ALREADY_EXISTS`, `ALREADY_FILLED`) by deterministic key, with `reason_code = LEGACY_AUDIT_RESTORED` and `operation_id = NULL` (the reconciling operation did not produce the event). Business rows are never modified.
+- Not reconciled, because the facts are not stored: legacy `RULE_TRIGGERED` details, the original evaluation `decision_source`, and reasons for legacy `REJECTED` / `CANCELLED` orders.
+- Migration keys (Room `MIGRATION_9_10`, PostgreSQL `0012`) are derived only from provable identity: executions by `order_id` (one execution per order), ledger rows by type + reference + `orders.side`. Any unrecognised shape or duplicate derived key aborts the migration; amounts, balances, ids, and timestamps are copied verbatim. The real Phase 10 DB copy migrates with all counts, execution rows, ledger rows, and reconstructed cash unchanged.
+
+#### 20.5.5 Partial-fill compatibility
+
+Current paper trading has exactly one `VIRTUAL_FILLED` execution per order (full fill at the next trading day open). Future broker trading may report several executions per order; they use `:fill:<n>` (or a broker execution id) under the same unique `execution_key`. `UNIQUE (order_id)` is deliberately not used. Partial fills are **not** implemented.
+
+#### 20.5.6 Remaining gaps (not resolved by Gate 6)
+
+- Orphan `RUNNING` operations and post-process-death reconciliation (20.4.9).
+- Scheduler redesign and archive / retention / Operations UI.
+- `finalizeRunEnd` commits cancellations and the run `COMPLETED` transition separately; a crash between them leaves the run `RUNNING` with its pending orders already cancelled.
+- The planned `LEDGER_MISMATCH` / `DUPLICATE_EXECUTION` catalog codes (4.2) are not yet in `AppErrorCode`.
+- The `KisAuthException` typed-kind deviation (20.3) is unrelated to audit atomicity and remains open.
 
 ---
 
@@ -753,4 +814,4 @@ The coordinator runs the executor inside `withContext(ForwardOperationContext(op
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-154)
+- `docs/060_DECISION_LOG.md` (D-143 – D-158)

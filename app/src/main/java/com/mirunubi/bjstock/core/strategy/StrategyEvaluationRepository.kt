@@ -31,6 +31,7 @@ class StrategyEvaluationRepository(
         evaluationDate: LocalDate,
         result: StrategyEvaluationResult,
         failAfterHeader: Boolean = false,
+        inSameTransaction: suspend (evaluationId: Long) -> Unit = {},
     ): Long {
         val quant = result.quantScoreStored ?: error("persistable evaluation requires quant_score")
         val decision = result.quantDecision ?: error("persistable evaluation requires quant_decision")
@@ -64,6 +65,7 @@ class StrategyEvaluationRepository(
                     ),
                 )
             }
+            inSameTransaction(evaluationId)
             evaluationId
         }
     }

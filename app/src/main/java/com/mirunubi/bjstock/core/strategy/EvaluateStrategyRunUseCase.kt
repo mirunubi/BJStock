@@ -45,6 +45,15 @@ class EvaluateStrategyRunUseCase(
         }
         val existing = evaluations.findEvaluation(strategyRunId, instrumentId, evaluationDate)
         if (existing != null) {
+            audit?.restoreMissing(
+                strategyRunId = strategyRunId,
+                eventType = TradeAuditEventType.EVALUATION_DECIDED,
+                eventKey = TradeAuditLogService.evaluationDecisionKey(existing.id),
+                instrumentId = instrumentId,
+                evaluationId = existing.id,
+                marketDate = evaluationDate,
+                reasonText = "${existing.quantDecision.name} decision restored from persisted evaluation",
+            )
             return StrategyEvaluationResult(
                 status = StrategyEvaluationStatus.ALREADY_EVALUATED,
                 quantScoreStored = existing.quantScore,
@@ -62,8 +71,10 @@ class EvaluateStrategyRunUseCase(
             instrumentId = instrumentId,
             evaluationDate = evaluationDate,
             result = computed,
+            inSameTransaction = { evaluationId ->
+                writeAudit(strategyRunId, instrumentId, evaluationDate, evaluationId, computed)
+            },
         )
-        writeAudit(strategyRunId, instrumentId, evaluationDate, evaluationId, computed)
         return computed.copy(persistedEvaluationId = evaluationId)
     }
 

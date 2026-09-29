@@ -14,6 +14,9 @@ interface ExecutionDao {
     @Query("SELECT * FROM executions WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): ExecutionEntity?
 
+    @Query("SELECT * FROM executions WHERE execution_key = :executionKey LIMIT 1")
+    suspend fun findByExecutionKey(executionKey: String): ExecutionEntity?
+
     @Query("SELECT * FROM executions WHERE order_id = :orderId LIMIT 1")
     suspend fun findByOrderId(orderId: Long): ExecutionEntity?
 

@@ -36,7 +36,7 @@ Storage rules:
 
 **Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
 
-Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Phase 9 adds `strategy_run_instruments` and `forward_test_cycles` in Room version 6. Phase 9.1 adds `themes`, `theme_instruments`, `strategy_signal_rules`, `trade_audit_logs`, and `api_error_logs` in Room version 7. Phase 11 adds `forward_operations`, `operational_events`, and nullable `operation_id` on `trade_audit_logs` / `api_error_logs` in Room version 8. Phase 11 / Gate 5 adds `forward_operations.operation_kind` in Room version 9. Explicit Migration(1, 2) through Migration(8, 9) are registered; `fallbackToDestructiveMigration` is not used.
+Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Phase 9 adds `strategy_run_instruments` and `forward_test_cycles` in Room version 6. Phase 9.1 adds `themes`, `theme_instruments`, `strategy_signal_rules`, `trade_audit_logs`, and `api_error_logs` in Room version 7. Phase 11 adds `forward_operations`, `operational_events`, and nullable `operation_id` on `trade_audit_logs` / `api_error_logs` in Room version 8. Phase 11 / Gate 5 adds `forward_operations.operation_kind` in Room version 9. Phase 11 / Gate 6 adds `executions.execution_key` and `cash_ledger.event_key` (NOT NULL, unique) in Room version 10; `MIGRATION_9_10` rebuilds both tables because SQLite cannot add a NOT NULL column without a default. Explicit Migration(1, 2) through Migration(9, 10) are registered; `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -310,9 +310,13 @@ Phase 4 persistence:
 
 **Numeric Mapping:** `amount` / `balance_after` → Long won (signed amount)
 
+**Unique:** `event_key` (`uq_cash_ledger_event_key`, Room v10 / PostgreSQL `0012`). PostgreSQL additionally keeps the partial unique `uq_cash_ledger_initial_deposit`; Room enforces one deposit per run in `CashLedgerService` and through the deterministic `run:<run>:initial-deposit` key.
+
 **Date/Time Mapping:** `event_date` LocalDate; `created_at` Instant UTC
 
 **Constraint Difference:** PostgreSQL CHECK event types / balance_after >= 0 are application-validated in Room.
+
+**Migration 9 → 10:** table rebuild; ids, amounts, balances, references, dates, and timestamps are copied verbatim. Keys: `INITIAL_DEPOSIT` / `STRATEGY_RUN` referencing its own run → `run:<run>:initial-deposit`; `EXECUTION` references resolved through `executions → orders.side` → `execution:<id>:buy-principal` / `buy-commission` / `sell-proceeds` / `sell-commission` / `sell-tax`. Any other shape or a duplicate derived key aborts the migration (`MIGRATION_9_10_UNRECOGNIZED_LEDGER_ROW` / `MIGRATION_9_10_AMBIGUOUS_LEDGER_KEY`); the v9 file is left untouched. The AUTOINCREMENT high-water mark is preserved.
 
 ---
 
@@ -366,7 +370,9 @@ Phase 4 persistence:
 
 **FK:** `order_id → orders.id` RESTRICT
 
-**Unique:** none beyond PK
+**Unique:** `execution_key` (`uq_executions_execution_key`, Room v10 / PostgreSQL `0012`). Not `UNIQUE (order_id)`: future broker partial fills use `:fill:<n>`.
+
+**Migration 9 → 10:** table rebuild; every existing row gets `paper:order:<order_id>:fill:1`. An order with more than one legacy execution aborts the migration (`MIGRATION_9_10_AMBIGUOUS_EXECUTION_KEY`) and leaves v9 untouched.
 
 **Numeric Mapping:** price/quantity/commission/tax/slippage → Long won or shares
 

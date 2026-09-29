@@ -620,3 +620,19 @@ All state-mutating Forward Test entry points (Run Now, `ForwardTestWorker`, Retr
 
 Run isolation is unchanged: a non-retryable block still stops later runs. Every selected run gets exactly one `RUN_RESULT`; later runs are `SKIPPED` / `PRIOR_RUN_BLOCKED`, never `FAILED` / `BLOCKED`. Operation status is `PARTIAL` when a block follows meaningful progress and `BLOCKED` when the first run blocks. The Worker result derives from the aggregate (non-retryable → failure, retryable → retry, otherwise success).
 
+## D-155
+
+Phase 11 / Gate 6: every required trade audit row commits in the same Room transaction as its business mutation (evaluation, order creation, skip, rejection, cancellation, fill). `ORDER_REJECTED` (`INSUFFICIENT_CASH` / `NO_POSITION_TO_SELL`) and `ORDER_CANCELLED` (`RUN_END_REACHED`) are now emitted. Missing legacy `EVALUATION_DECIDED` / `ORDER_CREATED` / `EXECUTION_FILLED` rows are restored on replay by deterministic key with `reason_code = LEGACY_AUDIT_RESTORED` and `operation_id = NULL`; business rows are never modified and unprovable details are never fabricated.
+
+## D-156
+
+`executions.execution_key` and `cash_ledger.event_key` are NOT NULL and unique (Room v10 / PostgreSQL `0012`). Paper fills use `paper:order:<order_id>:fill:1`; `UNIQUE (order_id)` is deliberately not used so future broker partial fills can use `:fill:<n>`. Ledger keys: `run:<run>:initial-deposit`, `execution:<id>:buy-principal|buy-commission|sell-proceeds|sell-commission|sell-tax`. The legacy migration derives keys only from provable identity and aborts on ambiguity.
+
+## D-157
+
+A duplicate canonical key is an idempotent replay only when the stored row is the same logical event. Otherwise the write aborts with `IntegrityViolationException`: execution / ledger conflicts map to `DATA_INTEGRITY_ERROR` with severity `FINANCIAL_INTEGRITY`; audit key conflicts map to `INTERNAL_INVARIANT_VIOLATION`. The planned `LEDGER_MISMATCH` / `DUPLICATE_EXECUTION` codes (`docs/150` 4.2) are not added in Gate 6.
+
+## D-158
+
+The paper execution transaction is: order terminal transition + execution + cash ledger group + position + `EXECUTION_FILLED`. The daily portfolio snapshot stays outside it and is recomputed from committed state.
+

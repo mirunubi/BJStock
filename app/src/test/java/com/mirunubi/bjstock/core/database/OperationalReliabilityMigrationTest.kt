@@ -47,7 +47,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(V7_TEST_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(9, db.version)
+            assertEquals(10, db.version)
             assertEquals(1L, scalar(db, "SELECT COUNT(*) FROM instruments"))
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM strategy_runs"))
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM forward_test_cycles"))
@@ -107,7 +107,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(V8_TEST_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(9, db.version)
+            assertEquals(10, db.version)
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM forward_operations WHERE operation_kind = 'FORWARD_RUN'"))
             val legacy = database.forwardOperationDao().findById(2)!!
             assertEquals("worker:w-1:0", legacy.operationKey)
@@ -134,6 +134,94 @@ class OperationalReliabilityMigrationTest {
         }
     }
 
+    @Test
+    fun migrate9To10_assignsDeterministicFinancialKeys_andPreservesMoney() = runBlocking<Unit> {
+        context.deleteDatabase(V9_TEST_DB)
+        val executionsBefore: List<String>
+        val ledgerBefore: List<String>
+        context.openOrCreateDatabase(V9_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            createSchemaFromExport(sqlite, version = 9)
+            seedV9FinancialRows(sqlite)
+            sqlite.version = 9
+            executionsBefore = rows(sqlite, EXECUTION_FINANCIAL_COLUMNS, "executions")
+            ledgerBefore = rows(sqlite, LEDGER_FINANCIAL_COLUMNS, "cash_ledger")
+        }
+
+        val database = openWithAllMigrations(V9_TEST_DB)
+        try {
+            val db = database.openHelper.writableDatabase
+            assertEquals(10, db.version)
+            assertEquals(executionsBefore, rows(db, EXECUTION_FINANCIAL_COLUMNS, "executions"))
+            assertEquals(ledgerBefore, rows(db, LEDGER_FINANCIAL_COLUMNS, "cash_ledger"))
+            assertEquals(
+                listOf("paper:order:1:fill:1", "paper:order:2:fill:1"),
+                database.executionDao().findByRun(3).map { it.executionKey },
+            )
+            assertEquals(
+                listOf(
+                    "run:3:initial-deposit",
+                    "execution:1:buy-principal",
+                    "execution:1:buy-commission",
+                    "execution:2:sell-proceeds",
+                    "execution:2:sell-commission",
+                    "execution:2:sell-tax",
+                ),
+                database.cashLedgerDao().findByRun(3).map { it.eventKey },
+            )
+            assertEquals(20L, scalar(db, "SELECT seq FROM sqlite_sequence WHERE name = 'cash_ledger'"))
+            assertEquals(
+                100_000_000L - 9_843_476L - 1_476L + 10_000_000L - 1_500L - 20_000L,
+                com.mirunubi.bjstock.core.paper.CashLedgerService(database.cashLedgerDao()).reconstructCash(3),
+            )
+            db.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
+            val duplicate = runCatching {
+                db.execSQL(
+                    """
+                    INSERT INTO cash_ledger (strategy_run_id, event_type, amount, balance_after, event_date, created_at, event_key)
+                    VALUES (3, 'BUY', -1, 1, 20726, 0, 'execution:1:buy-principal')
+                    """.trimIndent(),
+                )
+            }
+            assertTrue(duplicate.isFailure)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun migrate9To10_ambiguousLegacyExecution_abortsAndLeavesV9Untouched() {
+        context.deleteDatabase(V9_AMBIGUOUS_DB)
+        context.openOrCreateDatabase(V9_AMBIGUOUS_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            createSchemaFromExport(sqlite, version = 9)
+            seedV9FinancialRows(sqlite)
+            sqlite.execSQL(
+                """
+                INSERT INTO executions (id, order_id, execution_price, quantity, commission, tax, slippage, executed_at, created_at)
+                VALUES (3, 1, 266000, 37, 1476, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+            sqlite.version = 9
+        }
+
+        val database = openWithAllMigrations(V9_AMBIGUOUS_DB)
+        val failure = runCatching { database.openHelper.writableDatabase }.exceptionOrNull()
+        database.close()
+        assertEquals("MIGRATION_9_10_AMBIGUOUS_EXECUTION_KEY", failure?.message)
+
+        val path = context.getDatabasePath(V9_AMBIGUOUS_DB).path
+        SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY).use { sqlite ->
+            assertEquals(9, sqlite.version)
+            sqlite.rawQuery("SELECT COUNT(*) FROM executions", null).use {
+                it.moveToFirst()
+                assertEquals(3L, it.getLong(0))
+            }
+            sqlite.rawQuery("PRAGMA table_info(executions)", null).use { cursor ->
+                val columns = buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
+                assertTrue("execution_key" !in columns)
+            }
+        }
+    }
+
     /**
      * Opt-in: migrates a COPY of a real Phase 10 device DB.
      * Set BJSTOCK_PHASE10_DB to a checkpointed bjstock.db path. The source file is never opened for write.
@@ -151,6 +239,8 @@ class OperationalReliabilityMigrationTest {
         source.copyTo(target, overwrite = true)
 
         val before = mutableMapOf<String, Long>()
+        val executionsBefore: List<String>
+        val ledgerBefore: List<String>
         SQLiteDatabase.openDatabase(target.path, null, SQLiteDatabase.OPEN_READWRITE).use { sqlite ->
             assertEquals(7, sqlite.version)
             userTables(sqlite).forEach { table ->
@@ -159,15 +249,36 @@ class OperationalReliabilityMigrationTest {
                     before[table] = it.getLong(0)
                 }
             }
+            executionsBefore = rows(sqlite, EXECUTION_FINANCIAL_COLUMNS, "executions")
+            ledgerBefore = rows(sqlite, LEDGER_FINANCIAL_COLUMNS, "cash_ledger")
         }
         assertTrue(before.containsKey("trade_audit_logs"))
 
         val database = openWithAllMigrations(REAL_COPY_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(9, db.version)
+            assertEquals(10, db.version)
             before.forEach { (table, count) ->
                 assertEquals("row count for $table", count, scalar(db, "SELECT COUNT(*) FROM `$table`"))
+            }
+            assertEquals(executionsBefore, rows(db, EXECUTION_FINANCIAL_COLUMNS, "executions"))
+            assertEquals(ledgerBefore, rows(db, LEDGER_FINANCIAL_COLUMNS, "cash_ledger"))
+            assertEquals(
+                0L,
+                scalar(
+                    db,
+                    "SELECT COUNT(*) FROM executions WHERE execution_key <> 'paper:order:' || order_id || ':fill:1'",
+                ),
+            )
+            assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM cash_ledger WHERE event_key NOT LIKE 'run:%' AND event_key NOT LIKE 'execution:%'"))
+            val cash = com.mirunubi.bjstock.core.paper.CashLedgerService(database.cashLedgerDao())
+            database.strategyRunDao().findAll().forEach { run ->
+                if (database.cashLedgerDao().countByRun(run.id) > 0) {
+                    assertEquals(
+                        database.cashLedgerDao().findLatest(run.id)!!.balanceAfter,
+                        cash.reconstructCash(run.id),
+                    )
+                }
             }
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM forward_operations"))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM operational_events"))
@@ -201,6 +312,7 @@ class OperationalReliabilityMigrationTest {
                 BJStockMigrations.MIGRATION_6_7,
                 BJStockMigrations.MIGRATION_7_8,
                 BJStockMigrations.MIGRATION_8_9,
+                BJStockMigrations.MIGRATION_9_10,
             )
             .allowMainThreadQueries()
             .build()
@@ -275,6 +387,49 @@ class OperationalReliabilityMigrationTest {
         ).forEach { sqlite.execSQL(it.trimIndent()) }
     }
 
+    private fun seedV9FinancialRows(sqlite: SQLiteDatabase) {
+        seedPhase10Rows(sqlite)
+        listOf(
+            "DELETE FROM cash_ledger",
+            """
+            INSERT INTO orders (id, client_order_id, strategy_run_id, instrument_id, side, order_type, quantity, status, created_at)
+            VALUES (2, 'paper-run-3-eval-2-SELL', 3, 3, 'SELL', 'MARKET', 37, 'VIRTUAL_FILLED', 0)
+            """,
+            """
+            INSERT INTO executions (id, order_id, execution_price, quantity, commission, tax, slippage, executed_at, created_at)
+            VALUES (2, 2, 270270, 37, 1500, 20000, 0, 0, 0)
+            """,
+            """
+            INSERT INTO cash_ledger (id, strategy_run_id, event_type, amount, balance_after, reference_type, reference_id, event_date, created_at)
+            VALUES (1, 3, 'INITIAL_DEPOSIT', 100000000, 100000000, 'STRATEGY_RUN', 3, 20714, 0),
+                   (2, 3, 'BUY', -9843476, 90156524, 'EXECUTION', 1, 20725, 0),
+                   (3, 3, 'COMMISSION', -1476, 90155048, 'EXECUTION', 1, 20725, 0),
+                   (4, 3, 'SELL', 10000000, 100155048, 'EXECUTION', 2, 20726, 0),
+                   (5, 3, 'COMMISSION', -1500, 100153548, 'EXECUTION', 2, 20726, 0),
+                   (6, 3, 'TAX', -20000, 100133548, 'EXECUTION', 2, 20726, 0)
+            """,
+            "UPDATE sqlite_sequence SET seq = 20 WHERE name = 'cash_ledger'",
+        ).forEach { sqlite.execSQL(it.trimIndent()) }
+    }
+
+    private fun rows(sqlite: SQLiteDatabase, columns: String, table: String): List<String> =
+        sqlite.rawQuery("SELECT $columns FROM `$table` ORDER BY id", null).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add((0 until cursor.columnCount).joinToString("|") { cursor.getString(it) ?: "NULL" })
+                }
+            }
+        }
+
+    private fun rows(db: androidx.sqlite.db.SupportSQLiteDatabase, columns: String, table: String): List<String> =
+        db.query("SELECT $columns FROM `$table` ORDER BY id").use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add((0 until cursor.columnCount).joinToString("|") { cursor.getString(it) ?: "NULL" })
+                }
+            }
+        }
+
     private fun userTables(sqlite: SQLiteDatabase): List<String> {
         val tables = mutableListOf<String>()
         sqlite.rawQuery(
@@ -305,6 +460,12 @@ class OperationalReliabilityMigrationTest {
     companion object {
         private const val V7_TEST_DB = "operational-reliability-v7-migration-test"
         private const val V8_TEST_DB = "operational-reliability-v8-migration-test"
+        private const val V9_TEST_DB = "financial-keys-v9-migration-test"
+        private const val V9_AMBIGUOUS_DB = "financial-keys-v9-ambiguous-migration-test"
+        private const val EXECUTION_FINANCIAL_COLUMNS =
+            "id, order_id, execution_price, quantity, commission, tax, slippage, executed_at, created_at"
+        private const val LEDGER_FINANCIAL_COLUMNS =
+            "id, strategy_run_id, event_type, amount, balance_after, reference_type, reference_id, event_date, created_at"
         private const val REAL_COPY_DB = "operational-reliability-phase10-copy-test"
         private const val PHASE10_DB_ENV = "BJSTOCK_PHASE10_DB"
     }

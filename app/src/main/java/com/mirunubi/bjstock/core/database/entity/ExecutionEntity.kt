@@ -19,6 +19,7 @@ import java.time.Instant
     ],
     indices = [
         Index(value = ["order_id"], name = "idx_executions_order_id"),
+        Index(value = ["execution_key"], unique = true, name = "uq_executions_execution_key"),
     ],
 )
 data class ExecutionEntity(
@@ -36,4 +37,7 @@ data class ExecutionEntity(
     val executedAt: Instant,
     @ColumnInfo(name = "created_at")
     val createdAt: Instant = Instant.now(),
+    /** Canonical fill identity, e.g. `paper:order:<orderId>:fill:1`. Not UNIQUE(order_id): future partial fills. */
+    @ColumnInfo(name = "execution_key")
+    val executionKey: String,
 )

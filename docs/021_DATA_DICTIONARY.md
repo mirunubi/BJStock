@@ -599,6 +599,7 @@ Append-only virtual cash events for a strategy run.
 **Unique**
 
 - at most one `INITIAL_DEPOSIT` per run (partial unique index)
+- `UNIQUE (event_key)` (Room v10 / PostgreSQL `0012`)
 
 **Main Columns**
 
@@ -610,10 +611,11 @@ Append-only virtual cash events for a strategy run.
 | reference_type / reference_id | TEXT / BIGINT | nullable audit pointer |
 | event_date | DATE | market/trading date of the event |
 | created_at | TIMESTAMPTZ | wall-clock insert time |
+| event_key | TEXT NOT NULL | canonical cash event identity: `run:<run>:initial-deposit`, `execution:<id>:buy-principal`, `:buy-commission`, `:sell-proceeds`, `:sell-commission`, `:sell-tax` |
 
 **Lifecycle**
 
-Append only. Current cash is the latest `balance_after`.
+Append only. Current cash is the latest `balance_after`. A replay of the same `event_key` with identical content returns the existing row; different content under the same key aborts with `DATA_INTEGRITY_ERROR` (`docs/150` 20.5).
 
 ---
 
@@ -672,12 +674,13 @@ Virtual fills. Ledger source of truth with orders.
 
 **Unique**
 
-- none beyond PK
+- `UNIQUE (execution_key)` (Room v10 / PostgreSQL `0012`). Deliberately not `UNIQUE (order_id)`, so future broker partial fills remain possible.
 
 **Main Columns**
 
 | Column | Type | Notes |
 | --- | --- | --- |
+| execution_key | TEXT NOT NULL | canonical fill identity; paper: `paper:order:<order_id>:fill:1` |
 | execution_price | NUMERIC(18, 4) | >= 0 |
 | quantity | NUMERIC(20, 4) | > 0 |
 | commission | NUMERIC(20, 4) | >= 0, default 0 |
@@ -692,7 +695,7 @@ Virtual fills. Ledger source of truth with orders.
 
 **Lifecycle**
 
-Append-only fill history. Never CASCADE-deleted from orders.
+Append-only fill history. Never CASCADE-deleted from orders. Paper trading writes exactly one execution per `VIRTUAL_FILLED` order, in the same transaction as the order transition, cash ledger group, position, and `EXECUTION_FILLED` audit.
 
 ---
 

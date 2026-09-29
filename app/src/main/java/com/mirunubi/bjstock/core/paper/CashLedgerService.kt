@@ -2,6 +2,7 @@ package com.mirunubi.bjstock.core.paper
 
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.entity.CashLedgerEntity
+import com.mirunubi.bjstock.core.error.IntegrityViolationException
 import com.mirunubi.bjstock.core.model.CashLedgerEventType
 import com.mirunubi.bjstock.core.model.CashLedgerReferenceTypes
 import java.time.Instant
@@ -33,9 +34,14 @@ class CashLedgerService(
             eventDate = eventDate,
             referenceType = CashLedgerReferenceTypes.STRATEGY_RUN,
             referenceId = strategyRunId,
+            eventKey = initialDepositKey(strategyRunId),
         )
     }
 
+    /**
+     * Appends one cash event identified by [eventKey]. A replay of the same logical event returns the
+     * existing row without a second cash mutation; a different event under the same key aborts.
+     */
     suspend fun append(
         strategyRunId: Long,
         eventType: CashLedgerEventType,
@@ -43,7 +49,18 @@ class CashLedgerService(
         eventDate: LocalDate,
         referenceType: String?,
         referenceId: Long?,
+        eventKey: String,
     ): CashLedgerEntity {
+        cashLedgerDao.findByEventKey(eventKey)?.let { existing ->
+            val sameEvent = existing.strategyRunId == strategyRunId &&
+                existing.eventType == eventType &&
+                existing.amount == amountWon &&
+                existing.eventDate == eventDate &&
+                existing.referenceType == referenceType &&
+                existing.referenceId == referenceId
+            if (!sameEvent) throw IntegrityViolationException.financial("LEDGER_EVENT_KEY_CONFLICT")
+            return existing
+        }
         val previous = currentCash(strategyRunId)
         val balanceAfter = previous + amountWon
         require(balanceAfter >= 0L) {
@@ -59,6 +76,7 @@ class CashLedgerService(
                 referenceId = referenceId,
                 eventDate = eventDate,
                 createdAt = now(),
+                eventKey = eventKey,
             ),
         )
         return cashLedgerDao.findByRun(strategyRunId).first { it.id == id }
@@ -75,5 +93,14 @@ class CashLedgerService(
             require(balance >= 0L)
         }
         return balance
+    }
+
+    companion object {
+        fun initialDepositKey(strategyRunId: Long) = "run:$strategyRunId:initial-deposit"
+        fun buyPrincipalKey(executionId: Long) = "execution:$executionId:buy-principal"
+        fun buyCommissionKey(executionId: Long) = "execution:$executionId:buy-commission"
+        fun sellProceedsKey(executionId: Long) = "execution:$executionId:sell-proceeds"
+        fun sellCommissionKey(executionId: Long) = "execution:$executionId:sell-commission"
+        fun sellTaxKey(executionId: Long) = "execution:$executionId:sell-tax"
     }
 }

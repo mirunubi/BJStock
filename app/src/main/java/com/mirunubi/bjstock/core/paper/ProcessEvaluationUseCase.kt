@@ -1,11 +1,14 @@
 package com.mirunubi.bjstock.core.paper
 
+import androidx.room.withTransaction
 import com.mirunubi.bjstock.core.audit.TradeAuditLogService
+import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.OrderDao
 import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.entity.OrderEntity
+import com.mirunubi.bjstock.core.database.entity.StockEvaluationEntity
 import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
 import com.mirunubi.bjstock.core.model.OrderType
@@ -15,6 +18,7 @@ import com.mirunubi.bjstock.core.model.TradeDecision
 import java.time.Instant
 
 class ProcessEvaluationUseCase(
+    private val database: BJStockDatabase,
     private val evaluationDao: StockEvaluationDao,
     private val strategyRunDao: StrategyRunDao,
     private val orderDao: OrderDao,
@@ -54,8 +58,24 @@ class ProcessEvaluationUseCase(
             else -> return PaperTradeResult(action = PaperTradeAction.NO_TRADE)
         }
 
+        return database.withTransaction { decide(evaluation, side) }
+    }
+
+    /** Order row + ORDER_CREATED, or the ORDER_SKIPPED audit, commit together with the decision reads. */
+    private suspend fun decide(evaluation: StockEvaluationEntity, side: OrderSide): PaperTradeResult {
+        val evaluationId = evaluation.id
         val existing = orderDao.findByEvaluationAndSide(evaluationId, side)
         if (existing != null) {
+            audit?.restoreMissing(
+                strategyRunId = existing.strategyRunId,
+                eventType = TradeAuditEventType.ORDER_CREATED,
+                eventKey = TradeAuditLogService.orderCreatedKey(existing.id),
+                instrumentId = existing.instrumentId,
+                evaluationId = evaluationId,
+                orderId = existing.id,
+                marketDate = evaluation.evaluationDate,
+                reasonText = createdReasonText(existing.side),
+            )
             return PaperTradeResult(
                 action = PaperTradeAction.ORDER_ALREADY_EXISTS,
                 orderId = existing.id,
@@ -135,7 +155,7 @@ class ProcessEvaluationUseCase(
             evaluationId = evaluationId,
             orderId = orderId,
             marketDate = evaluation.evaluationDate,
-            reasonText = "${side.name} signal → PENDING_EXECUTION",
+            reasonText = createdReasonText(side),
         )
         return PaperTradeResult(
             action = PaperTradeAction.ORDER_CREATED,
@@ -143,6 +163,8 @@ class ProcessEvaluationUseCase(
             message = "PENDING_EXECUTION",
         )
     }
+
+    private fun createdReasonText(side: OrderSide) = "${side.name} signal → PENDING_EXECUTION"
 
     companion object {
         fun clientOrderId(strategyRunId: Long, evaluationId: Long, side: OrderSide): String =

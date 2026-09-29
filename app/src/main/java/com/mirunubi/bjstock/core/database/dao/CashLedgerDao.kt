@@ -12,6 +12,9 @@ interface CashLedgerDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: CashLedgerEntity): Long
 
+    @Query("SELECT * FROM cash_ledger WHERE event_key = :eventKey LIMIT 1")
+    suspend fun findByEventKey(eventKey: String): CashLedgerEntity?
+
     @Query(
         """
         SELECT * FROM cash_ledger

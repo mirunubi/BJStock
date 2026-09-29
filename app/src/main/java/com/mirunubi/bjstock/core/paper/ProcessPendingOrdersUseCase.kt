@@ -6,6 +6,7 @@ import com.mirunubi.bjstock.core.database.dao.PositionDao
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
 import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.entity.OrderEntity
+import com.mirunubi.bjstock.core.error.AppErrorCode
 import com.mirunubi.bjstock.core.model.ExecutionPricePolicy
 import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
@@ -47,6 +48,22 @@ class ProcessPendingOrdersUseCase(
         val pending = orderDao.findByRunAndStatus(strategyRunId, OrderStatus.PENDING_EXECUTION)
             .sortedWith(compareBy({ it.evaluationId ?: Long.MAX_VALUE }, { it.id }))
         return pending.map { order -> processOne(order, policy, asOfMarketDate) }
+    }
+
+    /** Cancels every still-pending order of a run that reached its end date; one transaction per order. */
+    suspend fun cancelPendingAtRunEnd(
+        strategyRunId: Long,
+        marketDate: java.time.LocalDate,
+        cancelledAt: java.time.Instant,
+    ) {
+        for (order in orderDao.findByRunAndStatus(strategyRunId, OrderStatus.PENDING_EXECUTION)) {
+            fills.cancelPending(
+                orderId = order.id,
+                reasonCode = RUN_END_REACHED,
+                marketDate = marketDate,
+                cancelledAt = cancelledAt,
+            )
+        }
     }
 
     suspend fun processOne(
@@ -137,10 +154,10 @@ class ProcessPendingOrdersUseCase(
             costPolicy = policy.costPolicy,
         )
         if (quantity <= 0L) {
-            orderDao.update(order.copy(status = OrderStatus.REJECTED, quantity = 0L))
-            return PaperTradeResult(
-                action = PaperTradeAction.ORDER_REJECTED,
-                orderId = order.id,
+            return fills.reject(
+                order = order,
+                reasonCode = AppErrorCode.INSUFFICIENT_CASH.name,
+                marketDate = executionDate,
                 message = "INSUFFICIENT_CASH",
             )
         }
@@ -164,10 +181,10 @@ class ProcessPendingOrdersUseCase(
         val position = positionDao.find(order.strategyRunId, order.instrumentId)
         val quantity = position?.quantity ?: 0L
         if (quantity <= 0L) {
-            orderDao.update(order.copy(status = OrderStatus.REJECTED, quantity = 0L))
-            return PaperTradeResult(
-                action = PaperTradeAction.ORDER_REJECTED,
-                orderId = order.id,
+            return fills.reject(
+                order = order,
+                reasonCode = AppErrorCode.NO_POSITION_TO_SELL.name,
+                marketDate = executionDate,
                 message = "no position at fill time",
             )
         }
@@ -183,5 +200,9 @@ class ProcessPendingOrdersUseCase(
             commissionWon = commission,
             taxWon = tax,
         )
+    }
+
+    companion object {
+        const val RUN_END_REACHED = "RUN_END_REACHED"
     }
 }

@@ -458,4 +458,167 @@ object BJStockMigrations {
             )
         }
     }
+
+    /**
+     * Phase 11 / Gate 6: canonical financial event keys.
+     * Rebuilds executions / cash_ledger (SQLite cannot add NOT NULL without a default) and derives
+     * each key from provable identity only. Amounts, balances, ids and timestamps are copied verbatim.
+     * Any legacy row whose key is ambiguous aborts the migration; the v9 file stays untouched.
+     */
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            requireZero(
+                db,
+                "SELECT COUNT(*) FROM (SELECT order_id FROM executions GROUP BY order_id HAVING COUNT(*) > 1)",
+                "MIGRATION_9_10_AMBIGUOUS_EXECUTION_KEY",
+            )
+            requireZero(
+                db,
+                "SELECT COUNT(*) FROM ($LEGACY_LEDGER_KEYS) WHERE event_key IS NULL",
+                "MIGRATION_9_10_UNRECOGNIZED_LEDGER_ROW",
+            )
+            requireZero(
+                db,
+                "SELECT COUNT(*) FROM (SELECT event_key FROM ($LEGACY_LEDGER_KEYS) GROUP BY event_key HAVING COUNT(*) > 1)",
+                "MIGRATION_9_10_AMBIGUOUS_LEDGER_KEY",
+            )
+
+            db.execSQL(
+                """
+                CREATE TABLE `executions_new` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `order_id` INTEGER NOT NULL,
+                    `execution_price` INTEGER NOT NULL,
+                    `quantity` INTEGER NOT NULL,
+                    `commission` INTEGER NOT NULL,
+                    `tax` INTEGER NOT NULL,
+                    `slippage` INTEGER NOT NULL,
+                    `executed_at` INTEGER NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `execution_key` TEXT NOT NULL,
+                    FOREIGN KEY(`order_id`) REFERENCES `orders`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO `executions_new` (
+                    id, order_id, execution_price, quantity, commission, tax, slippage,
+                    executed_at, created_at, execution_key
+                )
+                SELECT id, order_id, execution_price, quantity, commission, tax, slippage,
+                       executed_at, created_at, 'paper:order:' || order_id || ':fill:1'
+                FROM `executions`
+                """.trimIndent(),
+            )
+            replaceTable(db, "executions")
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `idx_executions_order_id` ON `executions` (`order_id`)",
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `uq_executions_execution_key` ON `executions` (`execution_key`)",
+            )
+
+            db.execSQL(
+                """
+                CREATE TABLE `cash_ledger_new` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `strategy_run_id` INTEGER NOT NULL,
+                    `event_type` TEXT NOT NULL,
+                    `amount` INTEGER NOT NULL,
+                    `balance_after` INTEGER NOT NULL,
+                    `reference_type` TEXT,
+                    `reference_id` INTEGER,
+                    `event_date` INTEGER NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `event_key` TEXT NOT NULL,
+                    FOREIGN KEY(`strategy_run_id`) REFERENCES `strategy_runs`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO `cash_ledger_new` (
+                    id, strategy_run_id, event_type, amount, balance_after, reference_type,
+                    reference_id, event_date, created_at, event_key
+                )
+                SELECT id, strategy_run_id, event_type, amount, balance_after, reference_type,
+                       reference_id, event_date, created_at, event_key
+                FROM ($LEGACY_LEDGER_KEYS)
+                ORDER BY id
+                """.trimIndent(),
+            )
+            replaceTable(db, "cash_ledger")
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `idx_cash_ledger_run_created` ON `cash_ledger` (`strategy_run_id`, `id`)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `idx_cash_ledger_run_event_date` ON `cash_ledger` (`strategy_run_id`, `event_date`)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `idx_cash_ledger_run_event_type` ON `cash_ledger` (`strategy_run_id`, `event_type`)",
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `uq_cash_ledger_event_key` ON `cash_ledger` (`event_key`)",
+            )
+        }
+    }
+
+    /** Every cash_ledger row with its derived canonical key; NULL when identity is not provable. */
+    private val LEGACY_LEDGER_KEYS = """
+        SELECT c.*,
+            CASE
+                WHEN c.event_type = 'INITIAL_DEPOSIT' AND c.reference_type = 'STRATEGY_RUN'
+                    AND c.reference_id = c.strategy_run_id
+                    THEN 'run:' || c.strategy_run_id || ':initial-deposit'
+                WHEN c.reference_type = 'EXECUTION' AND o.strategy_run_id = c.strategy_run_id THEN
+                    CASE
+                        WHEN c.event_type = 'BUY' AND o.side = 'BUY'
+                            THEN 'execution:' || c.reference_id || ':buy-principal'
+                        WHEN c.event_type = 'COMMISSION' AND o.side = 'BUY'
+                            THEN 'execution:' || c.reference_id || ':buy-commission'
+                        WHEN c.event_type = 'SELL' AND o.side = 'SELL'
+                            THEN 'execution:' || c.reference_id || ':sell-proceeds'
+                        WHEN c.event_type = 'COMMISSION' AND o.side = 'SELL'
+                            THEN 'execution:' || c.reference_id || ':sell-commission'
+                        WHEN c.event_type = 'TAX' AND o.side = 'SELL'
+                            THEN 'execution:' || c.reference_id || ':sell-tax'
+                    END
+            END AS event_key
+        FROM cash_ledger c
+        LEFT JOIN executions e ON c.reference_type = 'EXECUTION' AND e.id = c.reference_id
+        LEFT JOIN orders o ON o.id = e.order_id
+    """.trimIndent()
+
+    private fun requireZero(db: SupportSQLiteDatabase, countSql: String, reasonCode: String) {
+        val count = db.query(countSql).use { cursor ->
+            cursor.moveToFirst()
+            cursor.getLong(0)
+        }
+        check(count == 0L) { reasonCode }
+    }
+
+    /** Swaps `<table>_new` in for `<table>`, keeping the AUTOINCREMENT high-water mark. */
+    private fun replaceTable(db: SupportSQLiteDatabase, table: String) {
+        db.execSQL(
+            """
+            UPDATE sqlite_sequence
+            SET seq = (SELECT seq FROM sqlite_sequence WHERE name = '$table')
+            WHERE name = '${table}_new'
+              AND EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = '$table')
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            INSERT INTO sqlite_sequence (name, seq)
+            SELECT '${table}_new', seq FROM sqlite_sequence
+            WHERE name = '$table'
+              AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = '${table}_new')
+            """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE `$table`")
+        db.execSQL("ALTER TABLE `${table}_new` RENAME TO `$table`")
+    }
 }

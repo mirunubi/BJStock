@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Verifies PostgreSQL migrations 0009 / 0010 / 0011 keep parity with Room v8 / v9.
+ * Verifies PostgreSQL migrations 0009 / 0010 / 0011 / 0012 keep parity with Room v8 / v9 / v10.
  * Runtime application of the file is done via scripts/db-migrate.ps1.
  */
 class OperationalReliabilityPostgresMigrationTest {
@@ -74,6 +74,32 @@ class OperationalReliabilityPostgresMigrationTest {
         }
     }
 
+    @Test
+    fun migration0012_financialKeysMatchRoomV10() {
+        val sql = resolveMigration(MIGRATION_0012).readText().replace("\r\n", "\n")
+        listOf(
+            "BEGIN;",
+            "ALTER TABLE bjstock.executions\n    ADD COLUMN execution_key TEXT;",
+            "SET execution_key = 'paper:order:' || order_id || ':fill:1';",
+            "ALTER COLUMN execution_key SET NOT NULL;",
+            "ADD CONSTRAINT uq_executions_execution_key UNIQUE (execution_key);",
+            "MIGRATION_0012_AMBIGUOUS_EXECUTION_KEY",
+            "ALTER TABLE bjstock.cash_ledger\n    ADD COLUMN event_key TEXT;",
+            "'run:' || c.strategy_run_id || ':initial-deposit'",
+            "':buy-principal'", "':buy-commission'", "':sell-proceeds'", "':sell-commission'", "':sell-tax'",
+            "MIGRATION_0012_UNRECOGNIZED_LEDGER_ROW",
+            "ALTER COLUMN event_key SET NOT NULL;",
+            "ADD CONSTRAINT uq_cash_ledger_event_key UNIQUE (event_key);",
+            "COMMIT;",
+        ).forEach { assertTrue("0012 missing: $it", sql.contains(it)) }
+        listOf("DROP ", "DELETE ", "TRUNCATE", "SET amount", "SET balance_after", "UNIQUE (order_id)").forEach {
+            assertFalse("0012 must not rewrite money or drop data: $it", sql.contains(it))
+        }
+        val roomMigration = BJStockMigrations.MIGRATION_9_10
+        assertTrue(roomMigration.startVersion == 9 && roomMigration.endVersion == 10)
+        assertEquals(10, BJStockDatabase.VERSION)
+    }
+
     private fun resolveMigration(
         relative: String = "db/migrations/0009_operational_reliability_foundation.sql",
     ): File {
@@ -85,5 +111,6 @@ class OperationalReliabilityPostgresMigrationTest {
     private companion object {
         const val MIGRATION_0010 = "db/migrations/0010_api_error_type_taxonomy.sql"
         const val MIGRATION_0011 = "db/migrations/0011_forward_operation_kind.sql"
+        const val MIGRATION_0012 = "db/migrations/0012_financial_event_keys.sql"
     }
 }

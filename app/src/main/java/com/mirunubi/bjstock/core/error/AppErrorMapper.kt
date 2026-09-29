@@ -96,6 +96,14 @@ object AppErrorMapper {
                     attempt = attempt,
                 ),
             )
+            is IntegrityViolationException -> SafeAppError(
+                code = throwable.code,
+                diagnostics = SafeDiagnostics(
+                    exceptionType = exceptionType,
+                    logicalEndpoint = logicalEndpoint,
+                    attempt = attempt,
+                ),
+            )
             is SocketTimeoutException -> networkError(
                 AppErrorCode.NETWORK_TIMEOUT, exceptionType, logicalEndpoint, attempt,
             )

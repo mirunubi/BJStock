@@ -185,6 +185,7 @@ class AiAdvisoryServiceTest {
         val created = service.createManualRequest(evaluationId) as AiAdviceOutcome.PromptReady
         service.saveManualResponse(created.requestId, validResponse(created.prompt.requestFingerprint, "SELL"))
         val process = ProcessEvaluationUseCase(
+            database = database,
             evaluationDao = database.stockEvaluationDao(),
             strategyRunDao = database.strategyRunDao(),
             orderDao = database.orderDao(),

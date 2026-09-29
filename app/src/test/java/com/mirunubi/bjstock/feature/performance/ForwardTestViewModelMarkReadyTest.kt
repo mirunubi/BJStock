@@ -307,6 +307,7 @@ class ForwardTestViewModelMarkReadyTest {
                 ),
             ),
             processEvaluation = ProcessEvaluationUseCase(
+                database = database,
                 evaluationDao = database.stockEvaluationDao(),
                 strategyRunDao = database.strategyRunDao(),
                 orderDao = database.orderDao(),

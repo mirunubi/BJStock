@@ -521,6 +521,7 @@ class ForwardOperationTracingIntegrationTest {
             now = { Instant.EPOCH },
         )
         private val processEvaluation = ProcessEvaluationUseCase(
+            database = database,
             evaluationDao = database.stockEvaluationDao(),
             strategyRunDao = database.strategyRunDao(),
             orderDao = database.orderDao(),
