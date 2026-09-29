@@ -189,7 +189,10 @@ private fun MarkReadyDialog(
         onDismissRequest = onDismiss,
         title = { Text("Mark run READY?") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text("Run ${confirmation.runId}: ${confirmation.runName}")
                 Text("Strategy ${confirmation.strategyLabel}")
                 Text("Start date ${confirmation.startDate}")
