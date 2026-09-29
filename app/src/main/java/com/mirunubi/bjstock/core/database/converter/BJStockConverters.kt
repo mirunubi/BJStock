@@ -13,7 +13,10 @@ import com.mirunubi.bjstock.core.model.FactorCategory
 import com.mirunubi.bjstock.core.model.FactorValueType
 import com.mirunubi.bjstock.core.model.ForwardCycleStage
 import com.mirunubi.bjstock.core.model.ForwardCycleStatus
+import com.mirunubi.bjstock.core.model.ForwardOperationStatus
+import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import com.mirunubi.bjstock.core.model.InstrumentType
+import com.mirunubi.bjstock.core.model.OperationalEventType
 import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
 import com.mirunubi.bjstock.core.model.OrderType
@@ -186,6 +189,27 @@ class BJStockConverters {
 
     @TypeConverter
     fun codeToApiErrorType(value: String): ApiErrorType = ApiErrorType.valueOf(value)
+
+    @TypeConverter
+    fun forwardOperationTriggerToCode(value: ForwardOperationTrigger): String = value.name
+
+    @TypeConverter
+    fun codeToForwardOperationTrigger(value: String): ForwardOperationTrigger =
+        ForwardOperationTrigger.valueOf(value)
+
+    @TypeConverter
+    fun forwardOperationStatusToCode(value: ForwardOperationStatus): String = value.name
+
+    @TypeConverter
+    fun codeToForwardOperationStatus(value: String): ForwardOperationStatus =
+        ForwardOperationStatus.valueOf(value)
+
+    @TypeConverter
+    fun operationalEventTypeToCode(value: OperationalEventType): String = value.name
+
+    @TypeConverter
+    fun codeToOperationalEventType(value: String): OperationalEventType =
+        OperationalEventType.valueOf(value)
 
     @TypeConverter
     fun boardToCode(value: Board): String = value.name

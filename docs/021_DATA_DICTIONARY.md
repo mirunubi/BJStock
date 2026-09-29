@@ -868,3 +868,13 @@ Append-only human-readable trade timeline. Unique `event_key`. Never auto-delete
 ## api_error_logs
 
 KIS diagnostics errors. Rolling 7-day retention. Never store secrets.
+
+Phase 11: nullable `operation_id` (soft reference to `forward_operations.id`) on both `trade_audit_logs` and `api_error_logs`. NULL for existing rows.
+
+## forward_operations
+
+One row per Forward Test invocation (`MANUAL` / `WORKER`). Unique `operation_key`. Status `RUNNING` → one of `SUCCEEDED`, `NO_OP`, `PARTIAL`, `BLOCKED`, `FAILED`; terminal rows are immutable. Operational evidence, not financial source of truth.
+
+## operational_events
+
+Append-only operational evidence (`OPERATION_STARTED`, `OPERATION_FINISHED`, `MARKET_SYNC_RESULT`, `RUN_RESULT`, `CYCLE_STARTED`, `CYCLE_FINISHED`, `WORKER_SCHEDULE_CHANGED`). Unique deterministic `event_key`. FK `operation_id` RESTRICT (nullable only for schedule changes). Safe structured fields only; no raw payloads.

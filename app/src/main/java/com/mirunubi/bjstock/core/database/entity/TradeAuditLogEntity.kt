@@ -24,6 +24,7 @@ import java.time.LocalDate
         Index(value = ["event_key"], unique = true, name = "uq_trade_audit_logs_event_key"),
         Index(value = ["strategy_run_id", "market_date"], name = "idx_trade_audit_logs_run_date"),
         Index(value = ["strategy_run_id", "created_at"], name = "idx_trade_audit_logs_run_created"),
+        Index(value = ["operation_id"], name = "idx_trade_audit_logs_operation"),
     ],
 )
 data class TradeAuditLogEntity(
@@ -61,4 +62,7 @@ data class TradeAuditLogEntity(
     val eventKey: String,
     @ColumnInfo(name = "created_at")
     val createdAt: Instant = Instant.now(),
+    /** Soft reference to forward_operations.id; NULL for pre-v8 rows and uncorrelated writes. */
+    @ColumnInfo(name = "operation_id")
+    val operationId: Long? = null,
 )

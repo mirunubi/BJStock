@@ -146,6 +146,30 @@ enum class ApiErrorProvider {
     KIS,
 }
 
+enum class ForwardOperationTrigger {
+    MANUAL,
+    WORKER,
+}
+
+enum class ForwardOperationStatus {
+    RUNNING,
+    SUCCEEDED,
+    NO_OP,
+    PARTIAL,
+    BLOCKED,
+    FAILED,
+}
+
+enum class OperationalEventType {
+    OPERATION_STARTED,
+    OPERATION_FINISHED,
+    MARKET_SYNC_RESULT,
+    RUN_RESULT,
+    CYCLE_STARTED,
+    CYCLE_FINISHED,
+    WORKER_SCHEDULE_CHANGED,
+}
+
 enum class ApiErrorType {
     NETWORK_TIMEOUT,
     HTTP_ERROR,

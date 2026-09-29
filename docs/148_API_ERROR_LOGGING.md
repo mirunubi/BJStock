@@ -16,6 +16,12 @@ Rolling 7-day retention
 
 Cleanup deletes rows with `occurred_at` strictly before `now - 7 days`. Invoked on app start and after successful Forward Test orchestrator paths (Worker / Run Now).
 
+Target: 90-day hot retention plus 400-day daily aggregates (`docs/150_OPERATIONAL_RELIABILITY_STANDARD.md`). Not active yet (D-149).
+
+## Operation correlation
+
+Room v8 adds nullable `operation_id` (soft reference to `forward_operations.id`). Existing rows stay NULL. Not yet populated at runtime.
+
 ## Secrets
 
 Never store AppKey, AppSecret, AccessToken, Authorization headers, account numbers, or raw request/response bodies. `ApiErrorLogService.sanitize` redacts secret-like messages.

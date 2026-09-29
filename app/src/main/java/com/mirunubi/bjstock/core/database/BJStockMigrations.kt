@@ -339,4 +339,114 @@ object BJStockMigrations {
             )
         }
     }
+
+    /**
+     * Phase 11 operational reliability foundation.
+     * Adds forward_operations / operational_events and nullable operation_id correlation
+     * on trade_audit_logs / api_error_logs. Existing rows are not rewritten (operation_id = NULL).
+     */
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `forward_operations` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `operation_key` TEXT NOT NULL,
+                    `trigger` TEXT NOT NULL,
+                    `work_id` TEXT,
+                    `work_attempt` INTEGER,
+                    `through_date` INTEGER NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `started_at` INTEGER NOT NULL,
+                    `finished_at` INTEGER,
+                    `final_code` TEXT,
+                    `safe_message` TEXT,
+                    `runs_considered` INTEGER NOT NULL,
+                    `runs_processed` INTEGER NOT NULL,
+                    `runs_skipped` INTEGER NOT NULL,
+                    `cycles_completed` INTEGER NOT NULL,
+                    `cycles_failed` INTEGER NOT NULL,
+                    `elapsed_ms` INTEGER
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_forward_operations_operation_key`
+                ON `forward_operations` (`operation_key`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_forward_operations_started`
+                ON `forward_operations` (`started_at`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_forward_operations_status`
+                ON `forward_operations` (`status`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `operational_events` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `event_key` TEXT NOT NULL,
+                    `operation_id` INTEGER,
+                    `run_id` INTEGER,
+                    `cycle_id` INTEGER,
+                    `instrument_id` INTEGER,
+                    `market_date` INTEGER,
+                    `event_type` TEXT NOT NULL,
+                    `result` TEXT,
+                    `reason_code` TEXT,
+                    `safe_message` TEXT,
+                    `elapsed_ms` INTEGER,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`operation_id`) REFERENCES `forward_operations`(`id`)
+                        ON UPDATE NO ACTION ON DELETE RESTRICT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `uq_operational_events_event_key`
+                ON `operational_events` (`event_key`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_operational_events_operation`
+                ON `operational_events` (`operation_id`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_operational_events_run_created`
+                ON `operational_events` (`run_id`, `created_at`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_operational_events_created`
+                ON `operational_events` (`created_at`)
+                """.trimIndent(),
+            )
+            db.execSQL("ALTER TABLE `trade_audit_logs` ADD COLUMN `operation_id` INTEGER")
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_trade_audit_logs_operation`
+                ON `trade_audit_logs` (`operation_id`)
+                """.trimIndent(),
+            )
+            db.execSQL("ALTER TABLE `api_error_logs` ADD COLUMN `operation_id` INTEGER")
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `idx_api_error_logs_operation`
+                ON `api_error_logs` (`operation_id`)
+                """.trimIndent(),
+            )
+        }
+    }
 }

@@ -9,9 +9,11 @@ import com.mirunubi.bjstock.core.database.dao.ApiErrorLogDao
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
+import com.mirunubi.bjstock.core.database.dao.ForwardOperationDao
 import com.mirunubi.bjstock.core.database.dao.ForwardTestCycleDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
+import com.mirunubi.bjstock.core.database.dao.OperationalEventDao
 import com.mirunubi.bjstock.core.database.dao.OrderDao
 import com.mirunubi.bjstock.core.database.dao.PaperTradingPolicyDao
 import com.mirunubi.bjstock.core.database.dao.PortfolioDailySnapshotDao
@@ -30,9 +32,11 @@ import com.mirunubi.bjstock.core.database.entity.CashLedgerEntity
 import com.mirunubi.bjstock.core.database.entity.ExecutionEntity
 import com.mirunubi.bjstock.core.database.entity.FactorDefinitionEntity
 import com.mirunubi.bjstock.core.database.entity.FactorValueEntity
+import com.mirunubi.bjstock.core.database.entity.ForwardOperationEntity
 import com.mirunubi.bjstock.core.database.entity.ForwardTestCycleEntity
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
 import com.mirunubi.bjstock.core.database.entity.MarketDailyBarEntity
+import com.mirunubi.bjstock.core.database.entity.OperationalEventEntity
 import com.mirunubi.bjstock.core.database.entity.OrderEntity
 import com.mirunubi.bjstock.core.database.entity.PaperTradingPolicyEntity
 import com.mirunubi.bjstock.core.database.entity.PortfolioDailySnapshotEntity
@@ -76,8 +80,10 @@ import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
         StrategySignalRuleEntity::class,
         TradeAuditLogEntity::class,
         ApiErrorLogEntity::class,
+        ForwardOperationEntity::class,
+        OperationalEventEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(BJStockConverters::class)
@@ -101,10 +107,12 @@ abstract class BJStockDatabase : RoomDatabase() {
     abstract fun strategySignalRuleDao(): StrategySignalRuleDao
     abstract fun tradeAuditLogDao(): TradeAuditLogDao
     abstract fun apiErrorLogDao(): ApiErrorLogDao
+    abstract fun forwardOperationDao(): ForwardOperationDao
+    abstract fun operationalEventDao(): OperationalEventDao
 
     companion object {
         const val NAME = "bjstock.db"
-        const val VERSION = 7
-        const val ENTITY_COUNT = 25
+        const val VERSION = 8
+        const val ENTITY_COUNT = 27
     }
 }

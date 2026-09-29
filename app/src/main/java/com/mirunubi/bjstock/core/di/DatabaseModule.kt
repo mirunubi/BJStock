@@ -9,9 +9,11 @@ import com.mirunubi.bjstock.core.database.dao.ApiErrorLogDao
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
 import com.mirunubi.bjstock.core.database.dao.ExecutionDao
 import com.mirunubi.bjstock.core.database.dao.FactorDao
+import com.mirunubi.bjstock.core.database.dao.ForwardOperationDao
 import com.mirunubi.bjstock.core.database.dao.ForwardTestCycleDao
 import com.mirunubi.bjstock.core.database.dao.InstrumentDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
+import com.mirunubi.bjstock.core.database.dao.OperationalEventDao
 import com.mirunubi.bjstock.core.database.dao.OrderDao
 import com.mirunubi.bjstock.core.database.dao.PaperTradingPolicyDao
 import com.mirunubi.bjstock.core.database.dao.PortfolioDailySnapshotDao
@@ -48,6 +50,7 @@ object DatabaseModule {
                 BJStockMigrations.MIGRATION_4_5,
                 BJStockMigrations.MIGRATION_5_6,
                 BJStockMigrations.MIGRATION_6_7,
+                BJStockMigrations.MIGRATION_7_8,
             )
             .build()
     }
@@ -117,4 +120,12 @@ object DatabaseModule {
     @Provides
     fun provideApiErrorLogDao(database: BJStockDatabase): ApiErrorLogDao =
         database.apiErrorLogDao()
+
+    @Provides
+    fun provideForwardOperationDao(database: BJStockDatabase): ForwardOperationDao =
+        database.forwardOperationDao()
+
+    @Provides
+    fun provideOperationalEventDao(database: BJStockDatabase): OperationalEventDao =
+        database.operationalEventDao()
 }

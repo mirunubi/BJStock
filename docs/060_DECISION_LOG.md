@@ -570,3 +570,35 @@ API error logs use rolling 7-day retention.
 
 API error logs never store secrets, tokens, or raw HTTP bodies.
 
+## D-143
+
+`docs/150_OPERATIONAL_RELIABILITY_STANDARD.md` is the canonical reliability, error-handling, and operational-evidence standard. Paper trading does not use weaker controls because money is virtual.
+
+## D-144
+
+Canonical errors use `AppErrorCode` with category, severity, retry policy, user-action flag, operation action, audit flag, and a fixed safe message. Unknown errors map to `UNEXPECTED_EXCEPTION`. Free-text messages are never business logic.
+
+## D-145
+
+Every Forward Test invocation will own one `forward_operations` row with a deterministic unique `operation_key` (`worker:<work_id>:<attempt>` / `manual:<request_id>`).
+
+## D-146
+
+Operational evidence lives in append-only `operational_events`, idempotent by deterministic `event_key`, separate from `trade_audit_logs` (WHY) and `api_error_logs` (WHAT failed externally).
+
+## D-147
+
+`operation_id` on `trade_audit_logs` and `api_error_logs` is a nullable soft reference without FK; `operational_events.operation_id` is a RESTRICT FK. Historical rows are never rewritten.
+
+## D-148
+
+Operational logging accepts only allowlisted typed fields. The existing deny-list sanitizer remains as defence-in-depth.
+
+## D-149
+
+The retention matrix in `docs/150` is the target lifecycle. Until verified archive and lifecycle jobs exist, D-138 (permanent trade audit) and D-141 (7-day API error cleanup) remain the runtime behavior.
+
+## D-150
+
+Phase 11 foundation (Room v8) does not change Auto Forward Test, Run Now, or `ForwardTestWorker` behavior. Wiring happens in later gates.
+

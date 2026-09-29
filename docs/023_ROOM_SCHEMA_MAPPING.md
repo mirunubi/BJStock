@@ -36,7 +36,7 @@ Storage rules:
 
 **Constraint Difference:** CHECK non-empty, board, instrument_type, and delisted>=listed are INTENTIONAL omissions in SQLite. Application validation and PostgreSQL CHECKs remain the source of closed lists.
 
-Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Phase 9 adds `strategy_run_instruments` and `forward_test_cycles` in Room version 6. Phase 9.1 adds `themes`, `theme_instruments`, `strategy_signal_rules`, `trade_audit_logs`, and `api_error_logs` in Room version 7. Explicit Migration(1, 2) through Migration(6, 7) are registered; `fallbackToDestructiveMigration` is not used.
+Phase 3-D added `standard_code`, `board`, and `instrument_type` in Room version 2. Phase 5 adds pinned `factor_calculation_version` in Room version 3. Phase 6 adds `cash_ledger` in Room version 4 and extends order status vocabulary with `PENDING_EXECUTION`. Phase 6.1 adds `paper_trading_policies` in Room version 5. Phase 9 adds `strategy_run_instruments` and `forward_test_cycles` in Room version 6. Phase 9.1 adds `themes`, `theme_instruments`, `strategy_signal_rules`, `trade_audit_logs`, and `api_error_logs` in Room version 7. Phase 11 adds `forward_operations`, `operational_events`, and nullable `operation_id` on `trade_audit_logs` / `api_error_logs` in Room version 8. Explicit Migration(1, 2) through Migration(7, 8) are registered; `fallbackToDestructiveMigration` is not used.
 
 ---
 
@@ -443,3 +443,21 @@ Phase 4 persistence:
 **Room:** version 7 entities + `MIGRATION_6_7`
 
 CHECK vocabularies enforced in Kotlin enums / application services. Trade audit is append-only; API errors use rolling 7-day cleanup.
+
+---
+
+## forward_operations / operational_events / operation_id correlation
+
+**PostgreSQL:** `0009_operational_reliability_foundation.sql`
+
+**Room:** version 8 entities `ForwardOperationEntity`, `OperationalEventEntity` + `MIGRATION_7_8`
+
+**forward_operations** — PK `id`; Unique `operation_key` (`uq_forward_operations_operation_key`); no FK. `trigger` / `status` enums stored as String. `through_date` LocalDate epoch day; `started_at` / `finished_at` Instant UTC.
+
+**operational_events** — PK `id`; Unique `event_key` (`uq_operational_events_event_key`); FK `operation_id → forward_operations.id` RESTRICT, nullable only for `WORKER_SCHEDULE_CHANGED`. `run_id` / `cycle_id` / `instrument_id` are soft references (no FK). Append-only.
+
+**trade_audit_logs.operation_id / api_error_logs.operation_id** — nullable INTEGER, indexed, soft reference (no FK). Existing rows stay NULL.
+
+**Constraint Difference:** PostgreSQL adds CHECKs for trigger/status/event_type vocabularies, WORKER ⇔ work identity, RUNNING ⇔ `finished_at IS NULL`, non-negative counts, and operation-required-unless-schedule. Room enforces these in `ForwardOperationLogService`.
+
+See `docs/150_OPERATIONAL_RELIABILITY_STANDARD.md`.

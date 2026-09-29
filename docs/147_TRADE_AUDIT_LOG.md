@@ -27,6 +27,12 @@ Unique `event_key` (e.g. `evaluation:<id>:decision`, `order:<id>:created`, `exec
 
 Append-only. **Never** auto-deleted. Not subject to the 7-day API error rotation.
 
+Target lifecycle (400-day hot, verified monthly archive, 5-year retention) is defined in `docs/150_OPERATIONAL_RELIABILITY_STANDARD.md` and is not active until verified archiving exists (D-149).
+
+## Operation correlation
+
+Room v8 adds nullable `operation_id` (soft reference to `forward_operations.id`). Existing rows stay NULL. Not yet populated at runtime.
+
 ## ORDER_SKIPPED
 
 Examples:

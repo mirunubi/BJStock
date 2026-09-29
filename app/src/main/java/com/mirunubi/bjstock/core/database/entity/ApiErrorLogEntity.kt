@@ -12,6 +12,7 @@ import java.time.Instant
     tableName = "api_error_logs",
     indices = [
         Index(value = ["occurred_at"], name = "idx_api_error_logs_occurred"),
+        Index(value = ["operation_id"], name = "idx_api_error_logs_operation"),
     ],
 )
 data class ApiErrorLogEntity(
@@ -34,4 +35,7 @@ data class ApiErrorLogEntity(
     val forwardCycleId: Long? = null,
     @ColumnInfo(name = "occurred_at")
     val occurredAt: Instant = Instant.now(),
+    /** Soft reference to forward_operations.id; NULL for pre-v8 rows and uncorrelated writes. */
+    @ColumnInfo(name = "operation_id")
+    val operationId: Long? = null,
 )
