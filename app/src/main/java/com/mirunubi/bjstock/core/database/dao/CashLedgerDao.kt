@@ -44,4 +44,7 @@ interface CashLedgerDao {
 
     @Query("SELECT COUNT(*) FROM cash_ledger WHERE strategy_run_id = :strategyRunId")
     suspend fun countByRun(strategyRunId: Long): Int
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM cash_ledger WHERE strategy_run_id = :strategyRunId")
+    suspend fun sumAmountByRun(strategyRunId: Long): Long
 }

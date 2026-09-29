@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
+import com.mirunubi.bjstock.core.model.TradeAuditEventType
 
 @Dao
 interface TradeAuditLogDao {
@@ -38,4 +39,12 @@ interface TradeAuditLogDao {
 
     @Query("SELECT COUNT(*) FROM trade_audit_logs WHERE strategy_run_id = :strategyRunId")
     suspend fun countByRun(strategyRunId: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM trade_audit_logs
+        WHERE evaluation_id = :evaluationId AND event_type = :eventType
+        """,
+    )
+    suspend fun countByEvaluationAndType(evaluationId: Long, eventType: TradeAuditEventType): Int
 }

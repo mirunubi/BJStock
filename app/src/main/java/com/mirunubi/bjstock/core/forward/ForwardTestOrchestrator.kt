@@ -246,7 +246,7 @@ class ForwardTestOrchestrator(
             if (cycle.attempted) cyclesCompleted += 1
             processed += marketDate
             if (run.endDate != null && marketDate == run.endDate) {
-                finalizeRunEnd(runId, marketDate)
+                processPending.finalizeRunEnd(runId, marketDate, now())
                 break
             }
         }
@@ -543,11 +543,6 @@ class ForwardTestOrchestrator(
             errorMessage = sanitizeError(message) ?: code.name,
             retryable = retryable,
         )
-    }
-
-    private suspend fun finalizeRunEnd(runId: Long, endDate: LocalDate) {
-        processPending.cancelPendingAtRunEnd(runId, endDate, now())
-        strategyRunDao.updateStatus(runId, RunStatus.COMPLETED, now())
     }
 
     private fun blocked(

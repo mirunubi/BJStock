@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Verifies PostgreSQL migrations 0009 / 0010 / 0011 / 0012 keep parity with Room v8 / v9 / v10.
+ * Verifies PostgreSQL migrations 0009 / 0010 / 0011 / 0012 / 0013 keep parity with Room v8 / v9 / v10 / v11.
  * Runtime application of the file is done via scripts/db-migrate.ps1.
  */
 class OperationalReliabilityPostgresMigrationTest {
@@ -97,8 +97,59 @@ class OperationalReliabilityPostgresMigrationTest {
         }
         val roomMigration = BJStockMigrations.MIGRATION_9_10
         assertTrue(roomMigration.startVersion == 9 && roomMigration.endVersion == 10)
-        assertEquals(10, BJStockDatabase.VERSION)
     }
+
+    @Test
+    fun migration0013_terminalAuditReconciliationMatchesRoomV11() {
+        val sql = resolveMigration(MIGRATION_0013).readText().replace("\r\n", "\n")
+        listOf(
+            "BEGIN;",
+            "INSERT INTO bjstock.trade_audit_logs (",
+            "WHERE o.status = 'REJECTED'",
+            "WHERE o.status = 'CANCELLED'",
+            "'order:' || o.id || ':rejected'",
+            "'order:' || o.id || ':cancelled'",
+            "WHEN o.quantity = 0 AND o.side = 'BUY' THEN 'INSUFFICIENT_CASH'",
+            "WHEN o.quantity = 0 AND o.side = 'SELL' THEN 'NO_POSITION_TO_SELL'",
+            "CASE WHEN o.cancelled_at IS NOT NULL THEN 'RUN_END_REACHED' ELSE 'LEGACY_REASON_UNKNOWN' END",
+            "ELSE 'LEGACY_REASON_UNKNOWN'",
+            "OR (a.order_id = o.id AND a.event_type = 'ORDER_REJECTED')",
+            "OR (a.order_id = o.id AND a.event_type = 'ORDER_CANCELLED')",
+            "COMMIT;",
+        ).forEach { assertTrue("0013 missing: $it", sql.contains(it)) }
+        val statements = withoutComments(sql)
+        listOf(
+            "UPDATE ", "DELETE ", "DROP ", "TRUNCATE", "ALTER ", "CREATE ", "CONSTRAINT",
+            "decision_source", "operation_id", "market_date",
+        ).forEach { assertFalse("0013 must be append-only data: $it", statements.contains(it)) }
+        val roomMigration = BJStockMigrations.MIGRATION_10_11
+        assertTrue(roomMigration.startVersion == 10 && roomMigration.endVersion == 11)
+        assertEquals(11, BJStockDatabase.VERSION)
+    }
+
+    @Test
+    fun decisionSourceCheck_isUnchangedSince0008() {
+        val sql0008 = resolveMigration(MIGRATION_0008).readText().replace("\r\n", "\n")
+        assertTrue(
+            sql0008.contains(
+                "CONSTRAINT ck_trade_audit_logs_decision_source CHECK (\n" +
+                    "        decision_source IS NULL OR decision_source IN ('SIGNAL_RULE', 'FACTOR_STRATEGY')\n    )",
+            ),
+        )
+        val migrations = resolveMigration(MIGRATION_0008).parentFile!!.listFiles { file -> file.name.endsWith(".sql") }!!
+        migrations.filter { it.name.take(4) > "0008" }.forEach { file ->
+            val text = withoutComments(file.readText())
+            assertFalse("${file.name} must not touch decision_source", text.contains("decision_source"))
+            assertFalse("${file.name} must not add LEGACY_UNKNOWN", text.contains("LEGACY_UNKNOWN"))
+        }
+        assertEquals(
+            listOf("SIGNAL_RULE", "FACTOR_STRATEGY"),
+            com.mirunubi.bjstock.core.model.DecisionSource.entries.map { it.name },
+        )
+    }
+
+    private fun withoutComments(sql: String): String =
+        sql.lines().filterNot { it.trimStart().startsWith("--") }.joinToString("\n")
 
     private fun resolveMigration(
         relative: String = "db/migrations/0009_operational_reliability_foundation.sql",
@@ -112,5 +163,7 @@ class OperationalReliabilityPostgresMigrationTest {
         const val MIGRATION_0010 = "db/migrations/0010_api_error_type_taxonomy.sql"
         const val MIGRATION_0011 = "db/migrations/0011_forward_operation_kind.sql"
         const val MIGRATION_0012 = "db/migrations/0012_financial_event_keys.sql"
+        const val MIGRATION_0013 = "db/migrations/0013_legacy_terminal_order_audit.sql"
+        const val MIGRATION_0008 = "db/migrations/0008_theme_rule_audit_logging.sql"
     }
 }

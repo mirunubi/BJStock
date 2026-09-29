@@ -7,13 +7,16 @@ import com.mirunubi.bjstock.core.audit.ForwardOperationContext
 import com.mirunubi.bjstock.core.audit.TradeAuditLogService
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.CashLedgerDao
+import com.mirunubi.bjstock.core.database.BJStockMigrations
 import com.mirunubi.bjstock.core.database.dao.StockEvaluationDao
+import com.mirunubi.bjstock.core.database.dao.StrategyRunDao
 import com.mirunubi.bjstock.core.database.dao.TradeAuditLogDao
 import com.mirunubi.bjstock.core.database.entity.CashLedgerEntity
 import com.mirunubi.bjstock.core.database.entity.ExecutionEntity
 import com.mirunubi.bjstock.core.database.entity.FactorValueEntity
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
 import com.mirunubi.bjstock.core.database.entity.MarketDailyBarEntity
+import com.mirunubi.bjstock.core.database.entity.OrderEntity
 import com.mirunubi.bjstock.core.database.entity.StockEvaluationDetailEntity
 import com.mirunubi.bjstock.core.database.entity.StockEvaluationEntity
 import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
@@ -30,6 +33,8 @@ import com.mirunubi.bjstock.core.model.CashLedgerReferenceTypes
 import com.mirunubi.bjstock.core.model.DecisionSource
 import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.OrderStatus
+import com.mirunubi.bjstock.core.model.OrderType
+import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.model.SignalAction
 import com.mirunubi.bjstock.core.model.SignalOperator
 import com.mirunubi.bjstock.core.model.TradeAuditEventType
@@ -210,8 +215,11 @@ class AuditAtomicityFinancialIdempotencyTest {
             harness.fills.executeBuy(order, monday, execution.executionPrice, execution.quantity - 1, execution.commission)
         }.exceptionOrNull() as IntegrityViolationException
         assertEquals("EXECUTION_REPLAY_MISMATCH", mismatch.reasonCode)
+        assertEquals(AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT, mismatch.code)
         assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, mismatch.severity)
-        assertEquals(AppErrorCode.DATA_INTEGRITY_ERROR, AppErrorMapper.fromThrowable(mismatch).code)
+        val mapped = AppErrorMapper.fromThrowable(mismatch)
+        assertEquals(AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT, mapped.code)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, mapped.severity)
 
         assertEquals(1, database.executionDao().countByRun(runId))
         assertEquals(3, database.cashLedgerDao().countByRun(runId))
@@ -233,6 +241,7 @@ class AuditAtomicityFinancialIdempotencyTest {
         )
         val failure = runCatching { Harness().processPending(runId) }.exceptionOrNull() as IntegrityViolationException
         assertEquals("EXECUTION_ORDER_STATE_MISMATCH", failure.reasonCode)
+        assertEquals(AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT, failure.code)
         assertEquals(1, database.cashLedgerDao().countByRun(runId))
         assertNull(database.positionDao().find(runId, instrumentId))
         assertEquals(OrderStatus.PENDING_EXECUTION, database.orderDao().findById(order.id)!!.status)
@@ -260,7 +269,9 @@ class AuditAtomicityFinancialIdempotencyTest {
 
         val conflict = runCatching { adjust(-2_000) }.exceptionOrNull() as IntegrityViolationException
         assertEquals("LEDGER_EVENT_KEY_CONFLICT", conflict.reasonCode)
+        assertEquals(AppErrorCode.LEDGER_MISMATCH, conflict.code)
         assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, conflict.severity)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, AppErrorMapper.fromThrowable(conflict).severity)
         assertEquals(before - 1_000, cash.currentCash(runId))
         assertEquals(2, database.cashLedgerDao().countByRun(runId))
         assertEquals(before - 1_000, cash.reconstructCash(runId))
@@ -347,6 +358,7 @@ class AuditAtomicityFinancialIdempotencyTest {
         val restored = auditByKey(TradeAuditLogService.evaluationDecisionKey(evaluationId))!!
         assertEquals(TradeAuditEventType.EVALUATION_DECIDED, restored.eventType)
         assertEquals(TradeAuditLogService.RECONCILED_REASON_CODE, restored.reasonCode)
+        assertEquals(DecisionSource.FACTOR_STRATEGY, restored.decisionSource)
         assertEquals(evaluationId, restored.evaluationId)
         assertNull(restored.operationId)
         assertEquals(evaluationBefore, database.stockEvaluationDao().findEvaluationById(evaluationId))
@@ -421,11 +433,11 @@ class AuditAtomicityFinancialIdempotencyTest {
     fun orderCancelled_isEmittedAtomicallyAtRunEnd() = runBlocking<Unit> {
         val order = createPendingBuy(withBar = false)
         val failing = Harness(auditDao = FailingAuditDao(database.tradeAuditLogDao(), TradeAuditEventType.ORDER_CANCELLED))
-        assertNotNull(runCatching { failing.processPending.cancelPendingAtRunEnd(runId, friday, Instant.EPOCH) }.exceptionOrNull())
+        assertNotNull(runCatching { failing.processPending.finalizeRunEnd(runId, friday, Instant.EPOCH) }.exceptionOrNull())
         assertEquals(OrderStatus.PENDING_EXECUTION, database.orderDao().findById(order.id)!!.status)
 
         withContext(ForwardOperationContext(505)) {
-            Harness().processPending.cancelPendingAtRunEnd(runId, friday, Instant.ofEpochSecond(9))
+            Harness().processPending.finalizeRunEnd(runId, friday, Instant.ofEpochSecond(9))
         }
         val cancelled = database.orderDao().findById(order.id)!!
         assertEquals(OrderStatus.CANCELLED, cancelled.status)
@@ -438,8 +450,9 @@ class AuditAtomicityFinancialIdempotencyTest {
         assertEquals(order.id, log.orderId)
         assertEquals(friday, log.marketDate)
         assertEquals(505L, log.operationId)
+        assertEquals(RunStatus.COMPLETED, database.strategyRunDao().findById(runId)!!.status)
 
-        Harness().processPending.cancelPendingAtRunEnd(runId, friday, Instant.ofEpochSecond(10))
+        Harness().processPending.finalizeRunEnd(runId, friday, Instant.ofEpochSecond(10))
         assertEquals(1, auditCount(TradeAuditEventType.ORDER_CANCELLED))
         assertEquals(0, database.executionDao().countByOrderId(order.id))
     }
@@ -535,6 +548,272 @@ class AuditAtomicityFinancialIdempotencyTest {
         assertEquals(OrderStatus.VIRTUAL_FILLED, database.orderDao().findById(buyOrder.id)!!.status)
     }
 
+    // Gate 6.1 — ledger arithmetic
+    @Test
+    fun ledgerArithmeticMismatch_abortsWithLedgerMismatch_andAppendsNothing() = runBlocking<Unit> {
+        val cash = CashLedgerService(database.cashLedgerDao()) { Instant.EPOCH }
+        database.cashLedgerDao().insert(
+            CashLedgerEntity(
+                strategyRunId = runId,
+                eventType = CashLedgerEventType.ADJUSTMENT,
+                amount = -1_000,
+                balanceAfter = 100_000_000L,
+                referenceType = CashLedgerReferenceTypes.STRATEGY_RUN,
+                referenceId = runId,
+                eventDate = friday,
+                createdAt = Instant.EPOCH,
+                eventKey = "run:$runId:corrupt-adjustment",
+            ),
+        )
+        val rowsBefore = database.cashLedgerDao().countByRun(runId)
+
+        val append = runCatching {
+            cash.append(
+                strategyRunId = runId,
+                eventType = CashLedgerEventType.ADJUSTMENT,
+                amountWon = -500,
+                eventDate = monday,
+                referenceType = CashLedgerReferenceTypes.STRATEGY_RUN,
+                referenceId = runId,
+                eventKey = "run:$runId:next-adjustment",
+            )
+        }.exceptionOrNull() as IntegrityViolationException
+        assertEquals(AppErrorCode.LEDGER_MISMATCH, append.code)
+        assertEquals("LEDGER_BALANCE_MISMATCH", append.reasonCode)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, AppErrorMapper.fromThrowable(append).severity)
+        assertEquals(rowsBefore, database.cashLedgerDao().countByRun(runId))
+
+        val rebuild = runCatching { cash.reconstructCash(runId) }.exceptionOrNull() as IntegrityViolationException
+        assertEquals(AppErrorCode.LEDGER_MISMATCH, rebuild.code)
+        assertEquals("LEDGER_RECONSTRUCTION_MISMATCH", rebuild.reasonCode)
+    }
+
+    // Gate 6.1 — finalizeRunEnd atomic boundary
+    @Test
+    fun finalizeRunEnd_commitsAllCancellationsAuditsAndCompletion_andReplayAddsNothing() = runBlocking<Unit> {
+        val orders = seedPendingOrders(3)
+        withContext(ForwardOperationContext(701)) {
+            Harness().processPending.finalizeRunEnd(runId, friday, Instant.ofEpochSecond(30))
+        }
+        assertFinalized(orders, Instant.ofEpochSecond(30))
+        assertTrue(orders.all { auditByKey(TradeAuditLogService.orderCancelledKey(it.id))!!.operationId == 701L })
+
+        Harness().processPending.finalizeRunEnd(runId, friday, Instant.ofEpochSecond(31))
+        assertFinalized(orders, Instant.ofEpochSecond(30))
+    }
+
+    @Test
+    fun finalizeRunEnd_anyFailure_rollsBackEverything_thenRetrySucceedsOnce() = runBlocking<Unit> {
+        val orders = seedPendingOrders(3)
+        val runBefore = database.strategyRunDao().findById(runId)
+        fun cancelAuditFailure(at: Int) =
+            Harness(auditDao = NthAuditFailureDao(database.tradeAuditLogDao(), TradeAuditEventType.ORDER_CANCELLED, at))
+        listOf(
+            "first cancellation audit" to cancelAuditFailure(1),
+            "middle cancellation audit" to cancelAuditFailure(2),
+            "last cancellation audit" to cancelAuditFailure(3),
+            "run COMPLETED update" to Harness(runDao = FailingCompletionRunDao(database.strategyRunDao())),
+        ).forEach { (case, harness) ->
+            val failure = runCatching { harness.processPending.finalizeRunEnd(runId, friday, Instant.ofEpochSecond(40)) }
+            assertNotNull(case, failure.exceptionOrNull())
+            orders.forEach { assertEquals(case, it, database.orderDao().findById(it.id)) }
+            assertEquals(case, 0, auditCount(TradeAuditEventType.ORDER_CANCELLED))
+            assertEquals(case, runBefore, database.strategyRunDao().findById(runId))
+        }
+
+        Harness().processPending.finalizeRunEnd(runId, friday, Instant.ofEpochSecond(41))
+        assertFinalized(orders, Instant.ofEpochSecond(41))
+        Harness().processPending.finalizeRunEnd(runId, friday, Instant.ofEpochSecond(42))
+        assertFinalized(orders, Instant.ofEpochSecond(41))
+    }
+
+    // Gate 6.1 — legacy terminal-order audit reconciliation
+    @Test
+    fun legacyTerminalOrders_getExactlyOneAudit_withProvenOrUnknownReason() = runBlocking<Unit> {
+        val buyRejected = insertOrder("legacy-r-buy", OrderSide.BUY, OrderStatus.REJECTED, quantity = 0)
+        val sellRejected = insertOrder("legacy-r-sell", OrderSide.SELL, OrderStatus.REJECTED, quantity = 0)
+        val oddRejected = insertOrder("legacy-r-odd", OrderSide.BUY, OrderStatus.REJECTED, quantity = 7)
+        val runEndCancelled = insertOrder(
+            "legacy-c-end", OrderSide.BUY, OrderStatus.CANCELLED, quantity = 0, cancelledAt = Instant.ofEpochSecond(5),
+        )
+        val oddCancelled = insertOrder("legacy-c-odd", OrderSide.SELL, OrderStatus.CANCELLED, quantity = 3)
+        val ordersBefore = database.orderDao().findByRun(runId)
+
+        reconcileTerminalOrders()
+
+        mapOf(
+            TradeAuditLogService.orderRejectedKey(buyRejected.id) to AppErrorCode.INSUFFICIENT_CASH.name,
+            TradeAuditLogService.orderRejectedKey(sellRejected.id) to AppErrorCode.NO_POSITION_TO_SELL.name,
+            TradeAuditLogService.orderRejectedKey(oddRejected.id) to TradeAuditLogService.LEGACY_REASON_UNKNOWN,
+            TradeAuditLogService.orderCancelledKey(runEndCancelled.id) to ProcessPendingOrdersUseCase.RUN_END_REACHED,
+            TradeAuditLogService.orderCancelledKey(oddCancelled.id) to TradeAuditLogService.LEGACY_REASON_UNKNOWN,
+        ).forEach { (key, reason) ->
+            val log = auditByKey(key)!!
+            assertEquals(key, reason, log.reasonCode)
+            assertEquals(key, runId, log.strategyRunId)
+            assertEquals(key, instrumentId, log.instrumentId)
+            assertNull(key, log.operationId)
+            assertNull(key, log.decisionSource)
+            assertNull(key, log.marketDate)
+            assertNull(key, log.executionId)
+            assertTrue(key, log.reasonText!!.startsWith(TradeAuditLogService.RECONCILED_REASON_CODE))
+        }
+        assertEquals(3, auditCount(TradeAuditEventType.ORDER_REJECTED))
+        assertEquals(2, auditCount(TradeAuditEventType.ORDER_CANCELLED))
+        assertEquals(ordersBefore, database.orderDao().findByRun(runId))
+        assertEquals(0L, emptyDecisionSourceCount())
+    }
+
+    @Test
+    fun terminalReconciliation_isIdempotent_andNeverDuplicatesOrRewritesExistingAudit() = runBlocking<Unit> {
+        val gate6 = insertOrder("gate6-pending", OrderSide.BUY, OrderStatus.PENDING_EXECUTION, quantity = 0)
+        withContext(ForwardOperationContext(801)) {
+            Harness().fills.reject(gate6, AppErrorCode.INSUFFICIENT_CASH.name, monday, "INSUFFICIENT_CASH")
+        }
+        val otherKey = insertOrder(
+            "legacy-other-key", OrderSide.SELL, OrderStatus.CANCELLED, quantity = 0, cancelledAt = Instant.EPOCH,
+        )
+        Harness().audit.append(
+            strategyRunId = runId,
+            eventType = TradeAuditEventType.ORDER_CANCELLED,
+            eventKey = "legacy:order:${otherKey.id}:cancelled",
+            orderId = otherKey.id,
+            reasonCode = ProcessPendingOrdersUseCase.RUN_END_REACHED,
+        )
+        insertOrder("legacy-missing", OrderSide.BUY, OrderStatus.REJECTED, quantity = 0)
+        val before = database.tradeAuditLogDao().findByRun(runId)
+
+        reconcileTerminalOrders()
+        val afterFirst = database.tradeAuditLogDao().findByRun(runId)
+        assertEquals(before.size + 1, afterFirst.size)
+        assertEquals(before, afterFirst.filter { row -> before.any { it.id == row.id } })
+        assertEquals(801L, auditByKey(TradeAuditLogService.orderRejectedKey(gate6.id))!!.operationId)
+        assertNull(auditByKey(TradeAuditLogService.orderCancelledKey(otherKey.id)))
+
+        reconcileTerminalOrders()
+        assertEquals(afterFirst, database.tradeAuditLogDao().findByRun(runId))
+    }
+
+    // Gate 6.1 — legacy evaluation decision_source
+    @Test
+    fun restoredEvaluation_usesProvenSignalRuleSource() = runBlocking<Unit> {
+        val ruleRun = newRun(createActiveWithSellRule(), 100_000_000L)
+        val evaluationId = Harness().evaluateRun(ruleRun, instrumentId, friday).persistedEvaluationId!!
+        deleteAudit(TradeAuditLogService.evaluationDecisionKey(evaluationId))
+
+        Harness().evaluateRun(ruleRun, instrumentId, friday)
+        val restored = auditByKey(TradeAuditLogService.evaluationDecisionKey(evaluationId))!!
+        assertEquals(DecisionSource.SIGNAL_RULE, restored.decisionSource)
+        assertEquals(TradeAuditLogService.RECONCILED_REASON_CODE, restored.reasonCode)
+    }
+
+    @Test
+    fun restoredEvaluation_withoutProof_hasNullSource_neverEmptyString() = runBlocking<Unit> {
+        val ruleRun = newRun(createActiveWithSellRule(), 100_000_000L)
+        val evaluationId = Harness().evaluateRun(ruleRun, instrumentId, friday).persistedEvaluationId!!
+        database.openHelper.writableDatabase.execSQL(
+            "DELETE FROM trade_audit_logs WHERE evaluation_id = ?",
+            arrayOf<Any>(evaluationId),
+        )
+
+        Harness().evaluateRun(ruleRun, instrumentId, friday)
+        val restored = auditByKey(TradeAuditLogService.evaluationDecisionKey(evaluationId))!!
+        assertNull(restored.decisionSource)
+        assertEquals(TradeAuditLogService.RECONCILED_REASON_CODE, restored.reasonCode)
+        assertNull(restored.operationId)
+        assertEquals(0L, emptyDecisionSourceCount())
+    }
+
+    @Test
+    fun liveEvaluationDecided_alwaysHasDecisionSource() = runBlocking<Unit> {
+        insertFactorValue(friday)
+        val ruleRun = newRun(createActiveWithSellRule(), 100_000_000L)
+        assertEquals(DecisionSource.FACTOR_STRATEGY, Harness().evaluateRun(runId, instrumentId, friday).decisionSource)
+        assertEquals(DecisionSource.SIGNAL_RULE, Harness().evaluateRun(ruleRun, instrumentId, friday).decisionSource)
+        val decided = (database.tradeAuditLogDao().findByRun(runId) + database.tradeAuditLogDao().findByRun(ruleRun))
+            .filter { it.eventType == TradeAuditEventType.EVALUATION_DECIDED }
+        assertEquals(2, decided.size)
+        assertEquals(
+            listOf(DecisionSource.FACTOR_STRATEGY, DecisionSource.SIGNAL_RULE),
+            decided.map { it.decisionSource },
+        )
+        assertTrue(decided.all { it.reasonCode != TradeAuditLogService.RECONCILED_REASON_CODE })
+    }
+
+    @Test
+    fun existingLegacyNullSourceAudit_isNeverRewritten() = runBlocking<Unit> {
+        insertFactorValue(friday)
+        val evaluationId = Harness().evaluateRun(runId, instrumentId, friday).persistedEvaluationId!!
+        val key = TradeAuditLogService.evaluationDecisionKey(evaluationId)
+        deleteAudit(key)
+        database.tradeAuditLogDao().insert(
+            TradeAuditLogEntity(
+                strategyRunId = runId,
+                instrumentId = instrumentId,
+                evaluationId = evaluationId,
+                marketDate = friday,
+                eventType = TradeAuditEventType.EVALUATION_DECIDED,
+                decisionSource = null,
+                reasonCode = TradeAuditLogService.RECONCILED_REASON_CODE,
+                reasonText = "BUY decision restored from persisted evaluation",
+                eventKey = key,
+                createdAt = Instant.EPOCH,
+            ),
+        )
+        val legacy = auditByKey(key)
+
+        Harness().evaluateRun(runId, instrumentId, friday)
+        reconcileTerminalOrders()
+        assertEquals(legacy, auditByKey(key))
+        assertEquals(1, auditCount(TradeAuditEventType.EVALUATION_DECIDED))
+    }
+
+    private suspend fun seedPendingOrders(count: Int): List<OrderEntity> =
+        (1..count).map { insertOrder("pending-$it", OrderSide.BUY, OrderStatus.PENDING_EXECUTION, quantity = 0) }
+
+    private suspend fun insertOrder(
+        tag: String,
+        side: OrderSide,
+        status: OrderStatus,
+        quantity: Long,
+        cancelledAt: Instant? = null,
+    ): OrderEntity {
+        val id = database.orderDao().insert(
+            OrderEntity(
+                clientOrderId = "paper-run-$runId-$tag-${side.name}",
+                strategyRunId = runId,
+                instrumentId = instrumentId,
+                side = side,
+                orderType = OrderType.MARKET,
+                quantity = quantity,
+                status = status,
+                createdAt = Instant.EPOCH,
+                cancelledAt = cancelledAt,
+            ),
+        )
+        return database.orderDao().findById(id)!!
+    }
+
+    private suspend fun assertFinalized(orders: List<OrderEntity>, cancelledAt: Instant) {
+        orders.forEach { order ->
+            val current = database.orderDao().findById(order.id)!!
+            assertEquals(OrderStatus.CANCELLED, current.status)
+            assertEquals(cancelledAt, current.cancelledAt)
+            val log = auditByKey(TradeAuditLogService.orderCancelledKey(order.id))!!
+            assertEquals(ProcessPendingOrdersUseCase.RUN_END_REACHED, log.reasonCode)
+        }
+        assertEquals(orders.size, auditCount(TradeAuditEventType.ORDER_CANCELLED))
+        assertEquals(RunStatus.COMPLETED, database.strategyRunDao().findById(runId)!!.status)
+    }
+
+    private fun reconcileTerminalOrders() =
+        BJStockMigrations.reconcileLegacyTerminalOrderAudits(database.openHelper.writableDatabase)
+
+    private fun emptyDecisionSourceCount(): Long =
+        database.openHelper.writableDatabase
+            .query("SELECT COUNT(*) FROM trade_audit_logs WHERE decision_source = ''")
+            .use { it.moveToFirst(); it.getLong(0) }
+
     private fun assertLedgerGroup(
         ledger: List<CashLedgerEntity>,
         execution: ExecutionEntity,
@@ -550,6 +829,7 @@ class AuditAtomicityFinancialIdempotencyTest {
         auditDao: TradeAuditLogDao = database.tradeAuditLogDao(),
         ledgerDao: CashLedgerDao = database.cashLedgerDao(),
         evaluationDao: StockEvaluationDao = database.stockEvaluationDao(),
+        runDao: StrategyRunDao = database.strategyRunDao(),
     ) {
         val audit = TradeAuditLogService(auditDao) { Instant.EPOCH }
         val cash = CashLedgerService(ledgerDao) { Instant.EPOCH }
@@ -572,7 +852,7 @@ class AuditAtomicityFinancialIdempotencyTest {
             now = { Instant.EPOCH },
         )
         val processPending = ProcessPendingOrdersUseCase(
-            strategyRunDao = database.strategyRunDao(),
+            strategyRunDao = runDao,
             orderDao = database.orderDao(),
             evaluationDao = evaluationDao,
             marketDailyBarDao = database.marketDailyBarDao(),
@@ -603,6 +883,30 @@ class AuditAtomicityFinancialIdempotencyTest {
         override suspend fun insert(entity: TradeAuditLogEntity): Long {
             check(entity.eventType != failOn) { "injected audit failure" }
             return delegate.insert(entity)
+        }
+    }
+
+    /** Fails the [failAt]-th insert of [failOn] (1-based) within this instance. */
+    private class NthAuditFailureDao(
+        private val delegate: TradeAuditLogDao,
+        private val failOn: TradeAuditEventType,
+        private val failAt: Int,
+    ) : TradeAuditLogDao by delegate {
+        private var seen = 0
+
+        override suspend fun insert(entity: TradeAuditLogEntity): Long {
+            if (entity.eventType == failOn) {
+                seen += 1
+                check(seen != failAt) { "injected audit failure" }
+            }
+            return delegate.insert(entity)
+        }
+    }
+
+    private class FailingCompletionRunDao(private val delegate: StrategyRunDao) : StrategyRunDao by delegate {
+        override suspend fun updateStatus(id: Long, status: RunStatus, updatedAt: Instant) {
+            check(status != RunStatus.COMPLETED) { "injected run completion failure" }
+            delegate.updateStatus(id, status, updatedAt)
         }
     }
 

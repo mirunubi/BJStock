@@ -66,6 +66,29 @@ class AppErrorModelTest {
     }
 
     @Test
+    fun financialIntegrityCodes_areClassifiedAndPreservedByTheMapper() {
+        listOf(AppErrorCode.LEDGER_MISMATCH, AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT).forEach { code ->
+            assertClassification(code, ErrorCategory.INVARIANT, ErrorSeverity.FINANCIAL_INTEGRITY, RetryPolicy.NONE, OperationAction.ABORT_OPERATION)
+            assertTrue(code.name, code.userActionRequired)
+            assertTrue(code.name, code.auditRequired)
+        }
+        assertEquals(AppErrorCode.UNEXPECTED_EXCEPTION, AppErrorCode.fromCode("DUPLICATE_EXECUTION"))
+
+        val ledger = SafeAppError.fromThrowable(IntegrityViolationException.ledgerMismatch("LEDGER_BALANCE_MISMATCH"))
+        assertEquals(AppErrorCode.LEDGER_MISMATCH, ledger.code)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, ledger.severity)
+        assertEquals("IntegrityViolationException", ledger.diagnostics.exceptionType)
+
+        val execution = SafeAppError.fromThrowable(IntegrityViolationException.executionConflict("EXECUTION_REPLAY_MISMATCH"))
+        assertEquals(AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT, execution.code)
+        assertEquals(ErrorSeverity.FINANCIAL_INTEGRITY, execution.severity)
+
+        val invariant = IntegrityViolationException.invariant("AUDIT_EVENT_KEY_CONFLICT")
+        assertEquals(ErrorSeverity.CRITICAL, SafeAppError.fromThrowable(invariant).severity)
+        assertEquals("AUDIT_EVENT_KEY_CONFLICT", invariant.message)
+    }
+
+    @Test
     fun existingForwardAndKisCodes_mapToCanonicalCodes() {
         ForwardErrorCode.entries.forEach { assertNotNull(AppErrorMapper.fromForwardErrorCode(it)) }
         assertEquals(AppErrorCode.INVALID_RUN_STATE, AppErrorMapper.fromForwardErrorCode(ForwardErrorCode.INVALID_RUN))

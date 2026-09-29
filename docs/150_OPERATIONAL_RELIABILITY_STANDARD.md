@@ -16,9 +16,12 @@ This standard is written to be **portable later to CatchMenu and other projects*
 | Single-flight between Forward Test entry points | Implemented — Gate 5 (20.4) |
 | Audit atomicity (evaluation, order create / skip / reject / cancel, fill) | Implemented — Gate 6 (20.5) |
 | Canonical `executions.execution_key` / `cash_ledger.event_key` | Implemented — Room v10 / PostgreSQL `0012` (Gate 6, 20.5) |
+| `LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` (`FINANCIAL_INTEGRITY`) | Implemented — Gate 6.1 (20.6) |
+| Atomic run-end finalization (cancellations + audits + run `COMPLETED`) | Implemented — Gate 6.1 (20.6) |
+| Legacy `REJECTED` / `CANCELLED` order audit reconciliation | Implemented — Room v11 / PostgreSQL `0013`, data-only (Gate 6.1, 20.6) |
 | Scheduler rework, retention/archive, Operations UI, orphan-operation reconciliation | **Not implemented** — later Phase 11 gates |
 
-Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5 and 6.
+Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, and 6.1.
 
 ---
 
@@ -50,7 +53,7 @@ Canonical categories (`ErrorCategory`):
 | `EXTERNAL` | An external provider answered, but not successfully. | `KIS_SERVER_ERROR`, `KIS_BUSINESS_ERROR` |
 | `TRANSIENT` | Temporary infrastructure condition; expected to clear. | `NETWORK_UNAVAILABLE`, `NETWORK_TIMEOUT`, `KIS_RATE_LIMIT` |
 | `SECURITY` | Credentials / authentication state prevents work. | `CREDENTIAL_MISSING`, `CREDENTIAL_REJECTED`, `AUTH_REQUIRED` |
-| `INVARIANT` | Internal consistency guarantee violated. | `DUPLICATE_EXECUTION`, `LEDGER_MISMATCH`, `INVALID_STATE_TRANSITION`, `DB_CONSTRAINT_VIOLATION` |
+| `INVARIANT` | Internal consistency guarantee violated. | `EXECUTION_IDEMPOTENCY_CONFLICT`, `LEDGER_MISMATCH`, `INVALID_STATE_TRANSITION`, `DB_CONSTRAINT_VIOLATION` |
 | `UNEXPECTED` | Not yet understood. | `UNEXPECTED_EXCEPTION` |
 
 Unknown errors **must** initially map to `UNEXPECTED_EXCEPTION`. They are never guessed into a friendlier category.
@@ -146,6 +149,8 @@ Only codes needed by existing Forward Test / KIS / paper-trading paths, plus `UN
 | `CREDENTIAL_REJECTED` | SECURITY | ERROR | USER_ACTION_REQUIRED | yes | REQUIRE_USER_ACTION | no |
 | `AUTH_REQUIRED` | SECURITY | ERROR | USER_ACTION_REQUIRED | yes | REQUIRE_USER_ACTION | no |
 | `DATA_INTEGRITY_ERROR` | INVARIANT | CRITICAL | NONE | yes | ABORT_OPERATION | no |
+| `LEDGER_MISMATCH` | INVARIANT | FINANCIAL_INTEGRITY | NONE | yes | ABORT_OPERATION | yes |
+| `EXECUTION_IDEMPOTENCY_CONFLICT` | INVARIANT | FINANCIAL_INTEGRITY | NONE | yes | ABORT_OPERATION | yes |
 | `INTERNAL_INVARIANT_VIOLATION` | INVARIANT | CRITICAL | NONE | yes | ABORT_OPERATION | no |
 | `UNEXPECTED_EXCEPTION` | UNEXPECTED | ERROR | NONE | no | ABORT_OPERATION | no |
 
@@ -157,12 +162,12 @@ Reserved for the idempotency / audit-atomicity gates. Added to `AppErrorCode` on
 
 | Code | Category | Severity | Retry | Operation action |
 | --- | --- | --- | --- | --- |
-| `DUPLICATE_EXECUTION` | INVARIANT | CRITICAL | NONE | ABORT_OPERATION |
 | `INVALID_STATE_TRANSITION` | INVARIANT | CRITICAL | NONE | ABORT_OPERATION |
 | `DB_CONSTRAINT_VIOLATION` | INVARIANT | CRITICAL | NONE | ABORT_OPERATION |
-| `LEDGER_MISMATCH` | INVARIANT | FINANCIAL_INTEGRITY | NONE | ABORT_OPERATION |
 
-Gate 6 does not add these codes. Canonical-key conflicts raise `IntegrityViolationException` carrying an existing code plus a severity: execution / ledger conflicts → `DATA_INTEGRITY_ERROR` with severity `FINANCIAL_INTEGRITY`; audit key conflicts → `INTERNAL_INVARIANT_VIOLATION` (`CRITICAL`). `SafeAppError.severity` still reports the catalog severity of the code (`CRITICAL`).
+Gate 6.1 moved `LEDGER_MISMATCH` into 4.1 and added `EXECUTION_IDEMPOTENCY_CONFLICT` there. `DUPLICATE_EXECUTION` is **not** added: an exact replay of the same `execution_key` with identical financial facts is normal idempotent success, not an error (20.6.1).
+
+`IntegrityViolationException` carries only a code; its severity is always the catalog severity of that code, so `SafeAppError.severity` reports `FINANCIAL_INTEGRITY` for the two financial codes and `CRITICAL` for audit-key conflicts (`INTERNAL_INVARIANT_VIOLATION`).
 
 ### 4.3 Mapping from existing BJStock codes
 
@@ -183,7 +188,7 @@ Gate 6 does not add these codes. Canonical-key conflicts raise `IntegrityViolati
 | `KisAuthException` other / no HTTP code | `AUTH_REQUIRED` (typed kind needed; see 20.3) |
 | `HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND` | `DATA_INTEGRITY_ERROR` |
 | `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` | `INTERNAL_INVARIANT_VIOLATION` |
-| `IntegrityViolationException` | its `code` (`DATA_INTEGRITY_ERROR` / `INTERNAL_INVARIANT_VIOLATION`) |
+| `IntegrityViolationException` | its `code` (`LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` / `INTERNAL_INVARIANT_VIOLATION`), severity preserved |
 | `java.net.SocketTimeoutException` | `NETWORK_TIMEOUT` |
 | other `java.io.IOException` | `NETWORK_UNAVAILABLE` |
 | anything else | `UNEXPECTED_EXCEPTION` |
@@ -398,7 +403,7 @@ Gate 1 finding: business state and its required audit event were written separat
 | order creation | order insert, then `ORDER_CREATED` | order + `ORDER_CREATED` in one transaction |
 | order skip | skip audit written after position read | position read + `ORDER_SKIPPED` in one transaction; no order row |
 | order rejection | status → REJECTED; **no** `ORDER_REJECTED` emitted | REJECTED + `ORDER_REJECTED` in one transaction |
-| order cancellation | status → CANCELLED at run end; **no** `ORDER_CANCELLED` emitted | CANCELLED + `ORDER_CANCELLED` in one transaction per order |
+| order cancellation | status → CANCELLED at run end; **no** `ORDER_CANCELLED` emitted | every run-end CANCELLED + `ORDER_CANCELLED` + run `COMPLETED` in one transaction (Gate 6.1; Gate 6 had one transaction per order) |
 | execution fill | fill transaction commits, then `EXECUTION_FILLED` appended outside it | `EXECUTION_FILLED` inside the fill transaction |
 
 Contract:
@@ -579,8 +584,8 @@ This phase does **not** implement broker trading (D-002, D-036, D-038 remain). T
 | `ForwardOperationLogService` (`startOperation`, `finishOperation`, `appendOperationalEvent`) | `core/audit/ForwardOperationLogService.kt` |
 | `ForwardOperationContext` (operation id as a coroutine-context element) | `core/audit/ForwardOperationContext.kt` |
 | `ForwardTestExecutionCoordinator` (Gate 5) | `core/forward/ForwardTestExecutionCoordinator.kt` |
-| Room v8 + `MIGRATION_7_8`; Room v9 + `MIGRATION_8_9` (`operation_kind`); Room v10 + `MIGRATION_9_10` (financial event keys) | `core/database/BJStockMigrations.kt` |
-| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql`, `0010_api_error_type_taxonomy.sql`, `0011_forward_operation_kind.sql`, `0012_financial_event_keys.sql` |
+| Room v8 + `MIGRATION_7_8`; Room v9 + `MIGRATION_8_9` (`operation_kind`); Room v10 + `MIGRATION_9_10` (financial event keys); Room v11 + `MIGRATION_10_11` (data-only terminal-order audit reconciliation) | `core/database/BJStockMigrations.kt` |
+| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql`, `0010_api_error_type_taxonomy.sql`, `0011_forward_operation_kind.sql`, `0012_financial_event_keys.sql`, `0013_legacy_terminal_order_audit.sql` |
 | `IntegrityViolationException` (Gate 6) | `core/error/IntegrityViolationException.kt` |
 | `ApiErrorType` ↔ `AppErrorCode` mapping | `core/audit/KisApiErrorMapper.kt` |
 
@@ -762,10 +767,10 @@ The coordinator runs the executor inside `withContext(ForwardOperationContext(op
 | Evaluation | `stock_evaluations` + `stock_evaluation_details` + `RULE_TRIGGERED` (rule decisions) + `EVALUATION_DECIDED` | `StrategyEvaluationRepository.persistSnapshot` (audit via `inSameTransaction`, called by `EvaluateStrategyRunUseCase`) |
 | Order decision | existing-order check + position read + either (`orders` row + `ORDER_CREATED`) or `ORDER_SKIPPED` | `ProcessEvaluationUseCase` |
 | Rejection | re-read order + `REJECTED` (quantity 0) + `ORDER_REJECTED` | `VirtualFillService.reject` |
-| Cancellation | re-read order + `CANCELLED` (`cancelled_at` from the orchestrator clock) + `ORDER_CANCELLED`, one transaction per order | `VirtualFillService.cancelPending`, via `ProcessPendingOrdersUseCase.cancelPendingAtRunEnd` from `finalizeRunEnd` |
+| Run-end finalization (Gate 6.1) | every pending order: re-read + `CANCELLED` (`cancelled_at` from the orchestrator clock) + `ORDER_CANCELLED`; then run `COMPLETED` | `ProcessPendingOrdersUseCase.finalizeRunEnd` (outer transaction via `VirtualFillService.inTransaction`; `VirtualFillService.cancelPending` joins it) |
 | Execution | re-read order + replay check + `executions` + cash ledger group + `positions` + order `VIRTUAL_FILLED` + `EXECUTION_FILLED` | `VirtualFillService.executeBuy` / `executeSell` |
 
-Outside the execution transaction, by design: `portfolio_daily_snapshots` (recomputed from committed state, unique per run/date) and the run status update to `COMPLETED` in `finalizeRunEnd`. Snapshot, order, fill price, sizing, fee / tax, and slippage math are unchanged.
+Outside the execution transaction, by design: `portfolio_daily_snapshots` (recomputed from committed state, unique per run/date). Gate 6 also left the run `COMPLETED` update outside the cancellations; Gate 6.1 moved it into the run-end transaction (20.6.2). Snapshot, order, fill price, sizing, fee / tax, and slippage math are unchanged.
 
 Crash windows closed: evaluation committed without `EVALUATION_DECIDED`; order committed without `ORDER_CREATED`; fill committed without `EXECUTION_FILLED`; rejection / cancellation without any audit. An injected failure at any audit or ledger insert rolls back the whole logical operation (`AuditAtomicityFinancialIdempotencyTest`).
 
@@ -782,15 +787,15 @@ Ledger rows are written only where they existed before: commission / tax rows on
 
 #### 20.5.3 Replay and conflicts
 
-- Fill replay: inside the transaction the order is re-read and the execution is looked up by key. Same order state and identical fill (order, price, quantity, commission, tax, slippage, `executed_at`) → `ALREADY_FILLED` with no financial mutation. Any disagreement (key present but order not `VIRTUAL_FILLED`, filled order without execution, different values) → `IntegrityViolationException.financial` (`DATA_INTEGRITY_ERROR`, severity `FINANCIAL_INTEGRITY`), and the transaction aborts.
-- Ledger replay: same key with identical run, type, amount, date, and reference → existing row, no cash mutation; different content → `LEDGER_EVENT_KEY_CONFLICT`, abort.
+- Fill replay: inside the transaction the order is re-read and the execution is looked up by key. Same order state and identical fill (order, price, quantity, commission, tax, slippage, `executed_at`) → `ALREADY_FILLED` with no financial mutation. Any disagreement (key present but order not `VIRTUAL_FILLED`, filled order without execution, different values) → `EXECUTION_IDEMPOTENCY_CONFLICT` (severity `FINANCIAL_INTEGRITY`; Gate 6 used `DATA_INTEGRITY_ERROR`), and the transaction aborts.
+- Ledger replay: same key with identical run, type, amount, date, and reference → existing row, no cash mutation; different content → `LEDGER_MISMATCH` / `LEDGER_EVENT_KEY_CONFLICT`, abort.
 - Audit replay: same key with the same run, event type, and evaluation / order / execution ids → existing row; otherwise `AUDIT_EVENT_KEY_CONFLICT` (`INTERNAL_INVARIANT_VIOLATION`), abort.
 - Nothing is caught to continue; the coordinator finishes the operation `FAILED` with the mapped code (20.4.8).
 
 #### 20.5.4 Legacy reconciliation
 
 - Missing `EVALUATION_DECIDED` / `ORDER_CREATED` / `EXECUTION_FILLED` rows are appended on the replay paths (`ALREADY_EVALUATED`, `ORDER_ALREADY_EXISTS`, `ALREADY_FILLED`) by deterministic key, with `reason_code = LEGACY_AUDIT_RESTORED` and `operation_id = NULL` (the reconciling operation did not produce the event). Business rows are never modified.
-- Not reconciled, because the facts are not stored: legacy `RULE_TRIGGERED` details, the original evaluation `decision_source`, and reasons for legacy `REJECTED` / `CANCELLED` orders.
+- Not reconciled, because the facts are not stored: legacy `RULE_TRIGGERED` details. Gate 6.1 (20.6) adds provable `decision_source` recovery and the legacy `REJECTED` / `CANCELLED` order audit.
 - Migration keys (Room `MIGRATION_9_10`, PostgreSQL `0012`) are derived only from provable identity: executions by `order_id` (one execution per order), ledger rows by type + reference + `orders.side`. Any unrecognised shape or duplicate derived key aborts the migration; amounts, balances, ids, and timestamps are copied verbatim. The real Phase 10 DB copy migrates with all counts, execution rows, ledger rows, and reconstructed cash unchanged.
 
 #### 20.5.5 Partial-fill compatibility
@@ -801,9 +806,72 @@ Current paper trading has exactly one `VIRTUAL_FILLED` execution per order (full
 
 - Orphan `RUNNING` operations and post-process-death reconciliation (20.4.9).
 - Scheduler redesign and archive / retention / Operations UI.
-- `finalizeRunEnd` commits cancellations and the run `COMPLETED` transition separately; a crash between them leaves the run `RUNNING` with its pending orders already cancelled.
-- The planned `LEDGER_MISMATCH` / `DUPLICATE_EXECUTION` catalog codes (4.2) are not yet in `AppErrorCode`.
+- **RESOLVED in Gate 6.1 (20.6.2):** `finalizeRunEnd` committed cancellations and the run `COMPLETED` transition separately.
+- **RESOLVED in Gate 6.1 (20.6.1):** financial conflicts used `DATA_INTEGRITY_ERROR` (reported as `CRITICAL`). `LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` now carry `FINANCIAL_INTEGRITY`; `DUPLICATE_EXECUTION` is intentionally not added.
 - The `KisAuthException` typed-kind deviation (20.3) is unrelated to audit atomicity and remains open.
+
+### 20.6 Financial integrity closure (Phase 11 / Gate 6.1)
+
+#### 20.6.1 Exact replay vs idempotency conflict
+
+| Situation | Result |
+| --- | --- |
+| Same `execution_key`, identical order state and fill facts | `ALREADY_FILLED`, no mutation (normal, not an error) |
+| Same `execution_key`, persisted facts differ from the attempted logical fill (values, order not `VIRTUAL_FILLED`, quantity differs), or order `VIRTUAL_FILLED` without an execution under its key | `EXECUTION_IDEMPOTENCY_CONFLICT` (`EXECUTION_REPLAY_MISMATCH` / `EXECUTION_ORDER_STATE_MISMATCH` / `FILLED_ORDER_WITHOUT_EXECUTION`) |
+| Same ledger `event_key`, identical facts | existing row, no cash mutation |
+| Same ledger `event_key`, conflicting values | `LEDGER_MISMATCH` (`LEDGER_EVENT_KEY_CONFLICT`) |
+| Latest `balance_after` ≠ sum of `amount` for the run, checked before every ledger append | `LEDGER_MISMATCH` (`LEDGER_BALANCE_MISMATCH`); nothing is appended |
+| Running reconstruction disagrees with a row's `balance_after`, or goes negative (`CashLedgerService.reconstructCash`) | `LEDGER_MISMATCH` (`LEDGER_RECONSTRUCTION_MISMATCH`) |
+
+Both codes: category `INVARIANT`, severity `FINANCIAL_INTEGRITY`, retry `NONE`, user action required, operation action `ABORT_OPERATION` (the catalog convention for every `INVARIANT` code), audit required. `AppErrorMapper` keeps the exception's code, so `SafeAppError.severity` reports `FINANCIAL_INTEGRITY` instead of collapsing to `CRITICAL`. The exception message is only the canonical reason code. The ledger balance check adds one `SUM(amount)` read per append; cash arithmetic is unchanged.
+
+#### 20.6.2 Run-end finalization boundary
+
+`ProcessPendingOrdersUseCase.finalizeRunEnd(run, market_date, finalized_at)` is one Room transaction:
+
+1. every `PENDING_EXECUTION` order of the run → `CANCELLED` (`cancelled_at = finalized_at`), each with one `ORDER_CANCELLED` (`reason_code = RUN_END_REACHED`);
+2. the run → `COMPLETED`.
+
+Either everything commits or nothing does. The qualifying orders (`PENDING_EXECUTION` of the run) are unchanged, and the orchestrator still calls it only when the processed market date equals the run end date. A failure at the first, middle, or last cancellation audit, or at the run update, rolls back every cancellation, every new audit, and the run transition; the retry then succeeds once with no duplicate audit (`AuditAtomicityFinancialIdempotencyTest`).
+
+#### 20.6.3 Legacy terminal-order audit reconciliation
+
+Room `MIGRATION_10_11` / PostgreSQL `0013` (data-only; no schema or CHECK change) append exactly one audit for each `REJECTED` / `CANCELLED` order that has none:
+
+| Order | Event / key | `reason_code` |
+| --- | --- | --- |
+| `REJECTED`, `quantity = 0`, side `BUY` | `ORDER_REJECTED` / `order:<id>:rejected` | `INSUFFICIENT_CASH` |
+| `REJECTED`, `quantity = 0`, side `SELL` | same | `NO_POSITION_TO_SELL` |
+| `REJECTED`, any other shape | same | `LEGACY_REASON_UNKNOWN` |
+| `CANCELLED`, `cancelled_at` set | `ORDER_CANCELLED` / `order:<id>:cancelled` | `RUN_END_REACHED` |
+| `CANCELLED`, `cancelled_at` NULL | same | `LEGACY_REASON_UNKNOWN` |
+
+Proof from repository history (no market / account state is recalculated): before Gate 6 the only `REJECTED` writers were `ProcessPendingOrdersUseCase.fillBuy` (no affordable quantity → `INSUFFICIENT_CASH`) and `fillSell` (no position → no-position), both writing `quantity = 0`, selected by the immutable order side. The only `CANCELLED` writer was run-end finalization (since `c7c3421`), which always set `cancelled_at`. No raw SQL ever wrote either status. Orders not matching the writer's signature get `LEGACY_REASON_UNKNOWN`.
+
+Other fields: `strategy_run_id`, `instrument_id`, `evaluation_id`, `order_id` from the order; `reason_text = "LEGACY_AUDIT_RESTORED: pre-Gate-6 <status> order had no audit"`; `market_date`, `decision_source`, `operation_id` NULL (not provable). Rules: an order with its audit (by key, or by order + event type) is skipped; orders and existing audit rows are never modified; rerunning changes nothing (`BJStockMigrations.reconcileLegacyTerminalOrderAudits` is idempotent). The real Phase 10 DB copy has no terminal orders, so it gains no rows.
+
+#### 20.6.4 Legacy evaluation `decision_source`
+
+`decision_source` values: `SIGNAL_RULE`, `FACTOR_STRATEGY`, and NULL **only** for legacy evidence whose source cannot be reconstructed. NULL is not a third decision source; on a restored row `reason_code = LEGACY_AUDIT_RESTORED` explains why it is NULL. `LEGACY_UNKNOWN` is not a decision source and is not added; the PostgreSQL `ck_trade_audit_logs_decision_source` CHECK (0008) is unchanged.
+
+When `ALREADY_EVALUATED` restores a missing `EVALUATION_DECIDED`:
+
+| Proof in immutable records | Restored `decision_source` |
+| --- | --- |
+| a `RULE_TRIGGERED` audit exists for the evaluation (written only for rule decisions) | `SIGNAL_RULE` |
+| the run's strategy version has no enabled signal rules (rules are editable only on DRAFT versions; evaluation requires ACTIVE) | `FACTOR_STRATEGY` |
+| neither | NULL |
+
+Live `EVALUATION_DECIDED` rows always carry the computed source (`StrategyEvaluationResult.decisionSource` is non-null); a live row never uses NULL. The value is an enum name, so an empty string is impossible.
+
+#### 20.6.5 Append-only historical rows
+
+Existing audit rows are never updated, including restored rows whose `decision_source` is NULL; they remain legacy evidence. Only rows written after Gate 6.1 use the corrective rules above. The real Phase 10 DB copy has no empty-string `decision_source` and every `EVALUATION_DECIDED` row there already carries a source.
+
+#### 20.6.6 Remaining gaps (not resolved by Gate 6.1)
+
+- Orphan `RUNNING` operations, scheduler redesign, archive / retention, Operations UI (20.4.9, 20.5.6).
+- `market_date` of reconciled terminal-order audits stays NULL (not persisted on the order).
 
 ---
 
@@ -814,4 +882,4 @@ Current paper trading has exactly one `VIRTUAL_FILLED` execution per order (full
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-158)
+- `docs/060_DECISION_LOG.md` (D-143 – D-162)

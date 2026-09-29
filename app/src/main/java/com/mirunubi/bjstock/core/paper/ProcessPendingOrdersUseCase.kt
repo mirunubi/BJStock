@@ -50,20 +50,24 @@ class ProcessPendingOrdersUseCase(
         return pending.map { order -> processOne(order, policy, asOfMarketDate) }
     }
 
-    /** Cancels every still-pending order of a run that reached its end date; one transaction per order. */
-    suspend fun cancelPendingAtRunEnd(
+    /**
+     * Run-end finalization as ONE transaction: every still-pending order → CANCELLED with its
+     * ORDER_CANCELLED audit, then the run → COMPLETED. Any failure rolls back all of it.
+     */
+    suspend fun finalizeRunEnd(
         strategyRunId: Long,
         marketDate: java.time.LocalDate,
-        cancelledAt: java.time.Instant,
-    ) {
+        finalizedAt: java.time.Instant,
+    ) = fills.inTransaction {
         for (order in orderDao.findByRunAndStatus(strategyRunId, OrderStatus.PENDING_EXECUTION)) {
             fills.cancelPending(
                 orderId = order.id,
                 reasonCode = RUN_END_REACHED,
                 marketDate = marketDate,
-                cancelledAt = cancelledAt,
+                cancelledAt = finalizedAt,
             )
         }
+        strategyRunDao.updateStatus(strategyRunId, RunStatus.COMPLETED, finalizedAt)
     }
 
     suspend fun processOne(

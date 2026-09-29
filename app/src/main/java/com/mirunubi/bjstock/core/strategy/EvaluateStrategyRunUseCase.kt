@@ -45,15 +45,19 @@ class EvaluateStrategyRunUseCase(
         }
         val existing = evaluations.findEvaluation(strategyRunId, instrumentId, evaluationDate)
         if (existing != null) {
-            audit?.restoreMissing(
-                strategyRunId = strategyRunId,
-                eventType = TradeAuditEventType.EVALUATION_DECIDED,
-                eventKey = TradeAuditLogService.evaluationDecisionKey(existing.id),
-                instrumentId = instrumentId,
-                evaluationId = existing.id,
-                marketDate = evaluationDate,
-                reasonText = "${existing.quantDecision.name} decision restored from persisted evaluation",
-            )
+            val decisionKey = TradeAuditLogService.evaluationDecisionKey(existing.id)
+            if (audit != null && !audit.hasEvent(decisionKey)) {
+                audit.restoreMissing(
+                    strategyRunId = strategyRunId,
+                    eventType = TradeAuditEventType.EVALUATION_DECIDED,
+                    eventKey = decisionKey,
+                    instrumentId = instrumentId,
+                    evaluationId = existing.id,
+                    marketDate = evaluationDate,
+                    decisionSource = provenDecisionSource(audit, existing.id, version.id),
+                    reasonText = "${existing.quantDecision.name} decision restored from persisted evaluation",
+                )
+            }
             return StrategyEvaluationResult(
                 status = StrategyEvaluationStatus.ALREADY_EVALUATED,
                 quantScoreStored = existing.quantScore,
@@ -76,6 +80,21 @@ class EvaluateStrategyRunUseCase(
             },
         )
         return computed.copy(persistedEvaluationId = evaluationId)
+    }
+
+    /**
+     * The historical decision source only when immutable records prove it; NULL otherwise.
+     * RULE_TRIGGERED is written only for SIGNAL_RULE decisions, and an ACTIVE version's signal rules
+     * are frozen, so a version without enabled rules can only have produced FACTOR_STRATEGY.
+     */
+    private suspend fun provenDecisionSource(
+        auditLog: TradeAuditLogService,
+        evaluationId: Long,
+        strategyVersionId: Long,
+    ): DecisionSource? = when {
+        auditLog.hasRuleTriggered(evaluationId) -> DecisionSource.SIGNAL_RULE
+        !loader.hasEnabledSignalRules(strategyVersionId) -> DecisionSource.FACTOR_STRATEGY
+        else -> null
     }
 
     private suspend fun writeAudit(

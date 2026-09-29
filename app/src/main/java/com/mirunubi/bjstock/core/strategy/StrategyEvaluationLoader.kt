@@ -55,6 +55,9 @@ class StrategyEvaluationLoader(
         return enrichFactorReason(factorResult, version)
     }
 
+    suspend fun hasEnabledSignalRules(strategyVersionId: Long): Boolean =
+        signalRuleDao.findEnabledByVersion(strategyVersionId).isNotEmpty()
+
     private fun enrichFactorReason(
         result: StrategyEvaluationResult,
         version: StrategyVersionEntity,

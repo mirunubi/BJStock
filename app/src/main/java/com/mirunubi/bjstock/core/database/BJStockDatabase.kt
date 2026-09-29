@@ -83,7 +83,7 @@ import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
         ForwardOperationEntity::class,
         OperationalEventEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 @TypeConverters(BJStockConverters::class)
@@ -112,7 +112,7 @@ abstract class BJStockDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "bjstock.db"
-        const val VERSION = 10
+        const val VERSION = 11
         const val ENTITY_COUNT = 27
     }
 }

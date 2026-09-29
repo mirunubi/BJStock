@@ -23,7 +23,7 @@ import java.time.LocalDate
  * - fill: order VIRTUAL_FILLED + execution + cash ledger group + position + EXECUTION_FILLED
  * - reject: order REJECTED + ORDER_REJECTED
  * - cancel: order CANCELLED + ORDER_CANCELLED
- * Snapshots are written separately (docs/150 §11).
+ * Snapshots are written separately (docs/150 §11). Calls made inside [inTransaction] join the outer transaction.
  */
 class VirtualFillService(
     private val database: BJStockDatabase,
@@ -258,6 +258,8 @@ class VirtualFillService(
         true
     }
 
+    suspend fun <R> inTransaction(block: suspend () -> R): R = database.withTransaction(block)
+
     private fun requestedExecution(
         order: OrderEntity,
         executionDate: LocalDate,
@@ -290,15 +292,15 @@ class VirtualFillService(
         val existing = executionDao.findByExecutionKey(requested.executionKey)
         if (existing == null) {
             if (current.status == OrderStatus.VIRTUAL_FILLED) {
-                throw IntegrityViolationException.financial("FILLED_ORDER_WITHOUT_EXECUTION")
+                throw IntegrityViolationException.executionConflict("FILLED_ORDER_WITHOUT_EXECUTION")
             }
             return null
         }
         if (current.status != OrderStatus.VIRTUAL_FILLED || current.quantity != existing.quantity) {
-            throw IntegrityViolationException.financial("EXECUTION_ORDER_STATE_MISMATCH")
+            throw IntegrityViolationException.executionConflict("EXECUTION_ORDER_STATE_MISMATCH")
         }
         if (!isSameFill(existing, requested)) {
-            throw IntegrityViolationException.financial("EXECUTION_REPLAY_MISMATCH")
+            throw IntegrityViolationException.executionConflict("EXECUTION_REPLAY_MISMATCH")
         }
         appendFilledAudit(current, existing, marketDate, restore = true)
         return PaperTradeResult(

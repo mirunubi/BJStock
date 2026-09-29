@@ -47,7 +47,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(V7_TEST_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(10, db.version)
+            assertEquals(BJStockDatabase.VERSION, db.version)
             assertEquals(1L, scalar(db, "SELECT COUNT(*) FROM instruments"))
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM strategy_runs"))
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM forward_test_cycles"))
@@ -107,7 +107,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(V8_TEST_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(10, db.version)
+            assertEquals(BJStockDatabase.VERSION, db.version)
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM forward_operations WHERE operation_kind = 'FORWARD_RUN'"))
             val legacy = database.forwardOperationDao().findById(2)!!
             assertEquals("worker:w-1:0", legacy.operationKey)
@@ -150,7 +150,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(V9_TEST_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(10, db.version)
+            assertEquals(BJStockDatabase.VERSION, db.version)
             assertEquals(executionsBefore, rows(db, EXECUTION_FINANCIAL_COLUMNS, "executions"))
             assertEquals(ledgerBefore, rows(db, LEDGER_FINANCIAL_COLUMNS, "cash_ledger"))
             assertEquals(
@@ -222,6 +222,48 @@ class OperationalReliabilityMigrationTest {
         }
     }
 
+    @Test
+    fun migrate10To11_appendsMissingTerminalOrderAudit_only() = runBlocking<Unit> {
+        context.deleteDatabase(V10_TEST_DB)
+        val ordersBefore: List<String>
+        context.openOrCreateDatabase(V10_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            createSchemaFromExport(sqlite, version = 10)
+            seedV10TerminalOrders(sqlite)
+            sqlite.version = 10
+            ordersBefore = rows(sqlite, ORDER_COLUMNS, "orders")
+        }
+
+        val database = openWithAllMigrations(V10_TEST_DB)
+        try {
+            val db = database.openHelper.writableDatabase
+            assertEquals(11, db.version)
+            assertEquals(ordersBefore, rows(db, ORDER_COLUMNS, "orders"))
+            val audits = database.tradeAuditLogDao().findByRun(3).associateBy { it.eventKey }
+            assertEquals(5, audits.size)
+            assertEquals("INSUFFICIENT_CASH", audits.getValue("order:11:rejected").reasonCode)
+            assertEquals("NO_POSITION_TO_SELL", audits.getValue("order:12:rejected").reasonCode)
+            assertEquals("RUN_END_REACHED", audits.getValue("order:13:cancelled").reasonCode)
+            assertEquals("LEGACY_REASON_UNKNOWN", audits.getValue("order:14:cancelled").reasonCode)
+            val existing = audits.getValue("order:15:rejected")
+            assertEquals("INSUFFICIENT_CASH", existing.reasonCode)
+            assertEquals(99L, existing.operationId)
+            assertEquals(Instant.ofEpochMilli(7), existing.createdAt)
+            listOf("order:11:rejected", "order:12:rejected", "order:13:cancelled", "order:14:cancelled").forEach {
+                val restored = audits.getValue(it)
+                assertNull(it, restored.operationId)
+                assertNull(it, restored.decisionSource)
+                assertNull(it, restored.marketDate)
+            }
+            assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM trade_audit_logs WHERE decision_source = ''"))
+
+            BJStockMigrations.reconcileLegacyTerminalOrderAudits(db)
+            assertEquals(5L, scalar(db, "SELECT COUNT(*) FROM trade_audit_logs"))
+            db.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
+        } finally {
+            database.close()
+        }
+    }
+
     /**
      * Opt-in: migrates a COPY of a real Phase 10 device DB.
      * Set BJSTOCK_PHASE10_DB to a checkpointed bjstock.db path. The source file is never opened for write.
@@ -241,6 +283,8 @@ class OperationalReliabilityMigrationTest {
         val before = mutableMapOf<String, Long>()
         val executionsBefore: List<String>
         val ledgerBefore: List<String>
+        val auditsBefore: List<String>
+        val reconciledTerminalAudits: Long
         SQLiteDatabase.openDatabase(target.path, null, SQLiteDatabase.OPEN_READWRITE).use { sqlite ->
             assertEquals(7, sqlite.version)
             userTables(sqlite).forEach { table ->
@@ -251,13 +295,23 @@ class OperationalReliabilityMigrationTest {
             }
             executionsBefore = rows(sqlite, EXECUTION_FINANCIAL_COLUMNS, "executions")
             ledgerBefore = rows(sqlite, LEDGER_FINANCIAL_COLUMNS, "cash_ledger")
+            auditsBefore = rows(sqlite, AUDIT_V7_COLUMNS, "trade_audit_logs")
+            sqlite.rawQuery("SELECT COUNT(*) FROM trade_audit_logs WHERE decision_source = ''", null).use {
+                it.moveToFirst()
+                assertEquals("legacy empty-string decision_source rows", 0L, it.getLong(0))
+            }
+            sqlite.rawQuery(MISSING_TERMINAL_AUDIT_COUNT, null).use {
+                it.moveToFirst()
+                reconciledTerminalAudits = it.getLong(0)
+            }
         }
         assertTrue(before.containsKey("trade_audit_logs"))
+        before["trade_audit_logs"] = before.getValue("trade_audit_logs") + reconciledTerminalAudits
 
         val database = openWithAllMigrations(REAL_COPY_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(10, db.version)
+            assertEquals(BJStockDatabase.VERSION, db.version)
             before.forEach { (table, count) ->
                 assertEquals("row count for $table", count, scalar(db, "SELECT COUNT(*) FROM `$table`"))
             }
@@ -280,6 +334,9 @@ class OperationalReliabilityMigrationTest {
                     )
                 }
             }
+            assertEquals(auditsBefore, rows(db, AUDIT_V7_COLUMNS, "trade_audit_logs").take(auditsBefore.size))
+            assertEquals(0L, scalar(db, MISSING_TERMINAL_AUDIT_COUNT))
+            assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM trade_audit_logs WHERE decision_source = ''"))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM forward_operations"))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM operational_events"))
             assertEquals(
@@ -313,6 +370,7 @@ class OperationalReliabilityMigrationTest {
                 BJStockMigrations.MIGRATION_7_8,
                 BJStockMigrations.MIGRATION_8_9,
                 BJStockMigrations.MIGRATION_9_10,
+                BJStockMigrations.MIGRATION_10_11,
             )
             .allowMainThreadQueries()
             .build()
@@ -412,6 +470,40 @@ class OperationalReliabilityMigrationTest {
         ).forEach { sqlite.execSQL(it.trimIndent()) }
     }
 
+    private fun seedV10TerminalOrders(sqlite: SQLiteDatabase) {
+        listOf(
+            """
+            INSERT INTO instruments (id, market, symbol, name, currency, is_active, created_at, updated_at, board, instrument_type)
+            VALUES (3, 'KRX', '005930', 'Samsung Electronics', 'KRW', 1, 0, 0, 'KOSPI', 'COMMON_STOCK')
+            """,
+            """
+            INSERT INTO strategies (id, strategy_code, strategy_name, is_active, created_at, updated_at)
+            VALUES (1, 'LEGACY', 'Legacy', 1, 0, 0)
+            """,
+            """
+            INSERT INTO strategy_versions (id, strategy_id, version_no, buy_threshold, sell_threshold, status, created_at)
+            VALUES (1, 1, 1, 700000, 400000, 'ACTIVE', 0)
+            """,
+            """
+            INSERT INTO strategy_runs (id, run_name, strategy_version_id, run_type, start_date, initial_cash, status, created_at, updated_at)
+            VALUES (3, 'Run 3', 1, 'PAPER', 20714, 100000000, 'COMPLETED', 0, 0)
+            """,
+            """
+            INSERT INTO orders (id, client_order_id, strategy_run_id, instrument_id, side, order_type, quantity, status, created_at, cancelled_at)
+            VALUES (11, 'legacy-11', 3, 3, 'BUY', 'MARKET', 0, 'REJECTED', 0, NULL),
+                   (12, 'legacy-12', 3, 3, 'SELL', 'MARKET', 0, 'REJECTED', 0, NULL),
+                   (13, 'legacy-13', 3, 3, 'BUY', 'MARKET', 0, 'CANCELLED', 0, 5000),
+                   (14, 'legacy-14', 3, 3, 'SELL', 'MARKET', 4, 'CANCELLED', 0, NULL),
+                   (15, 'gate6-15', 3, 3, 'BUY', 'MARKET', 0, 'REJECTED', 0, NULL),
+                   (16, 'filled-16', 3, 3, 'BUY', 'MARKET', 1, 'VIRTUAL_FILLED', 0, NULL)
+            """,
+            """
+            INSERT INTO trade_audit_logs (id, strategy_run_id, order_id, event_type, reason_code, event_key, created_at, operation_id)
+            VALUES (1, 3, 15, 'ORDER_REJECTED', 'INSUFFICIENT_CASH', 'order:15:rejected', 7, 99)
+            """,
+        ).forEach { sqlite.execSQL(it.trimIndent()) }
+    }
+
     private fun rows(sqlite: SQLiteDatabase, columns: String, table: String): List<String> =
         sqlite.rawQuery("SELECT $columns FROM `$table` ORDER BY id", null).use { cursor ->
             buildList {
@@ -462,6 +554,21 @@ class OperationalReliabilityMigrationTest {
         private const val V8_TEST_DB = "operational-reliability-v8-migration-test"
         private const val V9_TEST_DB = "financial-keys-v9-migration-test"
         private const val V9_AMBIGUOUS_DB = "financial-keys-v9-ambiguous-migration-test"
+        private const val V10_TEST_DB = "terminal-audit-v10-migration-test"
+        private const val ORDER_COLUMNS =
+            "id, client_order_id, strategy_run_id, instrument_id, evaluation_id, side, order_type, " +
+                "requested_price, quantity, status, created_at, executed_at, cancelled_at"
+        private const val AUDIT_V7_COLUMNS =
+            "id, strategy_run_id, instrument_id, evaluation_id, order_id, execution_id, market_date, event_type, " +
+                "decision_source, rule_id, reason_code, reason_text, metric_code, observed_value, threshold_value, " +
+                "event_key, created_at"
+        private const val MISSING_TERMINAL_AUDIT_COUNT = """
+            SELECT COUNT(*) FROM orders o
+            WHERE (o.status = 'REJECTED' AND NOT EXISTS (
+                      SELECT 1 FROM trade_audit_logs a WHERE a.order_id = o.id AND a.event_type = 'ORDER_REJECTED'))
+               OR (o.status = 'CANCELLED' AND NOT EXISTS (
+                      SELECT 1 FROM trade_audit_logs a WHERE a.order_id = o.id AND a.event_type = 'ORDER_CANCELLED'))
+        """
         private const val EXECUTION_FINANCIAL_COLUMNS =
             "id, order_id, execution_price, quantity, commission, tax, slippage, executed_at, created_at"
         private const val LEDGER_FINANCIAL_COLUMNS =

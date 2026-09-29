@@ -636,3 +636,19 @@ A duplicate canonical key is an idempotent replay only when the stored row is th
 
 The paper execution transaction is: order terminal transition + execution + cash ledger group + position + `EXECUTION_FILLED`. The daily portfolio snapshot stays outside it and is recomputed from committed state.
 
+## D-159
+
+Phase 11 / Gate 6.1: `LEDGER_MISMATCH` and `EXECUTION_IDEMPOTENCY_CONFLICT` are catalog codes (`INVARIANT`, `FINANCIAL_INTEGRITY`, retry `NONE`, user action required, `ABORT_OPERATION`, audit required). They replace `DATA_INTEGRITY_ERROR` for ledger / execution conflicts; `IntegrityViolationException` severity always equals its code's catalog severity, so `FINANCIAL_INTEGRITY` is never collapsed to `CRITICAL`. `DUPLICATE_EXECUTION` is not added: an exact replay with identical facts is idempotent success. A ledger append also aborts with `LEDGER_MISMATCH` when the latest balance differs from the sum of amounts. Supersedes the code choice in D-157.
+
+## D-160
+
+Run-end finalization is one transaction: every pending order → `CANCELLED` with its `ORDER_CANCELLED` (`RUN_END_REACHED`), then the run → `COMPLETED`. All or nothing. Qualifying orders are unchanged.
+
+## D-161
+
+Legacy `REJECTED` / `CANCELLED` orders without audit get exactly one reconciliation audit via a data-only Room `MIGRATION_10_11` / PostgreSQL `0013` (append-only, idempotent, orders untouched, `operation_id` NULL). The reason is used only when the pre-Gate-6 writer's persisted signature proves it (repository history: REJECTED `quantity = 0` per side, CANCELLED with `cancelled_at`); otherwise `LEGACY_REASON_UNKNOWN`. Historical market / account state is never recalculated.
+
+## D-162
+
+`decision_source` stays `SIGNAL_RULE` / `FACTOR_STRATEGY`; `LEGACY_UNKNOWN` is not added and the PostgreSQL CHECK is unchanged (human decision). A restored `EVALUATION_DECIDED` uses the proven source (`RULE_TRIGGERED` present → `SIGNAL_RULE`; version without enabled signal rules → `FACTOR_STRATEGY`) or NULL with `reason_code = LEGACY_AUDIT_RESTORED`. Live rows never use NULL. Existing audit rows, including restored NULL-source rows, are never rewritten.
+

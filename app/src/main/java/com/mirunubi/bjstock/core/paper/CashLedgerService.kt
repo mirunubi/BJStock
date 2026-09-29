@@ -40,7 +40,8 @@ class CashLedgerService(
 
     /**
      * Appends one cash event identified by [eventKey]. A replay of the same logical event returns the
-     * existing row without a second cash mutation; a different event under the same key aborts.
+     * existing row without a second cash mutation; a different event under the same key, or a latest
+     * balance that no longer equals the sum of amounts, aborts with LEDGER_MISMATCH.
      */
     suspend fun append(
         strategyRunId: Long,
@@ -58,10 +59,13 @@ class CashLedgerService(
                 existing.eventDate == eventDate &&
                 existing.referenceType == referenceType &&
                 existing.referenceId == referenceId
-            if (!sameEvent) throw IntegrityViolationException.financial("LEDGER_EVENT_KEY_CONFLICT")
+            if (!sameEvent) throw IntegrityViolationException.ledgerMismatch("LEDGER_EVENT_KEY_CONFLICT")
             return existing
         }
         val previous = currentCash(strategyRunId)
+        if (cashLedgerDao.sumAmountByRun(strategyRunId) != previous) {
+            throw IntegrityViolationException.ledgerMismatch("LEDGER_BALANCE_MISMATCH")
+        }
         val balanceAfter = previous + amountWon
         require(balanceAfter >= 0L) {
             "cash balance would become negative: $previous + $amountWon"
@@ -87,10 +91,9 @@ class CashLedgerService(
         var balance = 0L
         rows.forEach { row ->
             balance += row.amount
-            require(balance == row.balanceAfter) {
-                "ledger reconstruction mismatch at id=${row.id}"
+            if (balance != row.balanceAfter || balance < 0L) {
+                throw IntegrityViolationException.ledgerMismatch("LEDGER_RECONSTRUCTION_MISMATCH")
             }
-            require(balance >= 0L)
         }
         return balance
     }

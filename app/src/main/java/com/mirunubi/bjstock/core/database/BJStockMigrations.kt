@@ -566,6 +566,71 @@ object BJStockMigrations {
         }
     }
 
+    /** Phase 11 / Gate 6.1: data-only; see [reconcileLegacyTerminalOrderAudits]. Schema is unchanged. */
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            reconcileLegacyTerminalOrderAudits(db)
+        }
+    }
+
+    /**
+     * Appends the missing ORDER_REJECTED / ORDER_CANCELLED audit of pre-Gate-6 terminal orders.
+     * Append-only and idempotent: an order that already has its audit (by key or by order + type) is skipped,
+     * orders and existing audit rows are never modified. The reason is the only one the pre-Gate-6 writer
+     * could produce, recognised by the facts it persisted (REJECTED: quantity 0 per side; CANCELLED:
+     * cancelled_at set by run-end finalization); any other shape is LEGACY_REASON_UNKNOWN.
+     * market_date, decision_source and operation_id stay NULL because they are not provable.
+     */
+    fun reconcileLegacyTerminalOrderAudits(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            legacyTerminalAuditInsert(
+                status = "REJECTED",
+                eventType = "ORDER_REJECTED",
+                keySuffix = "rejected",
+                reasonSql = """
+                    CASE
+                        WHEN o.quantity = 0 AND o.side = 'BUY' THEN 'INSUFFICIENT_CASH'
+                        WHEN o.quantity = 0 AND o.side = 'SELL' THEN 'NO_POSITION_TO_SELL'
+                        ELSE 'LEGACY_REASON_UNKNOWN'
+                    END
+                """.trimIndent(),
+            ),
+        )
+        db.execSQL(
+            legacyTerminalAuditInsert(
+                status = "CANCELLED",
+                eventType = "ORDER_CANCELLED",
+                keySuffix = "cancelled",
+                reasonSql = "CASE WHEN o.cancelled_at IS NOT NULL THEN 'RUN_END_REACHED' ELSE 'LEGACY_REASON_UNKNOWN' END",
+            ),
+        )
+    }
+
+    private fun legacyTerminalAuditInsert(
+        status: String,
+        eventType: String,
+        keySuffix: String,
+        reasonSql: String,
+    ) = """
+        INSERT INTO trade_audit_logs (
+            strategy_run_id, instrument_id, evaluation_id, order_id, execution_id, market_date,
+            event_type, decision_source, rule_id, reason_code, reason_text, metric_code,
+            observed_value, threshold_value, event_key, created_at, operation_id
+        )
+        SELECT o.strategy_run_id, o.instrument_id, o.evaluation_id, o.id, NULL, NULL,
+            '$eventType', NULL, NULL, $reasonSql,
+            'LEGACY_AUDIT_RESTORED: pre-Gate-6 $status order had no audit', NULL,
+            NULL, NULL, 'order:' || o.id || ':$keySuffix', CAST(strftime('%s', 'now') AS INTEGER) * 1000, NULL
+        FROM orders o
+        WHERE o.status = '$status'
+          AND NOT EXISTS (
+              SELECT 1 FROM trade_audit_logs a
+              WHERE a.event_key = 'order:' || o.id || ':$keySuffix'
+                 OR (a.order_id = o.id AND a.event_type = '$eventType')
+          )
+        ORDER BY o.id
+    """.trimIndent()
+
     /** Every cash_ledger row with its derived canonical key; NULL when identity is not provable. */
     private val LEGACY_LEDGER_KEYS = """
         SELECT c.*,

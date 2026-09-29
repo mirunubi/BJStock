@@ -63,6 +63,7 @@ class TradeAuditLogService(
     /**
      * Restores a missing audit row for a business row committed before audit atomicity.
      * The row is uncorrelated (operation_id NULL): the current operation did not produce the event.
+     * [decisionSource] is NULL when the historical source cannot be proven; it is never guessed.
      */
     suspend fun restoreMissing(
         strategyRunId: Long,
@@ -73,6 +74,7 @@ class TradeAuditLogService(
         orderId: Long? = null,
         executionId: Long? = null,
         marketDate: LocalDate? = null,
+        decisionSource: DecisionSource? = null,
         reasonText: String? = null,
     ): Long = append(
         strategyRunId = strategyRunId,
@@ -83,10 +85,16 @@ class TradeAuditLogService(
         orderId = orderId,
         executionId = executionId,
         marketDate = marketDate,
+        decisionSource = decisionSource,
         reasonCode = RECONCILED_REASON_CODE,
         reasonText = reasonText,
         correlateWithCurrentOperation = false,
     )
+
+    suspend fun hasEvent(eventKey: String): Boolean = dao.findByEventKey(eventKey) != null
+
+    suspend fun hasRuleTriggered(evaluationId: Long): Boolean =
+        dao.countByEvaluationAndType(evaluationId, TradeAuditEventType.RULE_TRIGGERED) > 0
 
     private fun requireSameEvent(
         existing: TradeAuditLogEntity,
@@ -112,6 +120,9 @@ class TradeAuditLogService(
 
     companion object {
         const val RECONCILED_REASON_CODE = "LEGACY_AUDIT_RESTORED"
+
+        /** Reason for a restored terminal-order audit whose historical cause cannot be proven. */
+        const val LEGACY_REASON_UNKNOWN = "LEGACY_REASON_UNKNOWN"
 
         fun evaluationDecisionKey(evaluationId: Long) = "evaluation:$evaluationId:decision"
         fun ruleTriggeredKey(evaluationId: Long, ruleId: Long) =

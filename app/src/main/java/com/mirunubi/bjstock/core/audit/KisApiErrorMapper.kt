@@ -50,6 +50,8 @@ object KisApiErrorMapper {
         AppErrorCode.KIS_BUSINESS_ERROR -> ApiErrorType.KIS_BUSINESS_ERROR
         AppErrorCode.KIS_MALFORMED_RESPONSE -> ApiErrorType.MALFORMED_RESPONSE
         AppErrorCode.DATA_INTEGRITY_ERROR,
+        AppErrorCode.LEDGER_MISMATCH,
+        AppErrorCode.EXECUTION_IDEMPOTENCY_CONFLICT,
         AppErrorCode.INTERNAL_INVARIANT_VIOLATION,
         -> ApiErrorType.LOCAL_INVARIANT
         AppErrorCode.UNEXPECTED_EXCEPTION -> ApiErrorType.UNEXPECTED
