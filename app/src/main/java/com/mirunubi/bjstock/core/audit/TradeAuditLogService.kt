@@ -48,6 +48,7 @@ class TradeAuditLogService(
                 thresholdValue = thresholdValue,
                 eventKey = eventKey,
                 createdAt = now(),
+                operationId = currentForwardOperationId(),
             ),
         )
     }

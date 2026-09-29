@@ -34,6 +34,7 @@ class ApiErrorLogService(
             strategyRunId = strategyRunId,
             forwardCycleId = forwardCycleId,
             occurredAt = occurredAt,
+            operationId = currentForwardOperationId(),
         ),
     )
 

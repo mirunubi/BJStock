@@ -13,6 +13,7 @@ import com.mirunubi.bjstock.core.model.FactorCategory
 import com.mirunubi.bjstock.core.model.FactorValueType
 import com.mirunubi.bjstock.core.model.ForwardCycleStage
 import com.mirunubi.bjstock.core.model.ForwardCycleStatus
+import com.mirunubi.bjstock.core.model.ForwardOperationKind
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import com.mirunubi.bjstock.core.model.InstrumentType
@@ -196,6 +197,13 @@ class BJStockConverters {
     @TypeConverter
     fun codeToForwardOperationTrigger(value: String): ForwardOperationTrigger =
         ForwardOperationTrigger.valueOf(value)
+
+    @TypeConverter
+    fun forwardOperationKindToCode(value: ForwardOperationKind): String = value.name
+
+    @TypeConverter
+    fun codeToForwardOperationKind(value: String): ForwardOperationKind =
+        ForwardOperationKind.valueOf(value)
 
     @TypeConverter
     fun forwardOperationStatusToCode(value: ForwardOperationStatus): String = value.name

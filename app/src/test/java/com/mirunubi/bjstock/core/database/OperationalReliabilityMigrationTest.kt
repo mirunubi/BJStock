@@ -4,7 +4,11 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.mirunubi.bjstock.core.database.entity.ForwardOperationEntity
 import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
+import com.mirunubi.bjstock.core.model.ForwardOperationKind
+import com.mirunubi.bjstock.core.model.ForwardOperationStatus
+import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import com.mirunubi.bjstock.core.model.TradeAuditEventType
 import java.io.File
 import java.time.Instant
@@ -43,7 +47,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(V7_TEST_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(8, db.version)
+            assertEquals(9, db.version)
             assertEquals(1L, scalar(db, "SELECT COUNT(*) FROM instruments"))
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM strategy_runs"))
             assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM forward_test_cycles"))
@@ -82,6 +86,54 @@ class OperationalReliabilityMigrationTest {
         }
     }
 
+    @Test
+    fun migrate8To9_existingOperationsBecomeForwardRun_andRowsArePreserved() = runBlocking {
+        context.deleteDatabase(V8_TEST_DB)
+        context.openOrCreateDatabase(V8_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            createSchemaFromExport(sqlite, version = 8)
+            sqlite.execSQL(
+                """
+                INSERT INTO forward_operations (
+                    id, operation_key, `trigger`, work_id, work_attempt, through_date, status, started_at,
+                    runs_considered, runs_processed, runs_skipped, cycles_completed, cycles_failed
+                ) VALUES
+                    (1, 'manual:req-1', 'MANUAL', NULL, NULL, 20725, 'SUCCEEDED', 0, 1, 1, 0, 1, 0),
+                    (2, 'worker:w-1:0', 'WORKER', 'w-1', 0, 20725, 'NO_OP', 0, 0, 0, 0, 0, 0)
+                """.trimIndent(),
+            )
+            sqlite.version = 8
+        }
+
+        val database = openWithAllMigrations(V8_TEST_DB)
+        try {
+            val db = database.openHelper.writableDatabase
+            assertEquals(9, db.version)
+            assertEquals(2L, scalar(db, "SELECT COUNT(*) FROM forward_operations WHERE operation_kind = 'FORWARD_RUN'"))
+            val legacy = database.forwardOperationDao().findById(2)!!
+            assertEquals("worker:w-1:0", legacy.operationKey)
+            assertEquals(ForwardOperationKind.FORWARD_RUN, legacy.operationKind)
+            assertEquals(ForwardOperationStatus.NO_OP, legacy.status)
+
+            val retryId = database.forwardOperationDao().insert(
+                ForwardOperationEntity(
+                    operationKey = "manual-retry:req-2",
+                    trigger = ForwardOperationTrigger.MANUAL,
+                    operationKind = ForwardOperationKind.RETRY_FAILED_CYCLE,
+                    throughDate = java.time.LocalDate.of(2026, 9, 29),
+                    status = ForwardOperationStatus.RUNNING,
+                    startedAt = Instant.EPOCH,
+                ),
+            )
+            assertEquals(
+                ForwardOperationKind.RETRY_FAILED_CYCLE,
+                database.forwardOperationDao().findById(retryId)!!.operationKind,
+            )
+            db.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
+        } finally {
+            database.close()
+        }
+    }
+
     /**
      * Opt-in: migrates a COPY of a real Phase 10 device DB.
      * Set BJSTOCK_PHASE10_DB to a checkpointed bjstock.db path. The source file is never opened for write.
@@ -113,7 +165,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(REAL_COPY_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(8, db.version)
+            assertEquals(9, db.version)
             before.forEach { (table, count) ->
                 assertEquals("row count for $table", count, scalar(db, "SELECT COUNT(*) FROM `$table`"))
             }
@@ -148,6 +200,7 @@ class OperationalReliabilityMigrationTest {
                 BJStockMigrations.MIGRATION_5_6,
                 BJStockMigrations.MIGRATION_6_7,
                 BJStockMigrations.MIGRATION_7_8,
+                BJStockMigrations.MIGRATION_8_9,
             )
             .allowMainThreadQueries()
             .build()
@@ -251,6 +304,7 @@ class OperationalReliabilityMigrationTest {
 
     companion object {
         private const val V7_TEST_DB = "operational-reliability-v7-migration-test"
+        private const val V8_TEST_DB = "operational-reliability-v8-migration-test"
         private const val REAL_COPY_DB = "operational-reliability-phase10-copy-test"
         private const val PHASE10_DB_ENV = "BJSTOCK_PHASE10_DB"
     }

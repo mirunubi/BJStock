@@ -20,7 +20,7 @@ Target: 90-day hot retention plus 400-day daily aggregates (`docs/150_OPERATIONA
 
 ## Operation correlation
 
-Room v8 adds nullable `operation_id` (soft reference to `forward_operations.id`). Existing rows stay NULL. Not yet populated at runtime.
+Room v8 adds nullable `operation_id` (soft reference to `forward_operations.id`). Existing rows stay NULL. Since Phase 11 / Gate 5, rows recorded inside a Forward Test operation carry its id; rows recorded elsewhere stay NULL (`docs/150` 20.4.7).
 
 ## Secrets
 

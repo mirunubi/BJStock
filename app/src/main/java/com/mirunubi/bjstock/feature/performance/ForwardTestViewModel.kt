@@ -20,10 +20,13 @@ import com.mirunubi.bjstock.core.database.dao.StrategyRunInstrumentDao
 import com.mirunubi.bjstock.core.database.entity.ForwardTestCycleEntity
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyRunEntity
+import com.mirunubi.bjstock.core.error.AppErrorMapper
+import com.mirunubi.bjstock.core.forward.ForwardOperationOutcome
 import com.mirunubi.bjstock.core.forward.ForwardOrchestratorResult
 import com.mirunubi.bjstock.core.forward.ForwardTestClock
-import com.mirunubi.bjstock.core.forward.ForwardTestOrchestrator
+import com.mirunubi.bjstock.core.forward.ForwardTestExecutionCoordinator
 import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
+import com.mirunubi.bjstock.core.forward.RetryFailedCycleTarget
 import com.mirunubi.bjstock.core.model.ForwardCycleStatus
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.core.strategy.ActiveStrategyVersion
@@ -37,6 +40,7 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -107,7 +111,7 @@ data class ForwardTestUiState(
 class ForwardTestViewModel @Inject constructor(
     private val analytics: PerformanceAnalyticsService,
     private val repository: PerformanceAnalyticsRepository,
-    private val orchestrator: ForwardTestOrchestrator,
+    private val coordinator: ForwardTestExecutionCoordinator,
     private val scheduler: ForwardTestScheduler,
     private val runService: StrategyRunService,
     private val cycleDao: ForwardTestCycleDao,
@@ -221,11 +225,11 @@ class ForwardTestViewModel @Inject constructor(
     fun runNow() {
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true, message = null) }
-            val result = orchestrator.runForwardTests()
+            val message = runOperation { coordinator.runManualNow() }
             _uiState.update {
                 it.copy(
                     loading = false,
-                    message = formatResult(result),
+                    message = message,
                 )
             }
             _uiState.value.selectedRunId?.let { loadDashboard(it) }
@@ -237,16 +241,27 @@ class ForwardTestViewModel @Inject constructor(
         val runId = _uiState.value.selectedRunId ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true, message = null) }
-            val result = orchestrator.retryFailedCycle(runId)
+            val message = runOperation { coordinator.retryFailedCycle(RetryFailedCycleTarget(runId)) }
             _uiState.update {
                 it.copy(
                     loading = false,
-                    message = formatResult(result),
+                    message = message,
                 )
             }
             loadDashboard(runId)
         }
     }
+
+    /** The coordinator records operation failures itself; only a failure to record reaches this catch. */
+    private suspend fun runOperation(operation: suspend () -> ForwardOperationOutcome): String =
+        try {
+            formatResult(operation().display)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            val error = AppErrorMapper.fromThrowable(failure)
+            listOfNotNull(error.safeMessage, error.diagnostics.exceptionType?.let { "($it)" }).joinToString(" ")
+        }
 
     fun setInstrumentSearch(query: String) {
         _uiState.update { it.copy(instrumentSearch = query) }

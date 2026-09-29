@@ -14,6 +14,7 @@ import com.mirunubi.bjstock.core.error.SafeAppError
 import com.mirunubi.bjstock.core.error.SafeLogText
 import com.mirunubi.bjstock.core.model.ApiErrorProvider
 import com.mirunubi.bjstock.core.model.ApiErrorType
+import com.mirunubi.bjstock.core.model.ForwardOperationKind
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import com.mirunubi.bjstock.core.model.OperationalEventType
@@ -24,6 +25,7 @@ import com.mirunubi.bjstock.core.model.TradeAuditEventType
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -62,8 +64,9 @@ class ForwardOperationLogServiceTest {
 
         assertTrue(result is StartOperationResult.Started)
         val op = service.findOperation(result.operationId)!!
-        assertEquals("worker:w-1:0", op.operationKey)
+        assertEquals("worker:w-1:2026-09-29:0", op.operationKey)
         assertEquals(ForwardOperationTrigger.WORKER, op.trigger)
+        assertEquals(ForwardOperationKind.FORWARD_RUN, op.operationKind)
         assertEquals("w-1", op.workId)
         assertEquals(0, op.workAttempt)
         assertEquals(throughDate, op.throughDate)
@@ -125,7 +128,20 @@ class ForwardOperationLogServiceTest {
         assertThrows(IllegalArgumentException::class.java) {
             runBlocking {
                 service.startOperation(
-                    StartOperationRequest("worker:w-2:0", ForwardOperationTrigger.WORKER, throughDate),
+                    StartOperationRequest("worker:w-2:2026-09-29:0", ForwardOperationTrigger.WORKER, throughDate),
+                )
+            }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                service.startOperation(
+                    StartOperationRequest(
+                        operationKey = "worker:w-2:2026-09-28:0",
+                        trigger = ForwardOperationTrigger.WORKER,
+                        throughDate = throughDate,
+                        workId = "w-2",
+                        workAttempt = 0,
+                    ),
                 )
             }
         }
@@ -150,6 +166,43 @@ class ForwardOperationLogServiceTest {
             }
         }
         runBlocking { assertEquals(0, database.forwardOperationDao().countAll()) }
+    }
+
+    @Test
+    fun operationKind_isPersistedAndValidatedAgainstTriggerAndKey() = runBlocking {
+        val retry = service.startOperation(
+            StartOperationRequest(
+                operationKey = ForwardOperationKeys.manualRetry("req-r"),
+                trigger = ForwardOperationTrigger.MANUAL,
+                throughDate = throughDate,
+                kind = ForwardOperationKind.RETRY_FAILED_CYCLE,
+            ),
+        )
+        val op = service.findOperation(retry.operationId)!!
+        assertEquals("manual-retry:req-r", op.operationKey)
+        assertEquals(ForwardOperationTrigger.MANUAL, op.trigger)
+        assertEquals(ForwardOperationKind.RETRY_FAILED_CYCLE, op.operationKind)
+        assertEquals(
+            ForwardOperationKind.FORWARD_RUN,
+            service.findOperation(service.startOperation(manualRequest("req-f")).operationId)!!.operationKind,
+        )
+
+        val rejected = listOf(
+            StartOperationRequest("manual:req-a", ForwardOperationTrigger.MANUAL, throughDate, kind = ForwardOperationKind.RETRY_FAILED_CYCLE),
+            StartOperationRequest("manual-retry:req-b", ForwardOperationTrigger.MANUAL, throughDate),
+            StartOperationRequest(
+                operationKey = ForwardOperationKeys.worker("w-9", throughDate, 1),
+                trigger = ForwardOperationTrigger.WORKER,
+                throughDate = throughDate,
+                workId = "w-9",
+                workAttempt = 1,
+                kind = ForwardOperationKind.RETRY_FAILED_CYCLE,
+            ),
+        )
+        rejected.forEach { request ->
+            assertThrows(IllegalArgumentException::class.java) { runBlocking { service.startOperation(request) } }
+        }
+        assertEquals(2, database.forwardOperationDao().countAll())
     }
 
     @Test
@@ -429,8 +482,36 @@ class ForwardOperationLogServiceTest {
         assertEquals(5L, database.tradeAuditLogDao().findByEventKey("order:1:created")!!.operationId)
     }
 
+    @Test
+    fun auditAndApiRows_insideOperationContext_carryOperationId_andReplayKeepsOriginal() = runBlocking {
+        val runId = insertRun()
+        val opId = service.startOperation(manualRequest("req-ctx")).operationId
+        val audit = TradeAuditLogService(database.tradeAuditLogDao()) { now }
+        val api = ApiErrorLogService(database.apiErrorLogDao()) { now }
+
+        val apiId = withContext(ForwardOperationContext(opId)) {
+            audit.append(
+                strategyRunId = runId,
+                eventType = TradeAuditEventType.EVALUATION_DECIDED,
+                eventKey = "evaluation:9:decision",
+            )
+            api.record(ApiErrorProvider.KIS, "KIS_DAILY_PRICE", ApiErrorType.HTTP_ERROR, "server error")
+        }
+        withContext(ForwardOperationContext(opId + 1)) {
+            audit.append(
+                strategyRunId = runId,
+                eventType = TradeAuditEventType.EVALUATION_DECIDED,
+                eventKey = "evaluation:9:decision",
+            )
+        }
+
+        assertEquals(opId, database.tradeAuditLogDao().findByEventKey("evaluation:9:decision")!!.operationId)
+        assertEquals(opId, database.apiErrorLogDao().findSince(Instant.EPOCH).single { it.id == apiId }.operationId)
+        assertEquals(1, database.tradeAuditLogDao().findByRun(runId).size)
+    }
+
     private fun workerRequest(workId: String, attempt: Int) = StartOperationRequest(
-        operationKey = ForwardOperationKeys.worker(workId, attempt),
+        operationKey = ForwardOperationKeys.worker(workId, throughDate, attempt),
         trigger = ForwardOperationTrigger.WORKER,
         throughDate = throughDate,
         workId = workId,

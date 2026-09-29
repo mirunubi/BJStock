@@ -67,8 +67,8 @@ On `run.end_date = D`:
 - Network: `CONNECTED`
 - Auto default: **OFF**
 - No `SCHEDULE_EXACT_ALARM` / AlarmManager
-- Worker only wakes up and delegates to `ForwardTestOrchestrator`
-- Manual **Run Now** uses the same orchestrator
+- Worker only wakes up and delegates to `ForwardTestExecutionCoordinator`, which calls `ForwardTestOrchestrator`
+- Manual **Run Now** and **Retry Failed Cycle** use the same coordinator and orchestrator; one operation runs at a time (single-flight, `docs/150` 20.4)
 
 ## Operational Cutoff
 

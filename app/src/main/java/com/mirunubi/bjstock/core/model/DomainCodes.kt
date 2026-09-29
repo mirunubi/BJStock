@@ -151,6 +151,11 @@ enum class ForwardOperationTrigger {
     WORKER,
 }
 
+enum class ForwardOperationKind {
+    FORWARD_RUN,
+    RETRY_FAILED_CYCLE,
+}
+
 enum class ForwardOperationStatus {
     RUNNING,
     SUCCEEDED,
@@ -158,6 +163,38 @@ enum class ForwardOperationStatus {
     PARTIAL,
     BLOCKED,
     FAILED,
+}
+
+/** `operational_events.result` for RUN_RESULT. */
+enum class ForwardRunResult {
+    PROCESSED,
+    SKIPPED,
+    BLOCKED,
+    FAILED,
+    NO_OP,
+}
+
+/**
+ * Durable reason tokens for operation / run outcomes that have no [com.mirunubi.bjstock.core.error.AppErrorCode].
+ * Failures with a canonical error code persist that code instead.
+ */
+enum class ForwardOutcomeReason {
+    PROCESSED,
+    NO_ELIGIBLE_RUNS,
+    THROUGH_DATE_BEFORE_START,
+    EMPTY_UNIVERSE,
+    MISSING_POLICY,
+    AUTH_REQUIRED,
+    PREVIOUS_FAILED_CYCLE,
+    WAITING_FOR_MARKET_DATA,
+    INVALID_RUN_STATE,
+    RUN_NOT_FOUND,
+    PRIOR_RUN_BLOCKED,
+    ALREADY_RUNNING,
+    CANCELLED,
+    TARGET_CYCLE_NOT_FOUND,
+    TARGET_CYCLE_NOT_FAILED,
+    TARGET_CYCLE_RUN_MISMATCH,
 }
 
 enum class OperationalEventType {

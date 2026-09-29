@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.ForwardOperationContext
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.entity.ApiErrorLogEntity
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
@@ -29,6 +30,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -225,11 +227,24 @@ class KisForwardGatewayApiErrorLoggingTest {
     }
 
     @Test
+    fun operationContext_isStampedOnRepositoryAndGatewayRows() = runBlocking {
+        seedLatestBar()
+        enqueue(503, "<html>unavailable</html>")
+        withContext(ForwardOperationContext(OPERATION_ID)) { sync() }
+        enqueue(200, dailyJson(THROUGH, close = "N/A"))
+        withContext(ForwardOperationContext(OPERATION_ID)) { sync() }
+
+        val all = rows()
+        assertEquals(listOf("KIS_DAILY_PRICE", "KIS_FORWARD_SYNC"), all.map { it.operation }.sorted())
+        assertTrue(all.all { it.operationId == OPERATION_ID })
+    }
+
+    @Test
     fun successfulSync_unchanged_noRows() = runBlocking {
         seedLatestBar()
         enqueue(200, dailyJson(THROUGH, close = "70500"))
         val outcome = sync()
-        assertEquals(MarketSyncOutcome(success = true), outcome)
+        assertEquals(MarketSyncOutcome(success = true, requestedStart = THROUGH, insertedCount = 1), outcome)
         assertEquals(THROUGH, localRepository.findLatest(instrumentId)?.tradeDate)
         assertEquals(70_500L, localRepository.findLatest(instrumentId)?.closePrice)
         assertTrue(rows().isEmpty())
@@ -380,6 +395,7 @@ class KisForwardGatewayApiErrorLoggingTest {
 
     private companion object {
         const val TOKEN_CLOCK = 1_700_000_000_000L
+        const val OPERATION_ID = 42L
         val NOW: Instant = Instant.parse("2026-09-18T06:00:00Z")
         val TODAY: LocalDate = LocalDate.of(2026, 9, 18)
         val THROUGH: LocalDate = TODAY

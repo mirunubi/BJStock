@@ -13,7 +13,11 @@ object SafeLogText {
 
     private val CODE = Regex("^[A-Z][A-Z0-9_]{0,63}$")
     private val EVENT_KEY = Regex("^[a-z]+(:[A-Za-z0-9_-]{1,64}){1,8}$")
-    private val OPERATION_KEY = Regex("^(worker|manual):[A-Za-z0-9-]{1,64}(:[0-9]{1,6})?$")
+    private val OPERATION_KEY = Regex(
+        "^(worker:[A-Za-z0-9-]{1,64}:[0-9]{4}-[0-9]{2}-[0-9]{2}:[0-9]{1,6}" +
+            "|manual:[A-Za-z0-9-]{1,64}" +
+            "|manual-retry:[A-Za-z0-9-]{1,64})$",
+    )
     private val BUSINESS_CODE = Regex("^[A-Za-z0-9_-]{1,32}$")
     private val EXCEPTION_TYPE = Regex("^[A-Za-z_$][A-Za-z0-9_$]{0,79}$")
 

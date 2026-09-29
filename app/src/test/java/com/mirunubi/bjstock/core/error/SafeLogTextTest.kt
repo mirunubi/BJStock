@@ -70,7 +70,10 @@ class SafeLogTextTest {
         assertThrows(IllegalArgumentException::class.java) { SafeLogText.code("Bearer abc") }
         assertEquals("op:1:run:3:result", SafeLogText.eventKey("op:1:run:3:result"))
         assertThrows(IllegalArgumentException::class.java) { SafeLogText.eventKey("op:1:token=abc") }
-        assertEquals("worker:2b1f-9c:0", SafeLogText.operationKey("worker:2b1f-9c:0"))
+        assertEquals("worker:2b1f-9c:2026-09-30:0", SafeLogText.operationKey("worker:2b1f-9c:2026-09-30:0"))
+        assertEquals("manual:req-1", SafeLogText.operationKey("manual:req-1"))
+        assertEquals("manual-retry:req-1", SafeLogText.operationKey("manual-retry:req-1"))
+        assertThrows(IllegalArgumentException::class.java) { SafeLogText.operationKey("worker:2b1f-9c:0") }
         assertThrows(IllegalArgumentException::class.java) { SafeLogText.operationKey("cron:1") }
     }
 }

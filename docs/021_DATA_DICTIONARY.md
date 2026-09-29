@@ -869,11 +869,11 @@ Append-only human-readable trade timeline. Unique `event_key`. Never auto-delete
 
 KIS diagnostics errors. Rolling 7-day retention. Never store secrets.
 
-Phase 11: nullable `operation_id` (soft reference to `forward_operations.id`) on both `trade_audit_logs` and `api_error_logs`. NULL for existing rows.
+Phase 11: nullable `operation_id` (soft reference to `forward_operations.id`) on both `trade_audit_logs` and `api_error_logs`. NULL for existing rows and for rows written outside a Forward Test operation; set for rows written inside one (Gate 5).
 
 ## forward_operations
 
-One row per Forward Test invocation (`MANUAL` / `WORKER`). Unique `operation_key`. Status `RUNNING` → one of `SUCCEEDED`, `NO_OP`, `PARTIAL`, `BLOCKED`, `FAILED`; terminal rows are immutable. Operational evidence, not financial source of truth.
+One row per Forward Test invocation. `trigger` (`MANUAL` / `WORKER`) records who started it; `operation_kind` (`FORWARD_RUN` / `RETRY_FAILED_CYCLE`, Room v9, default `FORWARD_RUN`) records what it does. Unique `operation_key`: `manual:<request_id>`, `manual-retry:<request_id>`, or interim `worker:<work_id>:<through_date>:<attempt>`. Status `RUNNING` → one of `SUCCEEDED`, `NO_OP`, `PARTIAL`, `BLOCKED`, `FAILED`; terminal rows are immutable. An overlapping invocation is stored `BLOCKED` / `ALREADY_RUNNING`. Operational evidence, not financial source of truth.
 
 ## operational_events
 

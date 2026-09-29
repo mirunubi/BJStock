@@ -37,8 +37,9 @@ class KisForwardMarketDataGateway(
         instrumentIds: List<Long>,
         throughDate: LocalDate,
     ): MarketSyncOutcome {
+        var totals = MarketSyncOutcome(success = true)
         for (instrumentId in instrumentIds.sorted()) {
-            try {
+            val result = try {
                 val latest = localRepository.findLatest(instrumentId)
                 if (latest == null) {
                     val start = throughDate.minusDays(ForwardTestConfig.HISTORY_PREPARE_CALENDAR_DAYS)
@@ -47,15 +48,28 @@ class KisForwardMarketDataGateway(
                     syncFromLatest(instrumentId, throughDate)
                 }
             } catch (ex: HistoricalSyncException) {
-                return historicalSyncFailure(ex, OPERATION_HISTORICAL_SYNC)
+                return historicalSyncFailure(ex, OPERATION_HISTORICAL_SYNC).withCountsOf(totals)
             } catch (ex: KisMarketException) {
-                return marketFailure(ex)
+                return marketFailure(ex).withCountsOf(totals)
             } catch (ex: Exception) {
-                return unrecognisedFailure(ex, OPERATION_FORWARD_SYNC)
+                return unrecognisedFailure(ex, OPERATION_FORWARD_SYNC).withCountsOf(totals)
             }
+            totals = totals.copy(
+                requestedStart = listOfNotNull(totals.requestedStart, result.requestedStart).min(),
+                insertedCount = totals.insertedCount + result.insertedCount,
+                updatedCount = totals.updatedCount + result.updatedCount,
+                unchangedCount = totals.unchangedCount + result.unchangedCount,
+            )
         }
-        return MarketSyncOutcome(success = true)
+        return totals
     }
+
+    private fun MarketSyncOutcome.withCountsOf(totals: MarketSyncOutcome) = copy(
+        requestedStart = totals.requestedStart,
+        insertedCount = totals.insertedCount,
+        updatedCount = totals.updatedCount,
+        unchangedCount = totals.unchangedCount,
+    )
 
     suspend fun prepareHistory(
         instrumentIds: List<Long>,

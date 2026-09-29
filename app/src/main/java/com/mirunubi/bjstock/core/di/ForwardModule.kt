@@ -2,6 +2,8 @@ package com.mirunubi.bjstock.core.di
 
 import android.content.Context
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.ForwardOperationLogService
+import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.dao.FactorDao
 import com.mirunubi.bjstock.core.database.dao.ForwardTestCycleDao
 import com.mirunubi.bjstock.core.database.dao.MarketDailyBarDao
@@ -14,6 +16,7 @@ import com.mirunubi.bjstock.core.database.dao.StrategyRunInstrumentDao
 import com.mirunubi.bjstock.core.factor.FactorCalculationService
 import com.mirunubi.bjstock.core.forward.ForwardMarketDataGateway
 import com.mirunubi.bjstock.core.forward.ForwardTestClock
+import com.mirunubi.bjstock.core.forward.ForwardTestExecutionCoordinator
 import com.mirunubi.bjstock.core.forward.ForwardTestOrchestrator
 import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
 import com.mirunubi.bjstock.core.forward.ForwardTestSchedulerSettings
@@ -119,5 +122,23 @@ object ForwardModule {
         marketData = marketData,
         clock = clock,
         apiErrorLog = apiErrorLog,
+    )
+
+    @Provides
+    @Singleton
+    fun provideForwardOperationLogService(database: BJStockDatabase): ForwardOperationLogService =
+        ForwardOperationLogService(database)
+
+    /** Singleton: its single-flight guard is app-scoped and shared by Run Now, Worker, and Retry. */
+    @Provides
+    @Singleton
+    fun provideForwardTestExecutionCoordinator(
+        orchestrator: ForwardTestOrchestrator,
+        operationLog: ForwardOperationLogService,
+        clock: ForwardTestClock,
+    ): ForwardTestExecutionCoordinator = ForwardTestExecutionCoordinator(
+        executor = orchestrator,
+        operationLog = operationLog,
+        clock = clock,
     )
 }

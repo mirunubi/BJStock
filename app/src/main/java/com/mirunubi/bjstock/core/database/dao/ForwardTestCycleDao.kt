@@ -26,6 +26,9 @@ interface ForwardTestCycleDao {
     )
     suspend fun find(strategyRunId: Long, marketDate: LocalDate): ForwardTestCycleEntity?
 
+    @Query("SELECT * FROM forward_test_cycles WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): ForwardTestCycleEntity?
+
     @Query(
         """
         SELECT * FROM forward_test_cycles

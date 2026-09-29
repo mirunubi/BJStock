@@ -4,12 +4,16 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.mirunubi.bjstock.core.model.ForwardOperationKind
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import java.time.Instant
 import java.time.LocalDate
 
-/** One row per Forward Test invocation (MANUAL / WORKER). Terminal rows are immutable. */
+/**
+ * One row per Forward Test invocation. [trigger] says who started it (MANUAL / WORKER);
+ * [operationKind] says what it does. Terminal rows are immutable.
+ */
 @Entity(
     tableName = "forward_operations",
     indices = [
@@ -24,6 +28,8 @@ data class ForwardOperationEntity(
     @ColumnInfo(name = "operation_key")
     val operationKey: String,
     val trigger: ForwardOperationTrigger,
+    @ColumnInfo(name = "operation_kind", defaultValue = "'FORWARD_RUN'")
+    val operationKind: ForwardOperationKind = ForwardOperationKind.FORWARD_RUN,
     @ColumnInfo(name = "work_id")
     val workId: String? = null,
     @ColumnInfo(name = "work_attempt")

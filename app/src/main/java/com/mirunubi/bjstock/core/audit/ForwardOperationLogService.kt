@@ -6,6 +6,7 @@ import com.mirunubi.bjstock.core.database.entity.ForwardOperationEntity
 import com.mirunubi.bjstock.core.database.entity.OperationalEventEntity
 import com.mirunubi.bjstock.core.error.SafeAppError
 import com.mirunubi.bjstock.core.error.SafeLogText
+import com.mirunubi.bjstock.core.model.ForwardOperationKind
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import com.mirunubi.bjstock.core.model.OperationalEventType
@@ -35,6 +36,7 @@ class ForwardOperationLogService(
                 ForwardOperationEntity(
                     operationKey = key,
                     trigger = request.trigger,
+                    operationKind = request.kind,
                     workId = request.workId,
                     workAttempt = request.workAttempt,
                     throughDate = request.throughDate,
@@ -167,13 +169,21 @@ class ForwardOperationLogService(
                     "WORKER operations require work_id and work_attempt"
                 }
                 require(request.workAttempt >= 0) { "work_attempt must be non-negative" }
-                require(request.operationKey.startsWith("worker:")) { "WORKER key must start with worker:" }
+                require(request.kind == ForwardOperationKind.FORWARD_RUN) { "WORKER operations are FORWARD_RUN" }
+                require(
+                    request.operationKey ==
+                        ForwardOperationKeys.worker(request.workId, request.throughDate, request.workAttempt),
+                ) { "WORKER key must be worker:<work_id>:<through_date>:<attempt>" }
             }
             ForwardOperationTrigger.MANUAL -> {
                 require(request.workId == null && request.workAttempt == null) {
                     "MANUAL operations must not carry work_id / work_attempt"
                 }
-                require(request.operationKey.startsWith("manual:")) { "MANUAL key must start with manual:" }
+                val prefix = when (request.kind) {
+                    ForwardOperationKind.FORWARD_RUN -> "manual:"
+                    ForwardOperationKind.RETRY_FAILED_CYCLE -> "manual-retry:"
+                }
+                require(request.operationKey.startsWith(prefix)) { "MANUAL ${request.kind} key must start with $prefix" }
             }
         }
     }
@@ -192,6 +202,7 @@ data class StartOperationRequest(
     val throughDate: LocalDate,
     val workId: String? = null,
     val workAttempt: Int? = null,
+    val kind: ForwardOperationKind = ForwardOperationKind.FORWARD_RUN,
 )
 
 data class OperationCounts(
@@ -252,9 +263,16 @@ sealed class AppendEventResult {
 }
 
 object ForwardOperationKeys {
-    fun worker(workId: String, workAttempt: Int): String = "worker:$workId:$workAttempt"
+    /**
+     * Interim key for the current PeriodicWorkRequest: WorkManager reuses the work id every period
+     * and resets the run attempt to 0 after each period, so the through-date separates periods.
+     */
+    fun worker(workId: String, throughDate: LocalDate, workAttempt: Int): String =
+        "worker:$workId:$throughDate:$workAttempt"
 
     fun manual(requestId: String): String = "manual:$requestId"
+
+    fun manualRetry(requestId: String): String = "manual-retry:$requestId"
 }
 
 object OperationalEventKeys {

@@ -582,6 +582,8 @@ Canonical errors use `AppErrorCode` with category, severity, retry policy, user-
 
 Every Forward Test invocation will own one `forward_operations` row with a deterministic unique `operation_key` (`worker:<work_id>:<attempt>` / `manual:<request_id>`).
 
+Superseded in part by D-151: the Worker key is `worker:<work_id>:<through_date>:<attempt>`.
+
 ## D-146
 
 Operational evidence lives in append-only `operational_events`, idempotent by deterministic `event_key`, separate from `trade_audit_logs` (WHY) and `api_error_logs` (WHAT failed externally).
@@ -601,4 +603,20 @@ The retention matrix in `docs/150` is the target lifecycle. Until verified archi
 ## D-150
 
 Phase 11 foundation (Room v8) does not change Auto Forward Test, Run Now, or `ForwardTestWorker` behavior. Wiring happens in later gates.
+
+## D-151
+
+Phase 11 / Gate 5: the Worker operation key is the interim `worker:<work_id>:<through_date>:<attempt>`, because a `PeriodicWorkRequest` reuses its work id and resets its run attempt every period. Redelivery of the same work id, through-date, and attempt resolves to the same row without re-executing. The future canonical key `worker:<schedule_instance_id>:<attempt>` (e.g. `auto:2026-10-01:0730:KST`) arrives with the scheduler gate. Manual keys stay `manual:<request_id>`.
+
+## D-152
+
+All state-mutating Forward Test entry points (Run Now, `ForwardTestWorker`, Retry Failed Cycle) execute only through `ForwardTestExecutionCoordinator`, which owns the operation row, the operation-level through-date, the aggregate result, and a process-wide non-waiting single-flight guard. An overlapping invocation is persisted as `BLOCKED` / `ALREADY_RUNNING` and does not execute; the Worker returns retry for it.
+
+## D-153
+
+`forward_operations.operation_kind` (`FORWARD_RUN` / `RETRY_FAILED_CYCLE`, Room v9 / PostgreSQL `0011`) is separate from `trigger` (`MANUAL` / `WORKER`) and never inferred from the key. Existing rows are `FORWARD_RUN`. Retry uses `manual-retry:<request_id>`, is validated against its target cycle before any mutation, and never mutates a missing, non-FAILED, or other-run target.
+
+## D-154
+
+Run isolation is unchanged: a non-retryable block still stops later runs. Every selected run gets exactly one `RUN_RESULT`; later runs are `SKIPPED` / `PRIOR_RUN_BLOCKED`, never `FAILED` / `BLOCKED`. Operation status is `PARTIAL` when a block follows meaningful progress and `BLOCKED` when the first run blocks. The Worker result derives from the aggregate (non-retryable → failure, retryable → retry, otherwise success).
 

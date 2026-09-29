@@ -7,6 +7,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.mirunubi.bjstock.core.analytics.PerformanceAnalyticsRepository
 import com.mirunubi.bjstock.core.analytics.PerformanceAnalyticsService
+import com.mirunubi.bjstock.core.audit.ForwardOperationLogService
 import com.mirunubi.bjstock.core.audit.TradeAuditLogService
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
@@ -19,6 +20,7 @@ import com.mirunubi.bjstock.core.factor.SystemFactorRegistryFactory
 import com.mirunubi.bjstock.core.forward.ForwardMarketDataGateway
 import com.mirunubi.bjstock.core.forward.ForwardTestClock
 import com.mirunubi.bjstock.core.forward.ForwardTestConfig
+import com.mirunubi.bjstock.core.forward.ForwardTestExecutionCoordinator
 import com.mirunubi.bjstock.core.forward.ForwardTestOrchestrator
 import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
 import com.mirunubi.bjstock.core.forward.ForwardTestSchedulerSettings
@@ -326,7 +328,11 @@ class ForwardTestViewModelMarkReadyTest {
         return ForwardTestViewModel(
             analytics = PerformanceAnalyticsService(repository),
             repository = repository,
-            orchestrator = orchestrator,
+            coordinator = ForwardTestExecutionCoordinator(
+                executor = orchestrator,
+                operationLog = ForwardOperationLogService(database) { Instant.EPOCH },
+                clock = clock,
+            ),
             scheduler = ForwardTestScheduler(context, ForwardTestSchedulerSettings(context)),
             runService = runService,
             cycleDao = database.forwardTestCycleDao(),

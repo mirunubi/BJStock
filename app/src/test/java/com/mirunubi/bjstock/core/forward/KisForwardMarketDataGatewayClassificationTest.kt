@@ -237,11 +237,13 @@ class KisForwardMarketDataGatewayClassificationTest {
     fun successfulForwardSync_isUnchanged() = runBlocking {
         marketRepository.bars = listOf(bar(THROUGH))
         val first = sync()
-        assertEquals(MarketSyncOutcome(success = true), first)
+        assertTrue(first.success)
+        assertEquals(null, first.errorCode)
+        assertEquals(1, first.insertedCount)
         assertEquals(THROUGH, localRepository.findLatest(instrumentId)?.tradeDate)
 
         val second = sync()
-        assertEquals(MarketSyncOutcome(success = true), second)
+        assertEquals(MarketSyncOutcome(success = true, requestedStart = THROUGH), second)
         assertTrue(apiErrors().isEmpty())
     }
 

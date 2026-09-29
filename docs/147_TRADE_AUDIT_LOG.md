@@ -31,7 +31,7 @@ Target lifecycle (400-day hot, verified monthly archive, 5-year retention) is de
 
 ## Operation correlation
 
-Room v8 adds nullable `operation_id` (soft reference to `forward_operations.id`). Existing rows stay NULL. Not yet populated at runtime.
+Room v8 adds nullable `operation_id` (soft reference to `forward_operations.id`). Existing rows stay NULL. Since Phase 11 / Gate 5, rows appended inside a Forward Test operation carry its id; an idempotent replay returns the existing row unchanged (`docs/150` 20.4.7).
 
 ## ORDER_SKIPPED
 

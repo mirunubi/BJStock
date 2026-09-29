@@ -449,4 +449,13 @@ object BJStockMigrations {
             )
         }
     }
+
+    /** Phase 11 / Gate 5: explicit operation kind. Existing rows become FORWARD_RUN. */
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE `forward_operations` ADD COLUMN `operation_kind` TEXT NOT NULL DEFAULT 'FORWARD_RUN'",
+            )
+        }
+    }
 }

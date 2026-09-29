@@ -1,6 +1,7 @@
 package com.mirunubi.bjstock.core.database
 
 import com.mirunubi.bjstock.core.model.ApiErrorType
+import com.mirunubi.bjstock.core.model.ForwardOperationKind
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Verifies PostgreSQL migrations 0009 / 0010 keep parity with Room v8.
+ * Verifies PostgreSQL migrations 0009 / 0010 / 0011 keep parity with Room v8 / v9.
  * Runtime application of the file is done via scripts/db-migrate.ps1.
  */
 class OperationalReliabilityPostgresMigrationTest {
@@ -52,6 +53,27 @@ class OperationalReliabilityPostgresMigrationTest {
         }
     }
 
+    @Test
+    fun migration0011_operationKindMatchesRoomAndKotlinEnumExactly() {
+        val sql = resolveMigration(MIGRATION_0011).readText().replace("\r\n", "\n")
+        assertTrue(
+            sql.contains(
+                "ALTER TABLE bjstock.forward_operations\n    ADD COLUMN operation_kind TEXT NOT NULL DEFAULT 'FORWARD_RUN';",
+            ),
+        )
+        assertTrue(sql.contains("ADD CONSTRAINT ck_forward_operations_operation_kind CHECK (operation_kind IN ("))
+        val allowed = Regex("'([A-Z_]+)'").findAll(sql.substringAfter("ADD CONSTRAINT").substringBefore("));"))
+            .map { it.groupValues[1] }
+            .toList()
+        assertEquals(ForwardOperationKind.entries.map { it.name }, allowed)
+        assertTrue(
+            BJStockMigrations.MIGRATION_8_9.startVersion == 8 && BJStockMigrations.MIGRATION_8_9.endVersion == 9,
+        )
+        listOf("DROP ", "ALTER COLUMN", "UPDATE ", "DELETE ", "CREATE ", "TRUNCATE").forEach {
+            assertFalse("0011 must be additive: $it", sql.contains(it))
+        }
+    }
+
     private fun resolveMigration(
         relative: String = "db/migrations/0009_operational_reliability_foundation.sql",
     ): File {
@@ -62,5 +84,6 @@ class OperationalReliabilityPostgresMigrationTest {
 
     private companion object {
         const val MIGRATION_0010 = "db/migrations/0010_api_error_type_taxonomy.sql"
+        const val MIGRATION_0011 = "db/migrations/0011_forward_operation_kind.sql"
     }
 }

@@ -10,12 +10,13 @@ This standard is written to be **portable later to CatchMenu and other projects*
 | --- | --- |
 | Standard (this document) | Canonical from Phase 11 |
 | Canonical error model (`core/error`) | Implemented — foundation |
-| `forward_operations` / `operational_events` schema | Implemented — Room v8 / PostgreSQL `0009` |
-| `operation_id` on `trade_audit_logs` / `api_error_logs` | Implemented — nullable, not yet populated |
-| `ForwardOperationLogService` | Implemented — not yet wired into Worker / Orchestrator / Run Now |
-| Scheduler rework, runtime instrumentation, audit atomicity, retention/archive, Operations UI | **Not implemented** — later Phase 11 gates |
+| `forward_operations` / `operational_events` schema | Implemented — Room v8 / PostgreSQL `0009`; `operation_kind` Room v9 / `0011` |
+| `operation_id` on `trade_audit_logs` / `api_error_logs` | Implemented — populated for rows written inside an operation (Gate 5) |
+| `ForwardOperationLogService` | Implemented — wired through `ForwardTestExecutionCoordinator` for Run Now, Worker, Retry Failed Cycle (Gate 5, 20.4) |
+| Single-flight between Forward Test entry points | Implemented — Gate 5 (20.4) |
+| Scheduler rework, audit atomicity, retention/archive, Operations UI | **Not implemented** — later Phase 11 gates |
 
-Until a later gate wires the foundation, runtime behavior (Auto Forward Test, Run Now, `ForwardTestWorker`, 7-day API error cleanup, permanent trade audit) is unchanged.
+Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gate 5.
 
 ---
 
@@ -247,7 +248,17 @@ Rules:
 
 Every Forward Test invocation gets one durable `forward_operations` row.
 
-`trigger`: `MANUAL` | `WORKER`
+`trigger` (who started it): `MANUAL` | `WORKER`
+
+`operation_kind` (what it does): `FORWARD_RUN` | `RETRY_FAILED_CYCLE`
+
+Trigger and kind are independent columns. The kind is never inferred from the key.
+
+| Entry point | `trigger` | `operation_kind` | `operation_key` |
+| --- | --- | --- | --- |
+| Run Now | `MANUAL` | `FORWARD_RUN` | `manual:<request_id>` |
+| `ForwardTestWorker` | `WORKER` | `FORWARD_RUN` | `worker:<work_id>:<through_date>:<attempt>` (interim, 20.4.3) |
+| Retry Failed Cycle | `MANUAL` | `RETRY_FAILED_CYCLE` | `manual-retry:<request_id>` |
 
 Correlation chain:
 
@@ -271,8 +282,9 @@ Links:
 | Field | Type (Room) | Notes |
 | --- | --- | --- |
 | `id` | INTEGER PK | autoincrement |
-| `operation_key` | TEXT NOT NULL UNIQUE | deterministic: `worker:<work_id>:<attempt>` or `manual:<request_id>` |
+| `operation_key` | TEXT NOT NULL UNIQUE | deterministic: `worker:<work_id>:<through_date>:<attempt>`, `manual:<request_id>`, or `manual-retry:<request_id>` |
 | `trigger` | TEXT NOT NULL | `MANUAL` / `WORKER` |
+| `operation_kind` | TEXT NOT NULL DEFAULT `'FORWARD_RUN'` | `FORWARD_RUN` / `RETRY_FAILED_CYCLE`; rows created before Room v9 / `0011` are `FORWARD_RUN` |
 | `work_id` | TEXT nullable | WorkManager request id; required for WORKER, null for MANUAL |
 | `work_attempt` | INTEGER nullable | WorkManager run attempt; required for WORKER, null for MANUAL |
 | `through_date` | INTEGER NOT NULL | epoch day; operation-level nominal market through-date |
@@ -308,11 +320,13 @@ Minimum taxonomy (`OperationalEventType`):
 | --- | --- | --- |
 | `OPERATION_STARTED` | `startOperation` (same transaction) | `op:<operation_id>:started` |
 | `OPERATION_FINISHED` | `finishOperation` (same transaction) | `op:<operation_id>:finished` |
-| `MARKET_SYNC_RESULT` | orchestrator, per run | `op:<operation_id>:run:<run_id>:sync` |
-| `RUN_RESULT` | orchestrator, per run | `op:<operation_id>:run:<run_id>:result` |
-| `CYCLE_STARTED` | orchestrator, per cycle attempt | `op:<operation_id>:cycle:<cycle_id>:attempt:<n>:started` |
-| `CYCLE_FINISHED` | orchestrator, per cycle attempt | `op:<operation_id>:cycle:<cycle_id>:attempt:<n>:finished` |
-| `WORKER_SCHEDULE_CHANGED` | scheduler | `schedule:<action>:<epoch_millis>` |
+| `MARKET_SYNC_RESULT` | coordinator, per attempted run sync | `op:<operation_id>:run:<run_id>:sync` |
+| `RUN_RESULT` | coordinator, per selected run | `op:<operation_id>:run:<run_id>:result` |
+| `CYCLE_STARTED` | coordinator, per cycle attempt | `op:<operation_id>:cycle:<cycle_id>:attempt:<n>:started` |
+| `CYCLE_FINISHED` | coordinator, per cycle attempt | `op:<operation_id>:cycle:<cycle_id>:attempt:<n>:finished` |
+| `WORKER_SCHEDULE_CHANGED` | scheduler (not yet emitted; scheduler gate) | `schedule:<action>:<epoch_millis>` |
+
+The orchestrator reports through `ForwardExecutionObserver` hooks; the coordinator's recorder persists the events (20.4.4).
 
 No per-factor / per-row spam.
 
@@ -552,11 +566,13 @@ This phase does **not** implement broker trading (D-002, D-036, D-038 remain). T
 | `AppErrorCode` (catalog 4.1) | `core/error/AppErrorCode.kt` |
 | `SafeAppError`, `SafeDiagnostics`, `AppErrorMapper` | `core/error/SafeAppError.kt`, `core/error/AppErrorMapper.kt` |
 | `SafeLogText` (allowlist redaction) | `core/error/SafeLogText.kt` |
-| `ForwardOperationTrigger`, `ForwardOperationStatus`, `OperationalEventType` | `core/model/DomainCodes.kt` |
+| `ForwardOperationTrigger`, `ForwardOperationKind`, `ForwardOperationStatus`, `OperationalEventType`, `ForwardRunResult`, `ForwardOutcomeReason` | `core/model/DomainCodes.kt` |
 | `ForwardOperationEntity` / `OperationalEventEntity` + DAOs | `core/database` |
 | `ForwardOperationLogService` (`startOperation`, `finishOperation`, `appendOperationalEvent`) | `core/audit/ForwardOperationLogService.kt` |
-| Room v8 + `MIGRATION_7_8` | `core/database/BJStockMigrations.kt` |
-| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql`, `0010_api_error_type_taxonomy.sql` |
+| `ForwardOperationContext` (operation id as a coroutine-context element) | `core/audit/ForwardOperationContext.kt` |
+| `ForwardTestExecutionCoordinator` (Gate 5) | `core/forward/ForwardTestExecutionCoordinator.kt` |
+| Room v8 + `MIGRATION_7_8`; Room v9 + `MIGRATION_8_9` (`operation_kind`) | `core/database/BJStockMigrations.kt` |
+| PostgreSQL parity | `db/migrations/0009_operational_reliability_foundation.sql`, `0010_api_error_type_taxonomy.sql`, `0011_forward_operation_kind.sql` |
 | `ApiErrorType` ↔ `AppErrorCode` mapping | `core/audit/KisApiErrorMapper.kt` |
 
 Correlation columns:
@@ -566,26 +582,35 @@ Correlation columns:
 - `operational_events.operation_id` has a real FK (RESTRICT): event detail (90 days hot) is always purged before its operation summary (400 days hot).
 - Existing rows keep `NULL`. Historical rows are never rewritten.
 
-### 20.2 Runtime still unchanged
+### 20.2 Runtime status after Gate 5
 
-- Auto Forward Test still uses the existing periodic WorkManager request.
-- Run Now still calls the orchestrator from the ViewModel.
-- `ForwardTestWorker` result mapping is unchanged.
+Changed (20.4):
+
+- Run Now, `ForwardTestWorker`, and Retry Failed Cycle execute only through `ForwardTestExecutionCoordinator`.
+- Every invocation writes one `forward_operations` row plus lifecycle / run / sync / cycle events.
+- `operation_id` is written on `trade_audit_logs` and `api_error_logs` rows created inside an operation.
+
+Unchanged:
+
+- Auto Forward Test still uses the existing periodic WorkManager request (1 day, `CONNECTED`, `KEEP`); the Auto flag check, 18:00 Asia/Seoul cutoff, and WorkManager retry backoff are untouched.
+- Trading math (fills, sizing, commission / tax, snapshots) is untouched.
 - `api_error_logs` still uses the 7-day rolling cleanup (D-141). The 90-day target applies when the lifecycle gate lands.
 - `trade_audit_logs` is still never deleted (D-138). The 400-day hot / 5-year archive target applies only after verified archiving exists.
-- No code writes `operation_id` yet.
+- Audit writes are still outside the business transaction (section 11).
 
 ### 20.3 Known deviations to close in later gates
 
 | Deviation | Standard section | Target gate |
 | --- | --- | --- |
 | Auto ON can execute immediately (periodic work, no initial delay) | 5, 7 | scheduler + single-flight |
-| No single-flight between Run Now and Worker | 7 | scheduler + single-flight |
-| Orchestrator returns only the last Run's result; a non-retryable block stops later Runs | 5, 6 | instrumentation + isolation |
+| No single-flight between Run Now and Worker | 7 | **RESOLVED** — Phase 11 / Gate 5 (see 20.4.2); also covers Retry Failed Cycle |
+| Orchestrator returns only the last Run's result | 5, 6 | **RESOLVED** — Phase 11 / Gate 5: aggregate outcome across all runs (see 20.4.5) |
+| A non-retryable block stops later Runs | 5, 6 | **Retained by decision** (Gate 5): later runs are recorded `SKIPPED` / `PRIOR_RUN_BLOCKED`; changing isolation needs its own gate |
+| Orphan `RUNNING` operation after process death (no reconciliation; replay of the same key does not re-execute) | 7, 12 | scheduler / reconciliation gate |
 | `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 3, commit `f2abe55` (see 20.3.1) |
 | Gateway collapses KIS `BUSINESS` / `MALFORMED_RESPONSE` / `MAPPING_FAILURE` / local `INVALID_SYMBOL` / `INVALID_DATE_RANGE` into retryable `NETWORK_FAILURE`; `api_error_logs.error_type` misleading (`NETWORK_TIMEOUT` for local and unexpected failures, `KIS_BUSINESS_ERROR` for rate limit and local validation); gateway appends a duplicate row for failures the repository already recorded | 4.3, 6, 9 | **RESOLVED** — Phase 11 / Gate 4 (see 20.3.2) |
 | **OPEN / DEFERRED:** `KisMarketRepositoryImpl` catch-all may classify an unexpected local defect as `MALFORMED_RESPONSE`. The gateway preserves the repository-provided classification. Repository-level refinement needs its own impact analysis | 4.3, 6 | later bounded gate |
-| API error logging wrapped in discarded `runCatching` | 6 | instrumentation + isolation |
+| API error logging / 7-day cleanup wrapped in discarded `runCatching` (still present after Gate 5) | 6 | instrumentation + isolation |
 | `KisAuthException` has no typed kind; token network failure surfaces as auth failure | 4.3 | audit atomicity + retry |
 | Audit written outside business transaction; `ORDER_REJECTED` / `ORDER_CANCELLED` not emitted | 11 | audit atomicity + retry |
 | Executions / cash ledger lack canonical unique event keys | 12 | schema + idempotency |
@@ -630,6 +655,95 @@ Default retry semantics: only `TRANSIENT` codes and `KIS_SERVER_ERROR` retry aut
 
 Duplicate provider/API error logging must not occur merely because multiple architecture layers observe the same exception. `KisMarketRepositoryImpl` records each provider/transport failure attempt once (a rate-limited retry sequence therefore records one row per attempt). The gateway records only failures that originate at or above it: local `INVALID_SYMBOL` / `INVALID_DATE_RANGE`, `MAPPING_FAILURE`, local sync invariants, and unrecognised exceptions.
 
+### 20.4 Runtime operation wiring (Phase 11 / Gate 5)
+
+#### 20.4.1 One coordinator for every state-mutating Forward Test entry point
+
+`ForwardTestExecutionCoordinator` (Hilt singleton) is the only runtime path into `ForwardTestOrchestrator` (through the `ForwardRunExecutor` interface):
+
+| Entry point | Coordinator method | Execution context |
+| --- | --- | --- |
+| Run Now (`ForwardTestViewModel.runNow`) | `runManualNow()` | app-scoped `executionScope`; the ViewModel only awaits, so leaving the screen does not cancel the operation |
+| `ForwardTestWorker.doWork` | `runWorker(workId, runAttemptCount)` | the Worker's own coroutine, so WorkManager stop / cancellation semantics are unchanged |
+| Retry Failed Cycle (`ForwardTestViewModel.retryFailedCycle`) | `retryFailedCycle(RetryFailedCycleTarget)` | app-scoped `executionScope` |
+
+Supported `operation_kind` values: `FORWARD_RUN`, `RETRY_FAILED_CYCLE`. `trigger` records who started the invocation; `operation_kind` records what it does (section 7).
+
+The coordinator owns, per invocation: the trigger and kind, the operation key, operation-level `through_date` capture (`ForwardTestClock.throughDate()`, clamped per run to its end date, which equals the previous per-run clock clamp), `startOperation`, the single-flight guard, the aggregate result, `finishOperation`, and lock release.
+
+Order: create or resolve the operation row → acquire the guard → execute → finish → release.
+
+The Worker keeps its Auto flag check before calling the coordinator. The legacy orchestrator methods (`runForwardTests`, `runSingleStrategyRun`, `retryFailedCycle`) remain for tests and are not called by any runtime entry point.
+
+#### 20.4.2 Single-flight
+
+- Mechanism: one process-wide `kotlinx.coroutines.sync.Mutex` in the singleton coordinator, acquired with `tryLock()` (never waits) and released in `finally`.
+- Manual/manual, manual/worker, worker/worker, and every combination with Retry Failed Cycle are blocked the same way.
+- An overlapping invocation still gets its own durable row: `status = BLOCKED`, `final_code = ALREADY_RUNNING`, `safe_message = "Another Forward Test operation is already running"`, with `OPERATION_STARTED` / `OPERATION_FINISHED` and no execution. A blocked retry never touches its target cycle. The Worker returns `Result.retry()` for `ALREADY_RUNNING` (WorkManager backoff unchanged).
+- Cancellation: `CancellationException` is rethrown; before rethrowing, the operation is finished `FAILED` / `CANCELLED` under `NonCancellable`, and the lock is released.
+- Scope: process-local. Cross-process execution is not possible for this app (single process).
+
+#### 20.4.3 Operation key semantics
+
+| Key | Semantics |
+| --- | --- |
+| `manual:<request_id>` | Run Now; `request_id` is a fresh UUID per tap, so each tap is its own operation |
+| `manual-retry:<request_id>` | Retry Failed Cycle; fresh UUID per tap. Never derived from `run_id` + cycle date |
+| `worker:<work_id>:<through_date>:<attempt>` | **Interim** key for the current `PeriodicWorkRequest` |
+
+Why the Worker key is interim: WorkManager reuses the same `work_id` for every period of a periodic request and resets `runAttemptCount` after each period, so `worker:<work_id>:<attempt>` (D-145) would collide across days. Adding the operation-level `through_date` separates periods; a redelivery of the same `work_id` + `through_date` + `attempt` resolves to the same row and does not re-execute (the stored row decides the Worker result).
+
+Known interim limitation: if periodic drift puts two periods in the same 18:00-to-18:00 KST window (e.g. 18:30 on day N and 17:50 on day N+1, both through-date N) with the same attempt, the second resolves to the first row instead of executing. The first already processed that through-date, so no market date is skipped.
+
+Future canonical key: `worker:<schedule_instance_id>:<attempt>`, with `schedule_instance_id` such as `auto:2026-10-01:0730:KST`. It is introduced when the later scheduler gate replaces periodic work. The scheduler is **not** redesigned in Gate 5.
+
+#### 20.4.4 Event coverage
+
+| Event | Coverage |
+| --- | --- |
+| `OPERATION_STARTED` / `OPERATION_FINISHED` | every invocation, including `ALREADY_RUNNING`, failures, and cancellation; finish carries status, safe code / message, counts, `elapsed_ms` |
+| `RUN_RESULT` | exactly one per selected run: `PROCESSED`, `SKIPPED`, `BLOCKED`, `FAILED`, or `NO_OP`, with a reason code (`ForwardOutcomeReason` name or, for failures, the canonical error code) |
+| `MARKET_SYNC_RESULT` | exactly one per attempted run sync: `SUCCESS` / `FAILED`, failure code, `market_date` = through date, message with requested start / through and inserted / updated / unchanged counts, `elapsed_ms`. No payload |
+| `CYCLE_STARTED` / `CYCLE_FINISHED` | one pair per cycle attempt (`attempt` = `forward_test_cycles.attempt_count`), with run, cycle, `market_date`; finish carries `COMPLETE` / `FAILED`, reason code, stage, `elapsed_ms`. An exception inside a cycle writes `CYCLE_FINISHED` `FAILED` with the canonical code before propagating |
+
+Evidence writes are not swallowed: a failure to persist evidence fails the operation (`FAILED`).
+
+#### 20.4.5 Aggregate outcome
+
+- `runs_considered` = READY / RUNNING runs selected at operation start (for a retry: the target run).
+- `runs_processed` = runs whose own processing started (market sync attempted, or the retried cycle attempted).
+- `runs_skipped` = runs intentionally not processed (`SKIPPED` / `NO_OP` before processing), including `PRIOR_RUN_BLOCKED`. The blocker is not counted as skipped.
+- Status: no problem and some run `PROCESSED` → `SUCCEEDED`; nothing processed and no problem → `NO_OP`; a problem (`BLOCKED` / `FAILED` run) after meaningful progress → `PARTIAL`; a problem without progress → `BLOCKED`; unexpected exception or cancellation → `FAILED`.
+- `final_code`: the decisive problem's reason (first non-retryable, else first retryable); for `NO_OP` the first run's reason; `NO_ELIGIBLE_RUNS` when no run is selected.
+- Run isolation is unchanged: a non-retryable block still stops later runs. The blocker gets `BLOCKED` with its canonical reason (e.g. `MISSING_POLICY`, `AUTH_REQUIRED`, `EMPTY_UNIVERSE`, `PREVIOUS_FAILED_CYCLE`). Each later run gets `RUN_RESULT` `SKIPPED` / `PRIOR_RUN_BLOCKED` with the fixed message "Skipped because an earlier run blocked the operation", never `FAILED` / `BLOCKED`. No `blocked_by_run_id` column.
+- Worker result derives from the aggregate: no problem → `success`; decisive problem retryable → `retry`; non-retryable → `failure` (unchanged for a non-retryable block); unexpected exception → `failure`. A replayed key derives the result from the stored row.
+- Run Now / Retry display: identical to the previous single-run result when one run is selected. With several runs the display is the decisive problem, else the merged processed dates (previously the last run's result).
+
+#### 20.4.6 Retry Failed Cycle
+
+- Target resolution: explicit `expectedCycleId`, else `marketDate`, else the run's oldest `FAILED` cycle.
+- Target validation (target is never mutated): missing → `NO_OP` / `TARGET_CYCLE_NOT_FOUND`; not `FAILED` (stale) → `NO_OP` / `TARGET_CYCLE_NOT_FAILED`; belongs to another run → `BLOCKED` / `TARGET_CYCLE_RUN_MISMATCH`; run missing → `BLOCKED` / `RUN_NOT_FOUND`.
+- A successful retry updates the same cycle row (`attempt_count` + 1, no new cycle) and continues the run through the operation through-date, as before.
+- Correlation: operation → target run (`RUN_RESULT.run_id`) → target cycle (`CYCLE_STARTED.cycle_id`, `attempt:<n>`) → evaluation / order / execution audit (`trade_audit_logs.operation_id`) → API errors (`api_error_logs.operation_id`).
+
+#### 20.4.7 Correlation propagation
+
+The coordinator runs the executor inside `withContext(ForwardOperationContext(operation_id))`. `TradeAuditLogService.append` and `ApiErrorLogService.record` read `currentForwardOperationId()` and stamp new rows. Rows written outside an operation keep `NULL`. An idempotent audit replay returns the existing row unchanged; historical rows are never rewritten.
+
+#### 20.4.8 Error handling
+
+- `CancellationException` is always rethrown (orchestrator cycle path, coordinator, ViewModel).
+- Any other exception finishes the operation `FAILED` with `AppErrorMapper.fromThrowable` code (e.g. `UNEXPECTED_EXCEPTION`) and the catalog safe message plus the exception simple class name. `Throwable.message` is never persisted or displayed.
+- The ViewModel shows the operation's safe display result. Only a failure to record the operation itself reaches the ViewModel, which shows a safe catalog message instead of crashing.
+
+#### 20.4.9 Remaining gaps (not resolved by Gate 5)
+
+- **Audit atomicity** (section 11): unchanged; audit rows are still written outside the business transaction.
+- **Scheduler redesign**: periodic work, immediate first execution on Auto ON, and the interim Worker key remain until the scheduler gate.
+- **Orphan `RUNNING` operations**: if the process dies mid-operation the row stays `RUNNING`; a redelivery of the same Worker key returns `retry` without re-executing, and a new period / tap creates a new row. Reconciliation is a later gate.
+- **Retry precedence**: when an earlier run was retryable-blocked and a later run succeeded, the Worker now returns `retry` (previously the last run's success decided). Non-retryable blocks still decide `failure` first.
+- **Retention / archive / Operations UI**: not implemented.
+
 ---
 
 ## Related
@@ -639,4 +753,4 @@ Duplicate provider/API error logging must not occur merely because multiple arch
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-150)
+- `docs/060_DECISION_LOG.md` (D-143 – D-154)

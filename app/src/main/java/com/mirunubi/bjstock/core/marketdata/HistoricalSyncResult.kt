@@ -19,6 +19,9 @@ data class HistoricalSyncResult(
     val firstDate: LocalDate?,
     val lastDate: LocalDate?,
     val status: HistoricalSyncStatus,
+    val insertedCount: Int = 0,
+    val updatedCount: Int = 0,
+    val unchangedCount: Int = 0,
 )
 
 class HistoricalSyncException(

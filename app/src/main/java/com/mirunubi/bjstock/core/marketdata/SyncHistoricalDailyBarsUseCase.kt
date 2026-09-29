@@ -82,6 +82,9 @@ class SyncHistoricalDailyBarsUseCase(
                 MarketDataPersistStatus.SUCCESS -> HistoricalSyncStatus.SUCCESS
                 MarketDataPersistStatus.SUCCESS_EMPTY -> HistoricalSyncStatus.SUCCESS_EMPTY
             },
+            insertedCount = persist.insertedCount,
+            updatedCount = persist.updatedCount,
+            unchangedCount = persist.unchangedCount,
         )
     }
 }

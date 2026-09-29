@@ -25,6 +25,8 @@ Manual button on Forward Test screen. Computes current `throughDate` (Seoul 18:0
 
 Works even when Auto is OFF.
 
+Run Now, the Worker, and Retry Failed Cycle share one execution guard. If another Forward Test operation is already running, the new request does not execute and shows `ALREADY_RUNNING`; each request is recorded in `forward_operations` (`docs/150` 20.4).
+
 ## Status Labels
 
 | Status | Meaning |
