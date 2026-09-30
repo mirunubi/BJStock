@@ -169,12 +169,12 @@ class InterruptedOperationRecoveryTest {
         now = PREVIOUS_PROCESS.plusSeconds(1)
         val worker = service.startOperation(
             StartOperationRequest(
-                operationKey = ForwardOperationKeys.worker("auto:2026-09-30:0730:KST", 0),
+                operationKey = ForwardOperationKeys.worker("auto:2026-09-30:0700:KST", 0),
                 trigger = ForwardOperationTrigger.WORKER,
                 throughDate = THROUGH,
                 workId = "w-1",
                 workAttempt = 0,
-                scheduleInstanceId = "auto:2026-09-30:0730:KST",
+                scheduleInstanceId = "auto:2026-09-30:0700:KST",
             ),
         ).operationId
         now = PREVIOUS_PROCESS.plusSeconds(2)

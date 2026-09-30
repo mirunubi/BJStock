@@ -91,7 +91,7 @@ class HomePresenterTest {
         val content = HomePresenter.present(HomeFixtures.snapshot(auto = AUTO_ON, operation = HomeFixtures.operation()))
         assertTrue(content.auto.enabled)
         assertEquals("켜짐", content.auto.stateLabel)
-        assertEquals("10월 1일 오전 7:30 이후", content.auto.nextRun)
+        assertEquals("10월 1일 오전 7:00 이후", content.auto.nextRun)
         assertEquals("정상 완료 · 9월 30일 오전 7:34 · 자동", content.auto.latestOperation)
         assertTrue(content.alerts.isEmpty())
     }

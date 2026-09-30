@@ -9,6 +9,9 @@ class FakeAutoWorkGateway : AutoWorkGateway {
     val calls = mutableListOf<String>()
     val enqueueCalls = mutableListOf<Pair<AutoScheduleSlot, Long>>()
     val pending = mutableListOf<Pending>()
+
+    /** Active v2-tagged work whose slot tag no longer parses (e.g. a slot from a previous target time). */
+    val staleActive = mutableListOf<String>()
     var legacyActive = false
     var legacyCancelRequests = 0
     var cancelAllRequests = 0
@@ -26,7 +29,8 @@ class FakeAutoWorkGateway : AutoWorkGateway {
     }
 
     override suspend fun activeAutoWork(): List<AutoWorkInfo> =
-        pending.filter { it.state in ACTIVE }.map { AutoWorkInfo(it.workId, it.slot.scheduleInstanceId, it.state) }
+        pending.filter { it.state in ACTIVE }.map { AutoWorkInfo(it.workId, it.slot.scheduleInstanceId, it.state) } +
+            staleActive.map { AutoWorkInfo(it, null, "ENQUEUED") }
 
     override suspend fun enqueueSlot(slot: AutoScheduleSlot, initialDelayMillis: Long) {
         failEnqueue?.let { throw it }
@@ -41,6 +45,7 @@ class FakeAutoWorkGateway : AutoWorkGateway {
         calls += "cancelAllAuto"
         cancelAllRequests++
         pending.filter { it.state in ACTIVE }.forEach { it.state = "CANCELLED" }
+        staleActive.clear()
     }
 
     fun markRunning(slot: AutoScheduleSlot) {

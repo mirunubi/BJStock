@@ -15,11 +15,13 @@ Do not enable Auto Forward Test until physical-device acceptance for WorkManager
 1. Configure KIS credentials
 2. Create Strategy Run (DRAFT) → add universe instruments → Prepare History → mark READY
 3. On Run detail: **Auto Forward Test → ON**
-4. App schedules **one** wake-up for the next 07:30 Asia/Seoul strictly after now (for example ON at 06:00 → today 07:30; ON at 07:30 or 15:00 → tomorrow 07:30). Nothing runs immediately when Auto is turned ON.
+4. App schedules **one** wake-up for the next 07:00 Asia/Seoul strictly after now (for example ON at 06:00 or 06:59:59 → today 07:00; ON at 07:00, 07:00:01, or 15:00 → tomorrow 07:00). Nothing runs immediately when Auto is turned ON.
 
-Each wake-up is a one-time WorkManager request (network connected) named after its slot, e.g. `bjstock_forward_test_auto_2026-10-01_0730_KST`, and schedules the following day's slot before it starts working. Every calendar day has a slot; weekends and holidays simply find no new market date.
+Each wake-up is a one-time WorkManager request (network connected) named after its slot, e.g. `bjstock_forward_test_auto_2026-10-01_0700_KST`, and schedules the following day's slot before it starts working. Every calendar day has a slot; weekends and holidays simply find no new market date.
 
-07:30 is the **earliest** time, not an exact alarm: WorkManager may run later (Doze, battery, no network). A late wake-up keeps its slot identity (`auto:2026-10-01:0730:KST`), processes market dates through the actual cutoff (catch-up by market date, not worker timestamp), and schedules only the next future slot — missed days are not replayed as a burst.
+07:00 KST is the canonical daily Auto target. It remains an earliest eligible target, not an exact execution guarantee: WorkManager may run later (Doze, battery, no network). A late wake-up keeps its slot identity (`auto:2026-10-01:0700:KST`), processes market dates through the actual cutoff (catch-up by market date, not worker timestamp), and schedules only the next future slot — missed days are not replayed as a burst.
+
+Builds before the 07:00 target (D-168) scheduled 07:30 slots (`…_0730_KST`). Such leftover work is not a valid current slot: it never runs a Forward Test and does not prevent the 07:00 slot from being scheduled. Turning Auto OFF and ON again cancels it and schedules the next 07:00 slot.
 
 ## Auto OFF
 
@@ -54,7 +56,7 @@ elapsed_ms   (empty — real duration unknown)
 
 - One `OPERATION_FINISHED` event is appended in the same transaction; earlier events of that operation stay as they were. A cycle that was started but never finished is not marked finished by recovery.
 - Recovery does not run a Forward Test by itself. Market dates not yet processed are picked up by the next Worker run or Run Now through the normal catch-up.
-- If WorkManager redelivers the interrupted Worker attempt, it gets `retry`; the next attempt runs normally under the same slot with the next attempt number (`worker:auto:2026-10-01:0730:KST:1`). A later Run Now is unaffected.
+- If WorkManager redelivers the interrupted Worker attempt, it gets `retry`; the next attempt runs normally under the same slot with the next attempt number (`worker:auto:2026-10-01:0700:KST:1`). A later Run Now is unaffected.
 - Recovery is idempotent: restarting the app again changes nothing.
 - Recovery does not change the Auto schedule; after recovery the app re-applies Auto (existing pending slot kept, otherwise the next slot is created).
 
@@ -111,7 +113,7 @@ Non-retryable failures stay visible on the dashboard until fixed + Retry.
 Until Phase 10 acceptance:
 
 ```text
-Actual WorkManager wake-up (07:30 KST daily slot): DEFERRED
+Actual WorkManager wake-up (07:00 KST daily slot): DEFERRED
 Actual KIS daily automation: DEFERRED
 Actual offline catch-up on device: DEFERRED
 ```

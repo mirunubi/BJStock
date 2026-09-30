@@ -140,13 +140,13 @@ class ForwardAutoScheduleTest {
 
         assertTrue(scheduler.isAutoEnabled())
         assertEquals(slot(2026, 10, 1), change.enqueuedSlot)
-        assertEquals(listOf(slot(2026, 10, 1) to TimeUnit.MINUTES.toMillis(90)), gateway.enqueueCalls)
+        assertEquals(listOf(slot(2026, 10, 1) to TimeUnit.MINUTES.toMillis(60)), gateway.enqueueCalls)
         assertEquals(0, database.forwardOperationDao().countAll())
     }
 
     @Test
-    fun autoOnAfter0730_targetsTomorrow_withAPositiveDelay() = runBlocking<Unit> {
-        clock.now = kst(2026, 10, 1, 7, 30)
+    fun autoOnAt0700_targetsTomorrow_withAPositiveDelay() = runBlocking<Unit> {
+        clock.now = kst(2026, 10, 1, 7, 0)
         scheduler.setAutoEnabled(true)
 
         assertEquals(listOf(slot(2026, 10, 2) to TimeUnit.HOURS.toMillis(24)), gateway.enqueueCalls)
@@ -161,7 +161,7 @@ class ForwardAutoScheduleTest {
 
         assertEquals(listOf(slot(2026, 10, 1)), gateway.activeSlots)
         assertEquals(1, gateway.enqueueCalls.size)
-        assertEquals(listOf("schedule:slot:auto:2026-10-01:0730:KST:enqueued"), scheduleEventKeys())
+        assertEquals(listOf("schedule:slot:auto:2026-10-01:0700:KST:enqueued"), scheduleEventKeys())
     }
 
     @Test
@@ -225,7 +225,7 @@ class ForwardAutoScheduleTest {
     fun appStart_autoOn_preservesExistingFutureWork() = runBlocking<Unit> {
         settings.setAutoEnabled(true)
         gateway.enqueueSlot(slot(2026, 10, 1), 1L)
-        clock.now = kst(2026, 10, 1, 7, 0)
+        clock.now = kst(2026, 10, 1, 6, 30)
 
         scheduler.reconcileOnAppStart()
 
@@ -238,7 +238,7 @@ class ForwardAutoScheduleTest {
         settings.setAutoEnabled(true)
         gateway.enqueueSlot(slot(2026, 10, 1), 1L)
         gateway.markRunning(slot(2026, 10, 1))
-        clock.now = kst(2026, 10, 1, 7, 30, 1)
+        clock.now = kst(2026, 10, 1, 7, 0, 1)
 
         scheduler.reconcileOnAppStart()
 
@@ -254,7 +254,58 @@ class ForwardAutoScheduleTest {
 
         assertEquals(slot(2026, 10, 1), change.enqueuedSlot)
         assertTrue(change.legacyCancelled)
-        assertEquals(listOf("cancelLegacy", "enqueue:auto:2026-10-01:0730:KST"), gateway.calls)
+        assertEquals(listOf("cancelLegacy", "enqueue:auto:2026-10-01:0700:KST"), gateway.calls)
+    }
+
+    // --- work from the previous 07:30 target ---
+
+    @Test
+    fun appStart_autoOn_stale0730Work_isNotTheCurrentSlot_andDoesNotBlock0700() = runBlocking<Unit> {
+        settings.setAutoEnabled(true)
+        gateway.staleActive += "stale-0730"
+
+        val change = scheduler.reconcileOnAppStart()
+
+        assertEquals(slot(2026, 10, 1), change.enqueuedSlot)
+        assertEquals(listOf(slot(2026, 10, 1) to TimeUnit.MINUTES.toMillis(60)), gateway.enqueueCalls)
+        val status = scheduler.status()
+        assertEquals("auto:2026-10-01:0700:KST", status.nextScheduleInstanceId)
+        assertEquals(Instant.parse("2026-09-30T22:00:00Z"), status.nextScheduledAt)
+        assertEquals(0, database.forwardOperationDao().countAll())
+    }
+
+    @Test
+    fun autoOffThenOn_cancelsStale0730Work_andSchedulesOnlyThe0700Slot() = runBlocking<Unit> {
+        settings.setAutoEnabled(true)
+        gateway.staleActive += "stale-0730"
+
+        scheduler.setAutoEnabled(false)
+        assertTrue(gateway.staleActive.isEmpty())
+        scheduler.setAutoEnabled(true)
+
+        assertEquals(listOf("auto:2026-10-01:0700:KST"), gateway.activeAutoWork().map { it.scheduleInstanceId })
+        assertEquals(0, database.forwardOperationDao().countAll())
+    }
+
+    @Test
+    fun stale0730Invocation_neverExecutes_andEnsuresTheNext0700Slot() = runBlocking<Unit> {
+        settings.setAutoEnabled(true)
+        clock.now = kst(2026, 10, 1, 7, 30, 1)
+        gateway.staleActive += "stale-0730"
+        val stale = Data.Builder()
+            .putString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID, "auto:2026-10-01:0730:KST")
+            .putLong(AutoWorkRequests.KEY_SCHEDULED_AT_EPOCH_MILLIS, Instant.parse("2026-09-30T22:30:00Z").toEpochMilli())
+            .build()
+
+        assertNull(AutoWorkRequests.slotOf(stale))
+        val disposition = runAutoInvocation("stale-0730", 0, stale, scheduler) { _, _, _ ->
+            error("stale 07:30 input must never execute")
+        }
+
+        assertEquals(WorkerDisposition.SUCCESS, disposition)
+        assertEquals(0, database.forwardOperationDao().countAll())
+        assertEquals(listOf(slot(2026, 10, 2)), gateway.activeSlots)
+        assertEquals(listOf("schedule:slot:auto:2026-10-02:0700:KST:enqueued"), scheduleEventKeys())
     }
 
     // --- legacy Worker ---
@@ -273,7 +324,7 @@ class ForwardAutoScheduleTest {
         assertEquals(WorkerDisposition.SUCCESS, disposition)
         assertFalse(executed)
         assertEquals(0, database.forwardOperationDao().countAll())
-        assertEquals(listOf("enqueue:auto:2026-10-01:0730:KST", "cancelLegacy"), gateway.calls)
+        assertEquals(listOf("enqueue:auto:2026-10-01:0700:KST", "cancelLegacy"), gateway.calls)
         assertEquals(listOf(slot(2026, 10, 1)), gateway.activeSlots)
     }
 
@@ -291,10 +342,10 @@ class ForwardAutoScheduleTest {
     fun malformedScheduleInput_isTreatedAsLegacy_andNeverInventsAnId() = runBlocking<Unit> {
         settings.setAutoEnabled(true)
         val mismatched = Data.Builder()
-            .putString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID, "auto:2026-10-01:0730:KST")
+            .putString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID, "auto:2026-10-01:0700:KST")
             .putLong(AutoWorkRequests.KEY_SCHEDULED_AT_EPOCH_MILLIS, 1L)
             .build()
-        val idOnly = Data.Builder().putString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID, "auto:2026-10-01:0730:KST").build()
+        val idOnly = Data.Builder().putString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID, "auto:2026-10-01:0700:KST").build()
         val garbage = AutoWorkRequests.inputData(slot(2026, 10, 1)).let {
             Data.Builder().putAll(it).putString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID, "2026-10-01").build()
         }
@@ -317,7 +368,7 @@ class ForwardAutoScheduleTest {
         val current = slot(2026, 10, 1)
         gateway.enqueueSlot(current, 1L)
         gateway.markRunning(current)
-        clock.now = kst(2026, 10, 1, 7, 30, 5)
+        clock.now = kst(2026, 10, 1, 7, 0, 5)
         var slotsAtExecution: List<AutoScheduleSlot> = emptyList()
 
         runAutoInvocation("w-1", 0, AutoWorkRequests.inputData(current), scheduler) { _, _, sid ->
@@ -333,7 +384,7 @@ class ForwardAutoScheduleTest {
     fun success_failure_andRetry_eachLeaveExactlyOneNextSlot() = runBlocking<Unit> {
         settings.setAutoEnabled(true)
         val current = slot(2026, 10, 1)
-        clock.now = kst(2026, 10, 1, 7, 31)
+        clock.now = kst(2026, 10, 1, 7, 1)
         listOf(WorkerDisposition.SUCCESS, WorkerDisposition.FAILURE, WorkerDisposition.RETRY).forEach { result ->
             val disposition = runAutoInvocation("w-1", 0, AutoWorkRequests.inputData(current), scheduler) { _, _, _ ->
                 outcome(result)
@@ -361,7 +412,7 @@ class ForwardAutoScheduleTest {
             outcome(WorkerDisposition.SUCCESS)
         }
 
-        assertEquals("auto:2026-09-27:0730:KST", executedSid)
+        assertEquals("auto:2026-09-27:0700:KST", executedSid)
         assertEquals(listOf(slot(2026, 10, 2)), gateway.enqueueCalls.map { it.first })
     }
 
@@ -376,8 +427,8 @@ class ForwardAutoScheduleTest {
         runAutoInvocation("w-late", 0, AutoWorkRequests.inputData(late), scheduler, coordinator::runWorker)
 
         val row = database.forwardOperationDao().findRecent().single()
-        assertEquals("worker:auto:2026-09-27:0730:KST:0", row.operationKey)
-        assertEquals("auto:2026-09-27:0730:KST", row.scheduleInstanceId)
+        assertEquals("worker:auto:2026-09-27:0700:KST:0", row.operationKey)
+        assertEquals("auto:2026-09-27:0700:KST", row.scheduleInstanceId)
         assertEquals(LocalDate.of(2026, 10, 1), row.throughDate)
         assertEquals(listOf(LocalDate.of(2026, 10, 1)), executor.throughDates)
     }
@@ -396,7 +447,7 @@ class ForwardAutoScheduleTest {
     @Test
     fun cancellation_propagates_andTheNextSlotStaysScheduled() = runBlocking<Unit> {
         settings.setAutoEnabled(true)
-        clock.now = kst(2026, 10, 1, 7, 30, 1)
+        clock.now = kst(2026, 10, 1, 7, 0, 1)
 
         assertThrows(CancellationException::class.java) {
             runBlocking {
@@ -411,7 +462,7 @@ class ForwardAutoScheduleTest {
     @Test
     fun processInterruptedReplay_retries_andTheNextAttemptKeepsTheSlot() = runBlocking<Unit> {
         settings.setAutoEnabled(true)
-        clock.now = kst(2026, 10, 1, 7, 30, 1)
+        clock.now = kst(2026, 10, 1, 7, 0, 1)
         val sid = slot(2026, 10, 1).scheduleInstanceId
         val coordinator = coordinator(RecordingExecutor())
         operationLog.startOperation(
@@ -443,7 +494,7 @@ class ForwardAutoScheduleTest {
     fun slotEnqueuedEvent_isDeterministic_withSlotMarketDate_andNoOperation() = runBlocking<Unit> {
         scheduler.setAutoEnabled(true)
 
-        val event = database.operationalEventDao().findByEventKey("schedule:slot:auto:2026-10-01:0730:KST:enqueued")!!
+        val event = database.operationalEventDao().findByEventKey("schedule:slot:auto:2026-10-01:0700:KST:enqueued")!!
         assertEquals(OperationalEventType.WORKER_SCHEDULE_CHANGED, event.eventType)
         assertNull(event.operationId)
         assertEquals(LocalDate.of(2026, 10, 1), event.marketDate)
@@ -518,14 +569,14 @@ class ForwardAutoScheduleTest {
         settings.setAutoEnabled(true)
         gateway.enqueueSlot(slot(2026, 10, 1), 1L)
         gateway.markRunning(slot(2026, 10, 1))
-        clock.now = kst(2026, 10, 1, 7, 30, 1)
+        clock.now = kst(2026, 10, 1, 7, 0, 1)
         scheduler.ensureSlotAfter(slot(2026, 10, 1))
 
         val status = scheduler.status()
 
         assertTrue(status.autoEnabled)
-        assertEquals("auto:2026-10-02:0730:KST", status.nextScheduleInstanceId)
-        assertEquals(Instant.parse("2026-10-01T22:30:00Z"), status.nextScheduledAt)
+        assertEquals("auto:2026-10-02:0700:KST", status.nextScheduleInstanceId)
+        assertEquals(Instant.parse("2026-10-01T22:00:00Z"), status.nextScheduledAt)
         assertEquals("ENQUEUED", status.workState)
         assertEquals(gateway.pending.last().workId, status.workId)
         assertNull(status.lastScheduleFailure)
@@ -547,10 +598,10 @@ class ForwardAutoScheduleTest {
         assertEquals(WorkRequest.DEFAULT_BACKOFF_DELAY_MILLIS, spec.backoffDelayDuration)
         assertTrue(ForwardTestConfig.AUTO_WORK_TAG in request.tags)
         assertEquals(
-            listOf("auto:2026-10-01:0730:KST"),
+            listOf("auto:2026-10-01:0700:KST"),
             request.tags.mapNotNull(AutoWorkRequests::scheduleInstanceIdFromTag),
         )
-        assertEquals("auto:2026-10-01:0730:KST", spec.input.getString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID))
+        assertEquals("auto:2026-10-01:0700:KST", spec.input.getString(AutoWorkRequests.KEY_SCHEDULE_INSTANCE_ID))
         assertEquals(slot.scheduledAt.toEpochMilli(), spec.input.getLong(AutoWorkRequests.KEY_SCHEDULED_AT_EPOCH_MILLIS, 0L))
         assertEquals(slot, AutoWorkRequests.slotOf(spec.input))
     }

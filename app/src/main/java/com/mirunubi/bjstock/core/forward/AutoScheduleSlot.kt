@@ -6,7 +6,7 @@ import java.time.format.DateTimeParseException
 
 /**
  * One daily Auto wake-up slot: [date] at [ForwardTestConfig.AUTO_TARGET_TIME] in [ForwardTestConfig.MARKET_ZONE].
- * [scheduleInstanceId] names the intended invocation (`auto:<YYYY-MM-DD>:0730:KST`); it is not the market
+ * [scheduleInstanceId] names the intended invocation (`auto:<YYYY-MM-DD>:0700:KST`); it is not the market
  * through-date and not the WorkManager id. Every calendar day is a slot; market days are decided by catch-up.
  */
 data class AutoScheduleSlot(val date: LocalDate) {

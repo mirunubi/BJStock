@@ -13,7 +13,7 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Daily one-time Auto scheduling (docs/150 §20.9). Each slot is a unique OneTimeWorkRequest delayed until
- * 07:30 Asia/Seoul; every valid invocation schedules the following slot before it executes. Auto is OFF by
+ * 07:00 Asia/Seoul; every valid invocation schedules the following slot before it executes. Auto is OFF by
  * default, and turning it ON never executes anything immediately. WorkManager is the source of truth for
  * scheduled work; [ForwardTestSchedulerSettings] only holds the Auto flag.
  */
@@ -83,10 +83,14 @@ class ForwardTestScheduler(
         )
     }
 
+    /**
+     * Only work whose slot id parses as a current slot counts as scheduled. v2 work with any other id (e.g. a
+     * slot from a previous target time) never executes and is not allowed to block the current slot.
+     */
     private suspend fun reconcileEnabled(legacyFirst: Boolean): ScheduleChange {
         var change = ScheduleChange()
         if (legacyFirst) change += cancelLegacy()
-        if (gateway.activeAutoWork().isEmpty()) {
+        if (gateway.activeAutoWork().none { it.scheduleInstanceId != null }) {
             change += enqueue(AutoScheduleSlot.nextAfter(clock.nowInstant()))
         }
         if (!legacyFirst) change += cancelLegacy()
@@ -176,7 +180,7 @@ class ForwardTestScheduler(
         const val LEGACY_PERIODIC_CANCELLED = "LEGACY_PERIODIC_CANCELLED"
         const val SCHEDULE_EVENT_NOT_PERSISTED = "SCHEDULE_EVENT_NOT_PERSISTED"
         const val SCHEDULE_UPDATE_FAILED = "SCHEDULE_UPDATE_FAILED"
-        const val SLOT_ENQUEUED_MESSAGE = "Auto Forward Test slot scheduled for 07:30 KST"
+        const val SLOT_ENQUEUED_MESSAGE = "Auto Forward Test slot scheduled for 07:00 KST"
         const val AUTO_DISABLED_MESSAGE = "Auto Forward Test disabled; pending slots cancelled"
         const val LEGACY_PERIODIC_CANCELLED_MESSAGE = "Legacy periodic Forward Test work cancelled"
     }

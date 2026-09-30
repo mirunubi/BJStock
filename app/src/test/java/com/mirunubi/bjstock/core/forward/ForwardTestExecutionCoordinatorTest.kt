@@ -96,7 +96,7 @@ class ForwardTestExecutionCoordinatorTest {
         coordinator.runWorker(workId = WORK_ID, runAttempt = 2, scheduleInstanceId = SLOT)
 
         val op = onlyOperation()
-        assertEquals("worker:auto:2026-09-30:0730:KST:2", op.operationKey)
+        assertEquals("worker:auto:2026-09-30:0700:KST:2", op.operationKey)
         assertEquals(ForwardOperationTrigger.WORKER, op.trigger)
         assertEquals(ForwardOperationKind.FORWARD_RUN, op.operationKind)
         assertEquals(WORK_ID, op.workId)
@@ -401,7 +401,7 @@ class ForwardTestExecutionCoordinatorTest {
         assertEquals(ForwardOperationStatus.SUCCEEDED, next.status)
         assertEquals(WorkerDisposition.SUCCESS, next.disposition)
         val nextRow = operationLog.findOperation(next.operationId)!!
-        assertEquals("worker:auto:2026-09-30:0730:KST:1", nextRow.operationKey)
+        assertEquals("worker:auto:2026-09-30:0700:KST:1", nextRow.operationKey)
         assertEquals(SLOT, nextRow.scheduleInstanceId)
         assertEquals(listOf(THROUGH), executor.forwardDates)
         assertEquals(1, executor.forwardCalls.get())
@@ -752,8 +752,8 @@ class ForwardTestExecutionCoordinatorTest {
     private companion object {
         const val TIMEOUT = 10_000L
         const val WORK_ID = "7b0c2f55-1d2e-4a6b-9f3c-0d1e2f3a4b5c"
-        const val SLOT = "auto:2026-09-30:0730:KST"
-        const val SLOT_NEXT = "auto:2026-10-01:0730:KST"
+        const val SLOT = "auto:2026-09-30:0700:KST"
+        const val SLOT_NEXT = "auto:2026-10-01:0700:KST"
         val THROUGH: LocalDate = LocalDate.of(2026, 9, 30)
         val NOW: Instant = Instant.parse("2026-09-30T11:00:00Z")
         val CLOCK_INSTANT: Instant =

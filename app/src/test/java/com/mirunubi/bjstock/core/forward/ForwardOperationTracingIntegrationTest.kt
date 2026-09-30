@@ -734,7 +734,7 @@ class ForwardOperationTracingIntegrationTest {
 
     private companion object {
         const val WORK_ID = "3f1e2d4c-5b6a-4789-8a9b-0c1d2e3f4a5b"
-        const val SLOT = "auto:2026-09-30:0730:KST"
+        const val SLOT = "auto:2026-09-30:0700:KST"
         val FRIDAY: LocalDate = LocalDate.of(2026, 10, 9)
         val MONDAY: LocalDate = LocalDate.of(2026, 10, 12)
         val TUESDAY: LocalDate = LocalDate.of(2026, 10, 13)

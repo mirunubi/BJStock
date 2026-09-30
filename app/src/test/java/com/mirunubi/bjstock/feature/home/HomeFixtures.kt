@@ -28,8 +28,8 @@ object HomeFixtures {
 
     val AUTO_ON = AUTO_OFF.copy(
         autoEnabled = true,
-        nextScheduleInstanceId = "auto:2026-10-01:0730:KST",
-        nextScheduledAt = Instant.parse("2026-09-30T22:30:00Z"),
+        nextScheduleInstanceId = "auto:2026-10-01:0700:KST",
+        nextScheduledAt = Instant.parse("2026-09-30T22:00:00Z"),
         workId = "work-1",
         workState = "ENQUEUED",
     )
@@ -128,13 +128,13 @@ object HomeFixtures {
         finalCode: String? = null,
     ) = ForwardOperationEntity(
         id = 5,
-        operationKey = "worker:auto:2026-09-30:0730:KST:0",
+        operationKey = "worker:auto:2026-09-30:0700:KST:0",
         trigger = ForwardOperationTrigger.WORKER,
         throughDate = LocalDate.of(2026, 9, 29),
         status = status,
         startedAt = Instant.parse("2026-09-29T22:34:00Z"),
         finalCode = finalCode,
-        scheduleInstanceId = "auto:2026-09-30:0730:KST",
+        scheduleInstanceId = "auto:2026-09-30:0700:KST",
     )
 
     fun snapshot(

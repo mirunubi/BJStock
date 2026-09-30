@@ -162,7 +162,7 @@ object HomePresenter {
         )
     }
 
-    /** 07:30 is the earliest eligible time, never an exact execution time (docs/150 §20.9). */
+    /** 07:00 is the earliest eligible time, never an exact execution time (docs/150 §20.9). */
     private fun nextRun(status: AutoScheduleStatus): String {
         if (!status.autoEnabled) return AUTO_OFF_NEXT
         val at = status.nextScheduledAt ?: return AUTO_NO_SLOT

@@ -71,25 +71,25 @@ class SafeLogTextTest {
         assertEquals("op:1:run:3:result", SafeLogText.eventKey("op:1:run:3:result"))
         assertThrows(IllegalArgumentException::class.java) { SafeLogText.eventKey("op:1:token=abc") }
         assertEquals(
-            "worker:auto:2026-10-01:0730:KST:0",
-            SafeLogText.operationKey("worker:auto:2026-10-01:0730:KST:0"),
+            "worker:auto:2026-10-01:0700:KST:0",
+            SafeLogText.operationKey("worker:auto:2026-10-01:0700:KST:0"),
         )
         assertEquals("manual:req-1", SafeLogText.operationKey("manual:req-1"))
         assertEquals("manual-retry:req-1", SafeLogText.operationKey("manual-retry:req-1"))
         assertThrows(IllegalArgumentException::class.java) { SafeLogText.operationKey("worker:2b1f-9c:2026-09-30:0") }
         assertThrows(IllegalArgumentException::class.java) { SafeLogText.operationKey("worker:2b1f-9c:0") }
-        assertThrows(IllegalArgumentException::class.java) { SafeLogText.operationKey("worker:auto:2026-10-01:0730:KST") }
+        assertThrows(IllegalArgumentException::class.java) { SafeLogText.operationKey("worker:auto:2026-10-01:0700:KST") }
         assertThrows(IllegalArgumentException::class.java) { SafeLogText.operationKey("cron:1") }
     }
 
     @Test
     fun scheduleInstanceIds_andScheduleEventKeys_areShapeValidated() {
-        assertEquals("auto:2026-10-01:0730:KST", SafeLogText.scheduleInstanceId("auto:2026-10-01:0730:KST"))
-        listOf("", "auto:2026-10-01", "auto:2026-10-01:0730:UTC", "worker:auto:2026-10-01:0730:KST", "auto:x:0730:KST")
+        assertEquals("auto:2026-10-01:0700:KST", SafeLogText.scheduleInstanceId("auto:2026-10-01:0700:KST"))
+        listOf("", "auto:2026-10-01", "auto:2026-10-01:0700:UTC", "worker:auto:2026-10-01:0700:KST", "auto:x:0700:KST")
             .forEach { assertThrows(IllegalArgumentException::class.java) { SafeLogText.scheduleInstanceId(it) } }
         assertEquals(
-            "schedule:slot:auto:2026-10-01:0730:KST:enqueued",
-            SafeLogText.eventKey("schedule:slot:auto:2026-10-01:0730:KST:enqueued"),
+            "schedule:slot:auto:2026-10-01:0700:KST:enqueued",
+            SafeLogText.eventKey("schedule:slot:auto:2026-10-01:0700:KST:enqueued"),
         )
     }
 }

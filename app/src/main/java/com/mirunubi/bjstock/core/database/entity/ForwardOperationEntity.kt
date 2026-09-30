@@ -57,7 +57,7 @@ data class ForwardOperationEntity(
     val cyclesFailed: Int = 0,
     @ColumnInfo(name = "elapsed_ms")
     val elapsedMs: Long? = null,
-    /** Auto slot (`auto:<date>:0730:KST`). NULL for MANUAL and for pre-v12 WORKER rows; never derived from the key. */
+    /** Auto slot (`auto:<date>:0700:KST`; rows written before the 07:00 target keep `0730`). NULL for MANUAL and for pre-v12 WORKER rows; never derived from the key. */
     @ColumnInfo(name = "schedule_instance_id")
     val scheduleInstanceId: String? = null,
 )

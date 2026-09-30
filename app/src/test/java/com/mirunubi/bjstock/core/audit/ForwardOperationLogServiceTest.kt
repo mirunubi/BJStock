@@ -65,7 +65,7 @@ class ForwardOperationLogServiceTest {
 
         assertTrue(result is StartOperationResult.Started)
         val op = service.findOperation(result.operationId)!!
-        assertEquals("worker:auto:2026-09-30:0730:KST:0", op.operationKey)
+        assertEquals("worker:auto:2026-09-30:0700:KST:0", op.operationKey)
         assertEquals(ForwardOperationTrigger.WORKER, op.trigger)
         assertEquals(ForwardOperationKind.FORWARD_RUN, op.operationKind)
         assertEquals("w-1", op.workId)
@@ -138,7 +138,7 @@ class ForwardOperationLogServiceTest {
             runBlocking {
                 service.startOperation(
                     StartOperationRequest(
-                        operationKey = "worker:auto:2026-10-01:0730:KST:0",
+                        operationKey = "worker:auto:2026-10-01:0700:KST:0",
                         trigger = ForwardOperationTrigger.WORKER,
                         throughDate = throughDate,
                         workId = "w-2",
@@ -184,7 +184,7 @@ class ForwardOperationLogServiceTest {
         val rejected = listOf(
             request("worker:$SLOT:0", sid = null),
             request("worker:$SLOT:0", sid = " "),
-            request("worker:auto:2026-9-30:0730:KST:0", sid = "auto:2026-9-30:0730:KST"),
+            request("worker:auto:2026-9-30:0700:KST:0", sid = "auto:2026-9-30:0700:KST"),
             request("worker:auto:2026-09-30:0800:UTC:0", sid = "auto:2026-09-30:0800:UTC"),
             request("worker:w-5:2026-09-29:0", sid = SLOT),
             request("worker:$SLOT:1", sid = SLOT, attempt = 0),
@@ -593,7 +593,7 @@ class ForwardOperationLogServiceTest {
     )
 
     private companion object {
-        const val SLOT = "auto:2026-09-30:0730:KST"
+        const val SLOT = "auto:2026-09-30:0700:KST"
     }
 
     private fun manualRequest(requestId: String) = StartOperationRequest(

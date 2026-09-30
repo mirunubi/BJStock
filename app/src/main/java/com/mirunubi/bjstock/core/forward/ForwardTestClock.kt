@@ -16,7 +16,7 @@ object ForwardTestConfig {
     val OPERATIONAL_CUTOFF: LocalTime = LocalTime.of(18, 0)
 
     /** Earliest eligible Auto wake-up in [MARKET_ZONE]; WorkManager may run later (docs/150 §20.9). */
-    val AUTO_TARGET_TIME: LocalTime = LocalTime.of(7, 30)
+    val AUTO_TARGET_TIME: LocalTime = LocalTime.of(7, 0)
     const val AUTO_WORK_TAG = "bjstock_forward_test_auto_v2"
 
     /** Gate 5 periodic work. Only ever cancelled; never enqueued again. */

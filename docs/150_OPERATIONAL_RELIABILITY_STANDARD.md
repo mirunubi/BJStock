@@ -317,7 +317,7 @@ Links:
 | `cycles_completed` | INTEGER NOT NULL | |
 | `cycles_failed` | INTEGER NOT NULL | |
 | `elapsed_ms` | INTEGER nullable | `finished_at - started_at`, never negative |
-| `schedule_instance_id` | TEXT nullable | Room v12 / `0014`: Auto slot `auto:<YYYY-MM-DD>:0730:KST`; required for new WORKER rows (service validation), NULL for MANUAL; pre-v12 rows stay NULL and are never backfilled or parsed from `operation_key` (20.9.4) |
+| `schedule_instance_id` | TEXT nullable | Room v12 / `0014`: Auto slot `auto:<YYYY-MM-DD>:0700:KST` (`0730` for rows before D-168); required for new WORKER rows (service validation), NULL for MANUAL; pre-v12 rows stay NULL and are never backfilled or parsed from `operation_key` (20.9.4) |
 
 Status vocabulary (`ForwardOperationStatus`): `RUNNING`, `SUCCEEDED`, `NO_OP`, `PARTIAL`, `BLOCKED`, `FAILED`.
 
@@ -719,7 +719,7 @@ Why the Worker key is interim: WorkManager reuses the same `work_id` for every p
 
 Known interim limitation: if periodic drift puts two periods in the same 18:00-to-18:00 KST window (e.g. 18:30 on day N and 17:50 on day N+1, both through-date N) with the same attempt, the second resolves to the first row instead of executing. The first already processed that through-date, so no market date is skipped.
 
-Future canonical key: `worker:<schedule_instance_id>:<attempt>`, with `schedule_instance_id` such as `auto:2026-10-01:0730:KST`. It is introduced when the later scheduler gate replaces periodic work. The scheduler is **not** redesigned in Gate 5. **Implemented in Gate 7B (20.9.4)**; the interim limitation above no longer applies to new rows.
+Future canonical key: `worker:<schedule_instance_id>:<attempt>`, with `schedule_instance_id` such as `auto:2026-10-01:0700:KST`. It is introduced when the later scheduler gate replaces periodic work. The scheduler is **not** redesigned in Gate 5. **Implemented in Gate 7B (20.9.4)**; the interim limitation above no longer applies to new rows.
 
 #### 20.4.4 Event coverage
 
@@ -982,20 +982,22 @@ A `RUNNING` operation that already has `OPERATION_FINISHED` (20.8.5) must eventu
 | Property | Value |
 | --- | --- |
 | Request | `OneTimeWorkRequest<ForwardTestWorker>` per daily slot; **no `PeriodicWorkRequest` in the production path** |
-| Target | 07:30 `ForwardTestConfig.MARKET_ZONE` (Asia/Seoul), `ForwardTestConfig.AUTO_TARGET_TIME`; independent of device timezone; Asia/Seoul has no DST and no DST logic is assumed |
+| Target | 07:00 `ForwardTestConfig.MARKET_ZONE` (Asia/Seoul), `ForwardTestConfig.AUTO_TARGET_TIME` (07:30 until D-168); independent of device timezone; Asia/Seoul has no DST and no DST logic is assumed |
 | Guarantee | **earliest eligible time**, not an exact alarm. WorkManager may run later (Doze, battery, network). No `AlarmManager` / exact-alarm permission |
 | Constraint | `NetworkType.CONNECTED` (unchanged) |
 | Backoff | WorkManager default (exponential, 30 s); no new policy |
-| Unique name | `bjstock_forward_test_auto_<YYYY-MM-DD>_0730_KST`, `ExistingWorkPolicy.KEEP` |
+| Unique name | `bjstock_forward_test_auto_<YYYY-MM-DD>_0700_KST`, `ExistingWorkPolicy.KEEP` |
 | Tags | stable `bjstock_forward_test_auto_v2`, plus `bjstock_forward_test_auto_slot=<schedule_instance_id>` so the read model gets the slot from `WorkInfo` tags |
 | Input data | `schedule_instance_id`, `scheduled_at_epoch_millis` (must agree with the id) |
 | Calendar | every calendar day is a slot; no weekday or holiday logic. Market days are decided by the existing catch-up / through-date rules |
 
-Slot selection is strict: the next slot is the first 07:30 KST **strictly after** now (06:00 → same day; 07:29:59 → same day; 07:30:00 → next day; 15:00 → next day). The initial delay is `slot - now`, always positive; `AutoWorkRequests.build` rejects a zero or negative delay, so Auto can never enqueue immediate work.
+07:00 KST is the canonical daily Auto target. It remains an earliest eligible target, not an exact execution guarantee (D-168).
+
+Slot selection is strict: the next slot is the first 07:00 KST **strictly after** now (06:00 → same day; 06:59:59 → same day; 07:00:00 → next day; 07:00:01 → next day; 15:00 → next day). The initial delay is `slot - now`, always positive; `AutoWorkRequests.build` rejects a zero or negative delay, so Auto can never enqueue immediate work.
 
 #### 20.9.2 Auto ON / OFF
 
-- **Auto ON**: persist the flag `true` → request legacy cancellation → if no active (ENQUEUED / RUNNING / BLOCKED) v2 work exists, enqueue exactly one next slot. The coordinator is never invoked and no zero-delay work is created. Repeated ON never duplicates (active check + unique name + KEEP).
+- **Auto ON**: persist the flag `true` → request legacy cancellation → if no active (ENQUEUED / RUNNING / BLOCKED) v2 work with a valid current slot id exists, enqueue exactly one next slot. v2 work whose slot tag does not parse (e.g. a `…:0730:KST` slot from before D-168) is not a current slot and never blocks this. The coordinator is never invoked and no zero-delay work is created. Repeated ON never duplicates (active check + unique name + KEEP).
 - **Auto OFF**: persist `false` → request legacy cancellation → cancel all v2 work by tag → `AUTO_DISABLED` event. A Worker racing with cancellation checks the Auto flag first and returns success without an operation.
 - **Run Now / Retry Failed Cycle** are unaffected by Auto and never touch scheduling.
 - The Auto flag stays in SharedPreferences (authoritative for ON / OFF only). WorkManager is the source of truth for what is scheduled.
@@ -1013,9 +1015,9 @@ Slot selection is strict: the next slot is the first 07:30 KST **strictly after*
 
 | Item | Value |
 | --- | --- |
-| Format | `auto:<YYYY-MM-DD>:0730:KST`, e.g. `auto:2026-10-01:0730:KST` |
+| Format | `auto:<YYYY-MM-DD>:0700:KST`, e.g. `auto:2026-10-01:0700:KST`. Rows written before D-168 keep `0730`; they stay readable and are never rewritten |
 | Meaning | the intended slot. Not the market through-date, not the WorkManager UUID. A late Worker keeps it |
-| Worker key | `worker:<schedule_instance_id>:<attempt>`, e.g. `worker:auto:2026-10-01:0730:KST:0` |
+| Worker key | `worker:<schedule_instance_id>:<attempt>`, e.g. `worker:auto:2026-10-01:0700:KST:0` |
 | `work_id` | WorkManager request id; operation metadata only, never identity |
 | `through_date` | computed at the actual run time by `ForwardTestClock` (18:00 cutoff unchanged); independent of the slot |
 | Persisted | `forward_operations.schedule_instance_id` (Room v12 / PostgreSQL `0014`, nullable) |
@@ -1029,7 +1031,7 @@ Two WorkManager UUIDs targeting the same slot and attempt resolve to one logical
 A valid v2 invocation, in order:
 
 1. Auto flag OFF → success, no operation.
-2. Missing / non-canonical id → legacy path (20.9.3).
+2. Missing / non-canonical id (including a `…:0730:KST` slot from before D-168) → legacy path (20.9.3).
 3. Ensure the next slot strictly after `max(now, this slot)` exists (unique name + KEEP).
 4. `coordinator.runWorker(work_id, attempt, schedule_instance_id)`.
 5. Return the disposition.
@@ -1051,7 +1053,7 @@ A Worker that runs late keeps its original `schedule_instance_id`. Its through-d
 Gate 7A order is kept: recovery → schedule reconciliation → maintenance. Reconciliation failures are contained (`runAppStartSequence`) and remain visible in the read model.
 
 - Auto OFF: cancel legacy and v2; enqueue nothing. `AUTO_DISABLED` is recorded at app start only if v2 work was actually pending.
-- Auto ON: cancel legacy; if ENQUEUED / RUNNING v2 work exists, keep it (no duplicate); otherwise enqueue the next slot.
+- Auto ON: cancel legacy; if ENQUEUED / RUNNING v2 work with a valid current slot id exists, keep it (no duplicate); otherwise enqueue the next slot. Stale v2 work with a non-current slot id is left to Auto OFF (cancel all by tag) or to its own invocation (legacy path, never executes).
 
 #### 20.9.9 `WORKER_SCHEDULE_CHANGED`
 
@@ -1059,7 +1061,7 @@ Gate 7A order is kept: recovery → schedule reconciliation → maintenance. Rec
 
 | Action | `event_key` | `result` | `market_date` | Message |
 | --- | --- | --- | --- | --- |
-| Slot enqueued | `schedule:slot:<schedule_instance_id>:enqueued` | `SLOT_ENQUEUED` | slot local date | fixed: "Auto Forward Test slot scheduled for 07:30 KST" |
+| Slot enqueued | `schedule:slot:<schedule_instance_id>:enqueued` | `SLOT_ENQUEUED` | slot local date | fixed: "Auto Forward Test slot scheduled for 07:00 KST" |
 | Legacy cancelled | `schedule:legacy:bjstock_forward_test_v1:cancelled` | `LEGACY_PERIODIC_CANCELLED` | NULL | fixed; only when legacy work was active |
 | Auto disabled | `schedule:AUTO_DISABLED:<epoch_millis>` | `AUTO_DISABLED` | NULL | fixed |
 
