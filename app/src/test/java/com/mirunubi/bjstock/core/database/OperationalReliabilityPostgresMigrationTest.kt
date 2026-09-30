@@ -124,7 +124,24 @@ class OperationalReliabilityPostgresMigrationTest {
         ).forEach { assertFalse("0013 must be append-only data: $it", statements.contains(it)) }
         val roomMigration = BJStockMigrations.MIGRATION_10_11
         assertTrue(roomMigration.startVersion == 10 && roomMigration.endVersion == 11)
-        assertEquals(11, BJStockDatabase.VERSION)
+    }
+
+    @Test
+    fun migration0014_scheduleInstanceMatchesRoomV12_nullableWithoutBackfillOrCheck() {
+        val sql = resolveMigration(MIGRATION_0014).readText().replace("\r\n", "\n")
+        assertTrue(
+            sql.contains("ALTER TABLE bjstock.forward_operations\n    ADD COLUMN schedule_instance_id TEXT;"),
+        )
+        assertTrue(sql.contains("COMMENT ON COLUMN bjstock.forward_operations.schedule_instance_id IS"))
+        val statements = withoutComments(sql).substringBefore("COMMENT ON COLUMN")
+        listOf("NOT NULL", "DEFAULT", "CHECK", "CONSTRAINT", "UPDATE ", "DELETE ", "DROP ", "TRUNCATE", "INSERT ")
+            .forEach { assertFalse("0014 must only add a nullable column: $it", statements.contains(it)) }
+        val roomMigration = BJStockMigrations.MIGRATION_11_12
+        assertTrue(roomMigration.startVersion == 11 && roomMigration.endVersion == 12)
+        assertEquals(12, BJStockDatabase.VERSION)
+        val roomColumn = com.mirunubi.bjstock.core.database.entity.ForwardOperationEntity::class.java
+            .getDeclaredField("scheduleInstanceId")
+        assertEquals(String::class.java, roomColumn.type)
     }
 
     @Test
@@ -164,6 +181,7 @@ class OperationalReliabilityPostgresMigrationTest {
         const val MIGRATION_0011 = "db/migrations/0011_forward_operation_kind.sql"
         const val MIGRATION_0012 = "db/migrations/0012_financial_event_keys.sql"
         const val MIGRATION_0013 = "db/migrations/0013_legacy_terminal_order_audit.sql"
+        const val MIGRATION_0014 = "db/migrations/0014_forward_operation_schedule_instance.sql"
         const val MIGRATION_0008 = "db/migrations/0008_theme_rule_audit_logging.sql"
     }
 }

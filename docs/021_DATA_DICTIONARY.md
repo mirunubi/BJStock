@@ -876,7 +876,7 @@ Phase 11: nullable `operation_id` (soft reference to `forward_operations.id`) on
 
 ## forward_operations
 
-One row per Forward Test invocation. `trigger` (`MANUAL` / `WORKER`) records who started it; `operation_kind` (`FORWARD_RUN` / `RETRY_FAILED_CYCLE`, Room v9, default `FORWARD_RUN`) records what it does. Unique `operation_key`: `manual:<request_id>`, `manual-retry:<request_id>`, or interim `worker:<work_id>:<through_date>:<attempt>`. Status `RUNNING` → one of `SUCCEEDED`, `NO_OP`, `PARTIAL`, `BLOCKED`, `FAILED`; terminal rows are immutable. An overlapping invocation is stored `BLOCKED` / `ALREADY_RUNNING`. Operational evidence, not financial source of truth.
+One row per Forward Test invocation. `trigger` (`MANUAL` / `WORKER`) records who started it; `operation_kind` (`FORWARD_RUN` / `RETRY_FAILED_CYCLE`, Room v9, default `FORWARD_RUN`) records what it does. Unique `operation_key`: `manual:<request_id>`, `manual-retry:<request_id>`, or `worker:<schedule_instance_id>:<attempt>` (Gate 7B; older WORKER rows keep the interim `worker:<work_id>:<through_date>:<attempt>`). `schedule_instance_id` (Room v12, nullable): the Auto slot `auto:<YYYY-MM-DD>:0730:KST`, required for new WORKER rows, NULL for MANUAL and pre-v12 rows. Status `RUNNING` → one of `SUCCEEDED`, `NO_OP`, `PARTIAL`, `BLOCKED`, `FAILED`; terminal rows are immutable. An overlapping invocation is stored `BLOCKED` / `ALREADY_RUNNING`. Operational evidence, not financial source of truth.
 
 ## operational_events
 

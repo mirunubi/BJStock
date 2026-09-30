@@ -21,6 +21,7 @@ import com.mirunubi.bjstock.core.forward.ForwardTestOrchestrator
 import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
 import com.mirunubi.bjstock.core.forward.ForwardTestSchedulerSettings
 import com.mirunubi.bjstock.core.forward.KisForwardMarketDataGateway
+import com.mirunubi.bjstock.core.forward.WorkManagerAutoWorkGateway
 import com.mirunubi.bjstock.core.kis.KisCredentialStore
 import com.mirunubi.bjstock.core.kis.KisSettingsStore
 import com.mirunubi.bjstock.core.marketdata.MarketDataLocalRepository
@@ -56,7 +57,14 @@ object ForwardModule {
     fun provideForwardTestScheduler(
         @ApplicationContext context: Context,
         settings: ForwardTestSchedulerSettings,
-    ): ForwardTestScheduler = ForwardTestScheduler(context, settings)
+        operationLog: ForwardOperationLogService,
+        clock: ForwardTestClock,
+    ): ForwardTestScheduler = ForwardTestScheduler(
+        settings = settings,
+        gateway = WorkManagerAutoWorkGateway(context),
+        operationLog = operationLog,
+        clock = clock,
+    )
 
     @Provides
     @Singleton

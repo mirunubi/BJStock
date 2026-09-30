@@ -15,9 +15,23 @@ Do not enable Auto Forward Test until physical-device acceptance for WorkManager
 1. Configure KIS credentials
 2. Create Strategy Run (DRAFT) → add universe instruments → Prepare History → mark READY
 3. On Run detail: **Auto Forward Test → ON**
-4. App registers unique periodic work `bjstock_forward_test_v1` with network connected
+4. App schedules **one** wake-up for the next 07:30 Asia/Seoul strictly after now (for example ON at 06:00 → today 07:30; ON at 07:30 or 15:00 → tomorrow 07:30). Nothing runs immediately when Auto is turned ON.
 
-WorkManager may run late. Catch-up still applies by market date, not worker timestamp.
+Each wake-up is a one-time WorkManager request (network connected) named after its slot, e.g. `bjstock_forward_test_auto_2026-10-01_0730_KST`, and schedules the following day's slot before it starts working. Every calendar day has a slot; weekends and holidays simply find no new market date.
+
+07:30 is the **earliest** time, not an exact alarm: WorkManager may run later (Doze, battery, no network). A late wake-up keeps its slot identity (`auto:2026-10-01:0730:KST`), processes market dates through the actual cutoff (catch-up by market date, not worker timestamp), and schedules only the next future slot — missed days are not replayed as a burst.
+
+## Auto OFF
+
+Turning Auto OFF cancels every pending Auto wake-up. A wake-up that races with OFF sees Auto OFF and exits without running. Run Now and Retry Failed Cycle keep working.
+
+## Legacy periodic work
+
+Builds before Phase 11 / Gate 7B registered periodic work `bjstock_forward_test_v1`. Every app start and every Auto toggle cancels it. If it still fires once, it does not run a Forward Test and does not create an operation; with Auto ON it only makes sure the new daily slot exists.
+
+## Schedule status
+
+`ForwardTestScheduler.status()` reports Auto ON / OFF, the next slot id and time, its WorkManager id and state, and the last scheduling failure. The Operations UI that will show it is not built yet. Schedule changes are recorded as `WORKER_SCHEDULE_CHANGED` operational events (`docs/150` 20.9.9).
 
 ## Run Now
 
@@ -40,11 +54,13 @@ elapsed_ms   (empty — real duration unknown)
 
 - One `OPERATION_FINISHED` event is appended in the same transaction; earlier events of that operation stay as they were. A cycle that was started but never finished is not marked finished by recovery.
 - Recovery does not run a Forward Test by itself. Market dates not yet processed are picked up by the next Worker run or Run Now through the normal catch-up.
-- If WorkManager redelivers the interrupted Worker attempt, it gets `retry`; the next attempt runs normally under a new attempt key. A later Run Now is unaffected.
+- If WorkManager redelivers the interrupted Worker attempt, it gets `retry`; the next attempt runs normally under the same slot with the next attempt number (`worker:auto:2026-10-01:0730:KST:1`). A later Run Now is unaffected.
 - Recovery is idempotent: restarting the app again changes nothing.
-- The Auto schedule itself (periodic work, constraints, Auto ON / OFF, 18:00 cutoff) is unchanged.
+- Recovery does not change the Auto schedule; after recovery the app re-applies Auto (existing pending slot kept, otherwise the next slot is created).
 
-Details: `docs/150` 20.8.
+Details: `docs/150` 20.8 and 20.9.
+
+Future Operations UI requirement: a `RUNNING` operation that already has `OPERATION_FINISHED` must be shown as a high-priority local data-integrity warning (not an API error log entry). Not built yet (`docs/150` 20.8.11).
 
 ## Status Labels
 
@@ -95,7 +111,7 @@ Non-retryable failures stay visible on the dashboard until fixed + Retry.
 Until Phase 10 acceptance:
 
 ```text
-Actual WorkManager wake-up: DEFERRED
+Actual WorkManager wake-up (07:30 KST daily slot): DEFERRED
 Actual KIS daily automation: DEFERRED
 Actual offline catch-up on device: DEFERRED
 ```

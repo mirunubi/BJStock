@@ -13,8 +13,10 @@ object SafeLogText {
 
     private val CODE = Regex("^[A-Z][A-Z0-9_]{0,63}$")
     private val EVENT_KEY = Regex("^[a-z]+(:[A-Za-z0-9_-]{1,64}){1,8}$")
+    private const val SCHEDULE_INSTANCE_PATTERN = "auto:[0-9]{4}-[0-9]{2}-[0-9]{2}:[0-9]{4}:KST"
+    private val SCHEDULE_INSTANCE_ID = Regex("^$SCHEDULE_INSTANCE_PATTERN$")
     private val OPERATION_KEY = Regex(
-        "^(worker:[A-Za-z0-9-]{1,64}:[0-9]{4}-[0-9]{2}-[0-9]{2}:[0-9]{1,6}" +
+        "^(worker:$SCHEDULE_INSTANCE_PATTERN:[0-9]{1,6}" +
             "|manual:[A-Za-z0-9-]{1,64}" +
             "|manual-retry:[A-Za-z0-9-]{1,64})$",
     )
@@ -45,6 +47,11 @@ object SafeLogText {
 
     fun operationKey(value: String): String {
         require(OPERATION_KEY.matches(value)) { "operation_key has a disallowed shape" }
+        return value
+    }
+
+    fun scheduleInstanceId(value: String): String {
+        require(SCHEDULE_INSTANCE_ID.matches(value)) { "schedule_instance_id has a disallowed shape" }
         return value
     }
 

@@ -92,16 +92,49 @@ class ForwardTestExecutionCoordinatorTest {
     }
 
     @Test
-    fun worker_createsOneWorkerRow_withWorkIdentityAndInterimKey() = runBlocking<Unit> {
-        coordinator.runWorker(workId = WORK_ID, runAttempt = 2)
+    fun worker_createsOneWorkerRow_withScheduleInstanceKey_andWorkIdAsMetadata() = runBlocking<Unit> {
+        coordinator.runWorker(workId = WORK_ID, runAttempt = 2, scheduleInstanceId = SLOT)
 
         val op = onlyOperation()
-        assertEquals("worker:$WORK_ID:2026-09-30:2", op.operationKey)
+        assertEquals("worker:auto:2026-09-30:0730:KST:2", op.operationKey)
         assertEquals(ForwardOperationTrigger.WORKER, op.trigger)
         assertEquals(ForwardOperationKind.FORWARD_RUN, op.operationKind)
         assertEquals(WORK_ID, op.workId)
         assertEquals(2, op.workAttempt)
+        assertEquals(SLOT, op.scheduleInstanceId)
         assertEquals(THROUGH, op.throughDate)
+    }
+
+    @Test
+    fun manualRunNow_rowHasNoScheduleInstance() = runBlocking<Unit> {
+        coordinator.runManualNow()
+
+        assertNull(onlyOperation().scheduleInstanceId)
+    }
+
+    @Test
+    fun differentWorkIds_forTheSameSlotAndAttempt_resolveToOneOperation_withoutDuplicateExecution() =
+        runBlocking<Unit> {
+            executor.forward = { _, observer -> reportOf(observer, processed(1)) }
+            val first = coordinator.runWorker("0a5e4c1d-0000-4000-8000-000000000001", 0, SLOT)
+            val second = coordinator.runWorker("0a5e4c1d-0000-4000-8000-000000000002", 0, SLOT)
+
+            assertEquals(first.operationId, second.operationId)
+            assertTrue(second.replayed)
+            assertEquals(1, executor.forwardCalls.get())
+            assertEquals("0a5e4c1d-0000-4000-8000-000000000001", onlyOperation().workId)
+        }
+
+    @Test
+    fun twoCalendarSlots_areDistinctOperations_andThroughDateStaysIndependentOfTheSlot() = runBlocking<Unit> {
+        executor.forward = { _, observer -> reportOf(observer, processed(1)) }
+        val today = coordinator.runWorker(WORK_ID, 0, SLOT)
+        val tomorrow = coordinator.runWorker(WORK_ID, 0, SLOT_NEXT)
+
+        val rows = listOf(today, tomorrow).map { operationLog.findOperation(it.operationId)!! }
+        assertEquals(listOf(SLOT, SLOT_NEXT), rows.map { it.scheduleInstanceId })
+        assertEquals(listOf(THROUGH, THROUGH), rows.map { it.throughDate })
+        assertEquals(2, executor.forwardCalls.get())
     }
 
     @Test
@@ -143,7 +176,7 @@ class ForwardTestExecutionCoordinatorTest {
 
     @Test
     fun noEligibleRuns_isNoOp_andWorkerSucceeds() = runBlocking<Unit> {
-        val outcome = coordinator.runWorker(WORK_ID, 0)
+        val outcome = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         val op = onlyOperation()
         assertEquals(ForwardOperationStatus.NO_OP, op.status)
@@ -156,7 +189,7 @@ class ForwardTestExecutionCoordinatorTest {
     @Test
     fun nonRetryableBlock_isBlocked_andWorkerFails() = runBlocking<Unit> {
         executor.forward = { _, observer -> reportOf(observer, blocked(1, ForwardOutcomeReason.MISSING_POLICY.name)) }
-        val outcome = coordinator.runWorker(WORK_ID, 0)
+        val outcome = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         val op = onlyOperation()
         assertEquals(ForwardOperationStatus.BLOCKED, op.status)
@@ -169,7 +202,7 @@ class ForwardTestExecutionCoordinatorTest {
         executor.forward = { _, observer ->
             reportOf(observer, blocked(1, ForwardErrorCode.NETWORK_FAILURE.name, retryable = true))
         }
-        val outcome = coordinator.runWorker(WORK_ID, 0)
+        val outcome = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         assertEquals(ForwardOperationStatus.BLOCKED, onlyOperation().status)
         assertEquals(WorkerDisposition.RETRY, outcome.disposition)
@@ -178,7 +211,7 @@ class ForwardTestExecutionCoordinatorTest {
     @Test
     fun unexpectedException_persistsOnlySafeRepresentation_andWorkerFails() = runBlocking<Unit> {
         executor.forward = { _, _ -> throw IllegalStateException(SECRET_BEARING_TEXT) }
-        val outcome = coordinator.runWorker(WORK_ID, 0)
+        val outcome = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         val op = onlyOperation()
         assertEquals(ForwardOperationStatus.FAILED, op.status)
@@ -194,7 +227,7 @@ class ForwardTestExecutionCoordinatorTest {
     fun cancellation_isRethrown_recordedAsCancelled_andReleasesLock() = runBlocking<Unit> {
         val gate = Gate()
         executor.forward = { _, _ -> gate.hold() }
-        val worker = async(Dispatchers.Default) { coordinator.runWorker(WORK_ID, 0) }
+        val worker = async(Dispatchers.Default) { coordinator.runWorker(WORK_ID, 0, SLOT) }
         gate.awaitEntered()
         assertTrue(coordinator.isExecutionActive)
 
@@ -240,7 +273,7 @@ class ForwardTestExecutionCoordinatorTest {
         executor.forward = { _, observer -> gate.hold(); reportOf(observer, processed(1)) }
         val manual = async { coordinator.runManualNow() }
         gate.awaitEntered()
-        val workerWhileManual = coordinator.runWorker(WORK_ID, 0)
+        val workerWhileManual = coordinator.runWorker(WORK_ID, 0, SLOT)
         assertAlreadyRunning(workerWhileManual, ForwardOperationTrigger.WORKER, ForwardOperationKind.FORWARD_RUN)
         assertEquals(WorkerDisposition.RETRY, workerWhileManual.disposition)
         gate.release()
@@ -248,7 +281,7 @@ class ForwardTestExecutionCoordinatorTest {
 
         val secondGate = Gate()
         executor.forward = { _, observer -> secondGate.hold(); reportOf(observer, processed(1)) }
-        val worker = async(Dispatchers.Default) { coordinator.runWorker(WORK_ID, 1) }
+        val worker = async(Dispatchers.Default) { coordinator.runWorker(WORK_ID, 1, SLOT) }
         secondGate.awaitEntered()
         val manualWhileWorker = coordinator.runManualNow()
         assertAlreadyRunning(manualWhileWorker, ForwardOperationTrigger.MANUAL, ForwardOperationKind.FORWARD_RUN)
@@ -261,10 +294,10 @@ class ForwardTestExecutionCoordinatorTest {
     fun workerWorkerOverlap_secondIsBlocked() = runBlocking<Unit> {
         val gate = Gate()
         executor.forward = { _, observer -> gate.hold(); reportOf(observer, processed(1)) }
-        val first = async(Dispatchers.Default) { coordinator.runWorker("work-a", 0) }
+        val first = async(Dispatchers.Default) { coordinator.runWorker("work-a", 0, SLOT) }
         gate.awaitEntered()
 
-        val second = coordinator.runWorker("work-b", 0)
+        val second = coordinator.runWorker("work-b", 0, SLOT_NEXT)
 
         assertAlreadyRunning(second, ForwardOperationTrigger.WORKER, ForwardOperationKind.FORWARD_RUN)
         assertEquals(WorkerDisposition.RETRY, second.disposition)
@@ -278,7 +311,7 @@ class ForwardTestExecutionCoordinatorTest {
         executor.forward = { _, observer -> reportOf(observer, processed(1)) }
         coordinator.runManualNow()
         assertFalse(coordinator.isExecutionActive)
-        assertEquals(ForwardOperationStatus.SUCCEEDED, coordinator.runWorker(WORK_ID, 0).status)
+        assertEquals(ForwardOperationStatus.SUCCEEDED, coordinator.runWorker(WORK_ID, 0, SLOT).status)
         assertEquals(2, executor.forwardCalls.get())
     }
 
@@ -294,10 +327,10 @@ class ForwardTestExecutionCoordinatorTest {
     // --- key semantics / idempotency ---
 
     @Test
-    fun workerRedelivery_sameWorkIdDateAttempt_resolvesToSameRowWithoutReexecution() = runBlocking<Unit> {
+    fun workerRedelivery_sameSlotAndAttempt_resolvesToSameRowWithoutReexecution() = runBlocking<Unit> {
         executor.forward = { _, observer -> reportOf(observer, processed(1)) }
-        val first = coordinator.runWorker(WORK_ID, 3)
-        val replay = coordinator.runWorker(WORK_ID, 3)
+        val first = coordinator.runWorker(WORK_ID, 3, SLOT)
+        val replay = coordinator.runWorker(WORK_ID, 3, SLOT)
 
         assertEquals(first.operationId, replay.operationId)
         assertTrue(replay.replayed)
@@ -314,17 +347,17 @@ class ForwardTestExecutionCoordinatorTest {
             operationLog.findEvents(first.operationId).map { it.eventType },
         )
 
-        coordinator.runWorker(WORK_ID, 4)
+        coordinator.runWorker(WORK_ID, 4, SLOT)
         assertEquals(2, database.forwardOperationDao().countAll())
     }
 
     @Test
     fun workerRedelivery_ofFailedOperation_keepsStoredDisposition() = runBlocking<Unit> {
         executor.forward = { _, observer -> reportOf(observer, blocked(1, ForwardOutcomeReason.MISSING_POLICY.name)) }
-        coordinator.runWorker(WORK_ID, 0)
+        coordinator.runWorker(WORK_ID, 0, SLOT)
         executor.forward = { _, observer -> reportOf(observer, processed(1)) }
 
-        val replay = coordinator.runWorker(WORK_ID, 0)
+        val replay = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         assertTrue(replay.replayed)
         assertEquals(ForwardOperationStatus.BLOCKED, replay.status)
@@ -352,7 +385,7 @@ class ForwardTestExecutionCoordinatorTest {
         val orphan = startWorkerInPreviousProcess(attempt = 0)
         operationLog.recoverInterruptedOperations(NOW.plusMillis(1))
 
-        val replay = coordinator.runWorker(WORK_ID, 0)
+        val replay = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         assertTrue(replay.replayed)
         assertEquals(orphan, replay.operationId)
@@ -362,12 +395,14 @@ class ForwardTestExecutionCoordinatorTest {
         assertEquals(0, executor.forwardCalls.get())
 
         executor.forward = { _, observer -> reportOf(observer, processed(1)) }
-        val next = coordinator.runWorker(WORK_ID, 1)
+        val next = coordinator.runWorker(WORK_ID, 1, SLOT)
 
         assertFalse(next.replayed)
         assertEquals(ForwardOperationStatus.SUCCEEDED, next.status)
         assertEquals(WorkerDisposition.SUCCESS, next.disposition)
-        assertEquals("worker:$WORK_ID:2026-09-30:1", operationLog.findOperation(next.operationId)!!.operationKey)
+        val nextRow = operationLog.findOperation(next.operationId)!!
+        assertEquals("worker:auto:2026-09-30:0730:KST:1", nextRow.operationKey)
+        assertEquals(SLOT, nextRow.scheduleInstanceId)
         assertEquals(listOf(THROUGH), executor.forwardDates)
         assertEquals(1, executor.forwardCalls.get())
     }
@@ -392,7 +427,7 @@ class ForwardTestExecutionCoordinatorTest {
         val running = startWorkerInPreviousProcess(attempt = 0)
 
         assertEquals(emptyList<Long>(), operationLog.recoverInterruptedOperations(NOW))
-        val replay = coordinator.runWorker(WORK_ID, 0)
+        val replay = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         assertEquals(running, replay.operationId)
         assertEquals(ForwardOperationStatus.RUNNING, replay.status)
@@ -413,7 +448,7 @@ class ForwardTestExecutionCoordinatorTest {
     @Test
     fun executorRunsInsideOperationContext_andContextIsClearedAfterwards() = runBlocking<Unit> {
         val outcome = coordinator.runManualNow()
-        val worker = coordinator.runWorker(WORK_ID, 0)
+        val worker = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         assertEquals(listOf<Long?>(outcome.operationId, worker.operationId), executor.seenOperationIds)
         assertNull(currentForwardOperationId())
@@ -496,7 +531,7 @@ class ForwardTestExecutionCoordinatorTest {
     fun retry_isBlockedWhileWorkerIsActive() = runBlocking<Unit> {
         val gate = Gate()
         executor.forward = { _, observer -> gate.hold(); reportOf(observer, processed(1)) }
-        val worker = async(Dispatchers.Default) { coordinator.runWorker(WORK_ID, 0) }
+        val worker = async(Dispatchers.Default) { coordinator.runWorker(WORK_ID, 0, SLOT) }
         gate.awaitEntered()
 
         val retry = coordinator.retryFailedCycle(RetryFailedCycleTarget(runId = 5))
@@ -529,7 +564,7 @@ class ForwardTestExecutionCoordinatorTest {
         val retry = async { coordinator.retryFailedCycle(RetryFailedCycleTarget(runId = 5)) }
         gate.awaitEntered()
 
-        val worker = coordinator.runWorker(WORK_ID, 0)
+        val worker = coordinator.runWorker(WORK_ID, 0, SLOT)
 
         assertAlreadyRunning(worker, ForwardOperationTrigger.WORKER, ForwardOperationKind.FORWARD_RUN)
         assertEquals(WorkerDisposition.RETRY, worker.disposition)
@@ -556,7 +591,7 @@ class ForwardTestExecutionCoordinatorTest {
     fun retry_lockIsReleasedAfterSuccess() = runBlocking<Unit> {
         coordinator.retryFailedCycle(RetryFailedCycleTarget(runId = 5))
         assertFalse(coordinator.isExecutionActive)
-        assertEquals(ForwardOperationStatus.NO_OP, coordinator.runWorker(WORK_ID, 0).status)
+        assertEquals(ForwardOperationStatus.NO_OP, coordinator.runWorker(WORK_ID, 0, SLOT).status)
     }
 
     @Test
@@ -565,7 +600,7 @@ class ForwardTestExecutionCoordinatorTest {
         val outcome = coordinator.retryFailedCycle(RetryFailedCycleTarget(runId = 5))
         assertEquals(ForwardOperationStatus.FAILED, outcome.status)
         assertFalse(coordinator.isExecutionActive)
-        assertEquals(ForwardOperationStatus.NO_OP, coordinator.runWorker(WORK_ID, 0).status)
+        assertEquals(ForwardOperationStatus.NO_OP, coordinator.runWorker(WORK_ID, 0, SLOT).status)
     }
 
     @Test
@@ -590,7 +625,7 @@ class ForwardTestExecutionCoordinatorTest {
         assertEquals(ForwardOperationStatus.FAILED, op.status)
         assertEquals(ForwardOutcomeReason.CANCELLED.name, op.finalCode)
         assertFalse(retryCoordinator.isExecutionActive)
-        assertEquals(ForwardOperationStatus.NO_OP, retryCoordinator.runWorker(WORK_ID, 0).status)
+        assertEquals(ForwardOperationStatus.NO_OP, retryCoordinator.runWorker(WORK_ID, 0, SLOT).status)
     }
 
     @Test
@@ -619,11 +654,12 @@ class ForwardTestExecutionCoordinatorTest {
     private suspend fun startWorkerInPreviousProcess(attempt: Int): Long =
         operationLog.startOperation(
             StartOperationRequest(
-                operationKey = ForwardOperationKeys.worker(WORK_ID, THROUGH, attempt),
+                operationKey = ForwardOperationKeys.worker(SLOT, attempt),
                 trigger = ForwardOperationTrigger.WORKER,
                 throughDate = THROUGH,
                 workId = WORK_ID,
                 workAttempt = attempt,
+                scheduleInstanceId = SLOT,
             ),
         ).operationId
 
@@ -716,6 +752,8 @@ class ForwardTestExecutionCoordinatorTest {
     private companion object {
         const val TIMEOUT = 10_000L
         const val WORK_ID = "7b0c2f55-1d2e-4a6b-9f3c-0d1e2f3a4b5c"
+        const val SLOT = "auto:2026-09-30:0730:KST"
+        const val SLOT_NEXT = "auto:2026-10-01:0730:KST"
         val THROUGH: LocalDate = LocalDate.of(2026, 9, 30)
         val NOW: Instant = Instant.parse("2026-09-30T11:00:00Z")
         val CLOCK_INSTANT: Instant =

@@ -46,6 +46,20 @@ class AppStartSequenceTest {
     }
 
     @Test
+    fun scheduleReconciliationFailure_isContained_andMaintenanceStillRuns() = runBlocking {
+        runAppStartSequence(
+            recoverInterruptedOperations = { calls += "recover" },
+            reconcileAutoSchedule = {
+                calls += "schedule"
+                throw IllegalStateException("WorkManager unavailable")
+            },
+            maintenance = { calls += "maintenance" },
+        )
+
+        assertEquals(listOf("recover", "schedule", "maintenance"), calls)
+    }
+
+    @Test
     fun cancellationIsNotSwallowed() {
         val failure = runCatching {
             runBlocking {

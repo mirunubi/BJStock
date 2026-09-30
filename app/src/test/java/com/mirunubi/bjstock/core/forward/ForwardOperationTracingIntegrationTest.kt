@@ -196,8 +196,8 @@ class ForwardOperationTracingIntegrationTest {
         assertEquals(RunStatus.RUNNING, h.database.strategyRunDao().findById(runId)!!.status)
 
         val again = h.coordinator.runManualNow()
-        h.coordinator.runWorker(WORK_ID, 0)
-        h.coordinator.runWorker(WORK_ID, 0)
+        h.coordinator.runWorker(WORK_ID, 0, SLOT)
+        h.coordinator.runWorker(WORK_ID, 0, SLOT)
 
         TRADING_TABLES.forEach { sql -> assertEquals(sql, before.getValue(sql), h.dump(sql)) }
         assertTrue(h.database.executionDao().countByRun(runId) > 0)
@@ -212,7 +212,7 @@ class ForwardOperationTracingIntegrationTest {
         val runId = h.createRun(start = MONDAY, end = WEDNESDAY)
         h.gateway.failSync = true
 
-        val outcome = h.coordinator.runWorker(WORK_ID, 0)
+        val outcome = h.coordinator.runWorker(WORK_ID, 0, SLOT)
 
         val sync = h.events(outcome.operationId).single { it.eventType == OperationalEventType.MARKET_SYNC_RESULT }
         assertEquals(runId, sync.runId)
@@ -435,7 +435,7 @@ class ForwardOperationTracingIntegrationTest {
         val processed = h.createRun(MONDAY, WEDNESDAY, "P")
         val blocker = h.createEmptyUniverseRun()
         val later = listOf(h.createRun(MONDAY, WEDNESDAY, "L1"), h.createRun(MONDAY, WEDNESDAY, "L2"))
-        val outcome = if (viaWorker) h.coordinator.runWorker(WORK_ID, 0) else h.coordinator.runManualNow()
+        val outcome = if (viaWorker) h.coordinator.runWorker(WORK_ID, 0, SLOT) else h.coordinator.runManualNow()
         return PartialScenario(
             h = h,
             processedId = processed,
@@ -733,6 +733,7 @@ class ForwardOperationTracingIntegrationTest {
 
     private companion object {
         const val WORK_ID = "3f1e2d4c-5b6a-4789-8a9b-0c1d2e3f4a5b"
+        const val SLOT = "auto:2026-09-30:0730:KST"
         val FRIDAY: LocalDate = LocalDate.of(2026, 10, 9)
         val MONDAY: LocalDate = LocalDate.of(2026, 10, 12)
         val TUESDAY: LocalDate = LocalDate.of(2026, 10, 13)

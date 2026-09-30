@@ -42,6 +42,7 @@ class ForwardOperationLogService(
                     operationKind = request.kind,
                     workId = request.workId,
                     workAttempt = request.workAttempt,
+                    scheduleInstanceId = request.scheduleInstanceId,
                     throughDate = request.throughDate,
                     status = ForwardOperationStatus.RUNNING,
                     startedAt = startedAt,
@@ -211,16 +212,18 @@ class ForwardOperationLogService(
                     "WORKER operations require work_id and work_attempt"
                 }
                 require(request.workAttempt >= 0) { "work_attempt must be non-negative" }
+                require(!request.scheduleInstanceId.isNullOrBlank()) { "WORKER operations require schedule_instance_id" }
+                SafeLogText.scheduleInstanceId(request.scheduleInstanceId)
                 require(request.kind == ForwardOperationKind.FORWARD_RUN) { "WORKER operations are FORWARD_RUN" }
                 require(
-                    request.operationKey ==
-                        ForwardOperationKeys.worker(request.workId, request.throughDate, request.workAttempt),
-                ) { "WORKER key must be worker:<work_id>:<through_date>:<attempt>" }
+                    request.operationKey == ForwardOperationKeys.worker(request.scheduleInstanceId, request.workAttempt),
+                ) { "WORKER key must be worker:<schedule_instance_id>:<attempt>" }
             }
             ForwardOperationTrigger.MANUAL -> {
                 require(request.workId == null && request.workAttempt == null) {
                     "MANUAL operations must not carry work_id / work_attempt"
                 }
+                require(request.scheduleInstanceId == null) { "MANUAL operations must not carry schedule_instance_id" }
                 val prefix = when (request.kind) {
                     ForwardOperationKind.FORWARD_RUN -> "manual:"
                     ForwardOperationKind.RETRY_FAILED_CYCLE -> "manual-retry:"
@@ -248,6 +251,7 @@ data class StartOperationRequest(
     val workId: String? = null,
     val workAttempt: Int? = null,
     val kind: ForwardOperationKind = ForwardOperationKind.FORWARD_RUN,
+    val scheduleInstanceId: String? = null,
 )
 
 data class OperationCounts(
@@ -309,11 +313,10 @@ sealed class AppendEventResult {
 
 object ForwardOperationKeys {
     /**
-     * Interim key for the current PeriodicWorkRequest: WorkManager reuses the work id every period
-     * and resets the run attempt to 0 after each period, so the through-date separates periods.
+     * Canonical Auto key (docs/150 §20.9): the schedule instance names the logical invocation and the attempt
+     * is WorkManager's retry attempt. work_id and through_date are operation data, not identity.
      */
-    fun worker(workId: String, throughDate: LocalDate, workAttempt: Int): String =
-        "worker:$workId:$throughDate:$workAttempt"
+    fun worker(scheduleInstanceId: String, workAttempt: Int): String = "worker:$scheduleInstanceId:$workAttempt"
 
     fun manual(requestId: String): String = "manual:$requestId"
 
@@ -331,4 +334,7 @@ object OperationalEventKeys {
         "op:$operationId:cycle:$cycleId:attempt:$attempt:finished"
     fun workerScheduleChanged(action: String, epochMillis: Long) =
         "schedule:${SafeLogText.code(action)}:$epochMillis"
+    fun scheduleSlotEnqueued(scheduleInstanceId: String) =
+        "schedule:slot:${SafeLogText.scheduleInstanceId(scheduleInstanceId)}:enqueued"
+    fun legacyPeriodicCancelled(workName: String) = "schedule:legacy:$workName:cancelled"
 }

@@ -573,6 +573,13 @@ object BJStockMigrations {
         }
     }
 
+    /** Phase 11 / Gate 7B: nullable Auto slot identity. Existing rows stay NULL; nothing is backfilled. */
+    val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `forward_operations` ADD COLUMN `schedule_instance_id` TEXT")
+        }
+    }
+
     /**
      * Appends the missing ORDER_REJECTED / ORDER_CANCELLED audit of pre-Gate-6 terminal orders.
      * Append-only and idempotent: an order that already has its audit (by key or by order + type) is skipped,

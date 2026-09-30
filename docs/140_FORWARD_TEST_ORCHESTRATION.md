@@ -63,7 +63,7 @@ On `run.end_date = D`:
 
 ## WorkManager
 
-- Unique periodic work `bjstock_forward_test_v1`
+- One-time work per daily slot, 07:30 Asia/Seoul earliest (`bjstock_forward_test_auto_<YYYY-MM-DD>_0730_KST`, `KEEP`, tag `bjstock_forward_test_auto_v2`); each invocation schedules the next slot before running (`docs/150` 20.9). Legacy periodic work `bjstock_forward_test_v1` is only cancelled
 - Network: `CONNECTED`
 - Auto default: **OFF**
 - No `SCHEDULE_EXACT_ALARM` / AlarmManager

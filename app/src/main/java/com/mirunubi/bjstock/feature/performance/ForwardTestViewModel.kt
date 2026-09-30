@@ -218,8 +218,15 @@ class ForwardTestViewModel @Inject constructor(
     }
 
     fun toggleAuto(enabled: Boolean) {
-        scheduler.setAutoEnabled(enabled)
-        _uiState.update { it.copy(autoEnabled = scheduler.isAutoEnabled()) }
+        viewModelScope.launch {
+            val failure = runCatching { scheduler.setAutoEnabled(enabled) }.exceptionOrNull()
+            _uiState.update {
+                it.copy(
+                    autoEnabled = scheduler.isAutoEnabled(),
+                    message = failure?.let { e -> "Auto schedule update failed: ${e::class.simpleName}" } ?: it.message,
+                )
+            }
+        }
     }
 
     fun runNow() {

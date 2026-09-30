@@ -64,11 +64,12 @@ class ForwardOperationLogServiceTest {
 
         assertTrue(result is StartOperationResult.Started)
         val op = service.findOperation(result.operationId)!!
-        assertEquals("worker:w-1:2026-09-29:0", op.operationKey)
+        assertEquals("worker:auto:2026-09-30:0730:KST:0", op.operationKey)
         assertEquals(ForwardOperationTrigger.WORKER, op.trigger)
         assertEquals(ForwardOperationKind.FORWARD_RUN, op.operationKind)
         assertEquals("w-1", op.workId)
         assertEquals(0, op.workAttempt)
+        assertEquals(SLOT, op.scheduleInstanceId)
         assertEquals(throughDate, op.throughDate)
         assertEquals(ForwardOperationStatus.RUNNING, op.status)
         assertEquals(now, op.startedAt)
@@ -128,7 +129,7 @@ class ForwardOperationLogServiceTest {
         assertThrows(IllegalArgumentException::class.java) {
             runBlocking {
                 service.startOperation(
-                    StartOperationRequest("worker:w-2:2026-09-29:0", ForwardOperationTrigger.WORKER, throughDate),
+                    StartOperationRequest("worker:$SLOT:0", ForwardOperationTrigger.WORKER, throughDate),
                 )
             }
         }
@@ -136,11 +137,12 @@ class ForwardOperationLogServiceTest {
             runBlocking {
                 service.startOperation(
                     StartOperationRequest(
-                        operationKey = "worker:w-2:2026-09-28:0",
+                        operationKey = "worker:auto:2026-10-01:0730:KST:0",
                         trigger = ForwardOperationTrigger.WORKER,
                         throughDate = throughDate,
                         workId = "w-2",
                         workAttempt = 0,
+                        scheduleInstanceId = SLOT,
                     ),
                 )
             }
@@ -169,6 +171,75 @@ class ForwardOperationLogServiceTest {
     }
 
     @Test
+    fun workerOperations_requireAValidScheduleInstance_andTheCanonicalKey() {
+        fun request(key: String, sid: String?, attempt: Int = 0, workId: String? = "w-5") = StartOperationRequest(
+            operationKey = key,
+            trigger = ForwardOperationTrigger.WORKER,
+            throughDate = throughDate,
+            workId = workId,
+            workAttempt = attempt,
+            scheduleInstanceId = sid,
+        )
+        val rejected = listOf(
+            request("worker:$SLOT:0", sid = null),
+            request("worker:$SLOT:0", sid = " "),
+            request("worker:auto:2026-9-30:0730:KST:0", sid = "auto:2026-9-30:0730:KST"),
+            request("worker:auto:2026-09-30:0800:UTC:0", sid = "auto:2026-09-30:0800:UTC"),
+            request("worker:w-5:2026-09-29:0", sid = SLOT),
+            request("worker:$SLOT:1", sid = SLOT, attempt = 0),
+            request("worker:$SLOT:-1", sid = SLOT, attempt = -1),
+            request("worker:$SLOT:0", sid = SLOT, workId = " "),
+        )
+        rejected.forEach { assertThrows(IllegalArgumentException::class.java) { runBlocking { service.startOperation(it) } } }
+        runBlocking { assertEquals(0, database.forwardOperationDao().countAll()) }
+    }
+
+    @Test
+    fun manualOperations_neverCarryAScheduleInstance() {
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                service.startOperation(manualRequest("req-s").copy(scheduleInstanceId = SLOT))
+            }
+        }
+        runBlocking {
+            val id = service.startOperation(manualRequest("req-t")).operationId
+            assertNull(service.findOperation(id)!!.scheduleInstanceId)
+        }
+    }
+
+    @Test
+    fun sameSlotAndAttempt_replaysIdempotently_whileANewAttemptIsANewOperation() = runBlocking {
+        val first = service.startOperation(workerRequest("w-6", 0))
+        val replay = service.startOperation(workerRequest("w-7", 0))
+        val nextAttempt = service.startOperation(workerRequest("w-6", 1))
+
+        assertTrue(replay is StartOperationResult.AlreadyExists)
+        assertEquals(first.operationId, replay.operationId)
+        assertTrue(nextAttempt is StartOperationResult.Started)
+        val rows = database.forwardOperationDao().findRecent()
+        assertEquals(2, rows.size)
+        assertEquals(setOf(SLOT), rows.map { it.scheduleInstanceId }.toSet())
+        assertEquals(setOf("worker:$SLOT:0", "worker:$SLOT:1"), rows.map { it.operationKey }.toSet())
+    }
+
+    @Test
+    fun legacyWorkerRow_withoutScheduleInstance_staysReadable() = runBlocking {
+        database.openHelper.writableDatabase.execSQL(
+            """
+            INSERT INTO forward_operations (
+                operation_key, `trigger`, work_id, work_attempt, through_date, status, started_at, finished_at,
+                runs_considered, runs_processed, runs_skipped, cycles_completed, cycles_failed
+            ) VALUES ('worker:w-legacy:2026-09-29:0', 'WORKER', 'w-legacy', 0, 0, 'SUCCEEDED', 0, 1, 0, 0, 0, 0, 0)
+            """.trimIndent(),
+        )
+
+        val legacy = database.forwardOperationDao().findRecent().single()
+        assertEquals("worker:w-legacy:2026-09-29:0", legacy.operationKey)
+        assertEquals(ForwardOperationTrigger.WORKER, legacy.trigger)
+        assertNull(legacy.scheduleInstanceId)
+    }
+
+    @Test
     fun operationKind_isPersistedAndValidatedAgainstTriggerAndKey() = runBlocking {
         val retry = service.startOperation(
             StartOperationRequest(
@@ -191,12 +262,13 @@ class ForwardOperationLogServiceTest {
             StartOperationRequest("manual:req-a", ForwardOperationTrigger.MANUAL, throughDate, kind = ForwardOperationKind.RETRY_FAILED_CYCLE),
             StartOperationRequest("manual-retry:req-b", ForwardOperationTrigger.MANUAL, throughDate),
             StartOperationRequest(
-                operationKey = ForwardOperationKeys.worker("w-9", throughDate, 1),
+                operationKey = ForwardOperationKeys.worker(SLOT, 1),
                 trigger = ForwardOperationTrigger.WORKER,
                 throughDate = throughDate,
                 workId = "w-9",
                 workAttempt = 1,
                 kind = ForwardOperationKind.RETRY_FAILED_CYCLE,
+                scheduleInstanceId = SLOT,
             ),
         )
         rejected.forEach { request ->
@@ -510,13 +582,18 @@ class ForwardOperationLogServiceTest {
         assertEquals(1, database.tradeAuditLogDao().findByRun(runId).size)
     }
 
-    private fun workerRequest(workId: String, attempt: Int) = StartOperationRequest(
-        operationKey = ForwardOperationKeys.worker(workId, throughDate, attempt),
+    private fun workerRequest(workId: String, attempt: Int, scheduleInstanceId: String = SLOT) = StartOperationRequest(
+        operationKey = ForwardOperationKeys.worker(scheduleInstanceId, attempt),
         trigger = ForwardOperationTrigger.WORKER,
         throughDate = throughDate,
         workId = workId,
         workAttempt = attempt,
+        scheduleInstanceId = scheduleInstanceId,
     )
+
+    private companion object {
+        const val SLOT = "auto:2026-09-30:0730:KST"
+    }
 
     private fun manualRequest(requestId: String) = StartOperationRequest(
         operationKey = ForwardOperationKeys.manual(requestId),

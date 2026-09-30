@@ -68,16 +68,20 @@ class ForwardTestExecutionCoordinator(
         ) { observer -> executor.executeRetryFailedCycle(target, throughDate, observer) }
     }.await()
 
-    /** Executes in the Worker's own coroutine so WorkManager stop / cancellation semantics are unchanged. */
-    suspend fun runWorker(workId: String, runAttempt: Int): ForwardOperationOutcome {
+    /**
+     * Executes in the Worker's own coroutine so WorkManager stop / cancellation semantics are unchanged.
+     * Identity is [scheduleInstanceId] + [runAttempt]; the through-date is computed at the actual run time.
+     */
+    suspend fun runWorker(workId: String, runAttempt: Int, scheduleInstanceId: String): ForwardOperationOutcome {
         val throughDate = clock.throughDate()
         return execute(
             StartOperationRequest(
-                operationKey = ForwardOperationKeys.worker(workId, throughDate, runAttempt),
+                operationKey = ForwardOperationKeys.worker(scheduleInstanceId, runAttempt),
                 trigger = ForwardOperationTrigger.WORKER,
                 throughDate = throughDate,
                 workId = workId,
                 workAttempt = runAttempt,
+                scheduleInstanceId = scheduleInstanceId,
             ),
         ) { observer -> executor.executeForwardRuns(throughDate, observer) }
     }

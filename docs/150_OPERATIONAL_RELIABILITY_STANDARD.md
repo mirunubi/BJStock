@@ -21,9 +21,10 @@ This standard is written to be **portable later to CatchMenu and other projects*
 | Atomic run-end finalization (cancellations + audits + run `COMPLETED`) | Implemented — Gate 6.1 (20.6) |
 | Legacy `REJECTED` / `CANCELLED` order audit reconciliation | Implemented — Room v11 / PostgreSQL `0013`, data-only (Gate 6.1, 20.6) |
 | Interrupted (orphan `RUNNING`) operation recovery on app start | Implemented — Gate 7A (20.8) |
-| Scheduler rework, retention/archive, Operations UI | **Not implemented** — later Phase 11 gates |
+| Daily one-time Auto scheduler + `schedule_instance_id` | Implemented — Room v12 / PostgreSQL `0014` (Gate 7B, 20.9) |
+| Retention/archive, Operations UI | **Not implemented** — later Phase 11 gates |
 
-Auto Forward Test scheduling (periodic work, 18:00 Asia/Seoul cutoff), trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, 6.1, 6.2, and 7A.
+The 18:00 Asia/Seoul cutoff, trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, 6.1, 6.2, 7A, and 7B. Auto scheduling itself changed in Gate 7B (20.9).
 
 ---
 
@@ -270,7 +271,7 @@ Trigger and kind are independent columns. The kind is never inferred from the ke
 | Entry point | `trigger` | `operation_kind` | `operation_key` |
 | --- | --- | --- | --- |
 | Run Now | `MANUAL` | `FORWARD_RUN` | `manual:<request_id>` |
-| `ForwardTestWorker` | `WORKER` | `FORWARD_RUN` | `worker:<work_id>:<through_date>:<attempt>` (interim, 20.4.3) |
+| `ForwardTestWorker` | `WORKER` | `FORWARD_RUN` | `worker:<schedule_instance_id>:<attempt>` (Gate 7B, 20.9.4) |
 | Retry Failed Cycle | `MANUAL` | `RETRY_FAILED_CYCLE` | `manual-retry:<request_id>` |
 
 Correlation chain:
@@ -295,7 +296,7 @@ Links:
 | Field | Type (Room) | Notes |
 | --- | --- | --- |
 | `id` | INTEGER PK | autoincrement |
-| `operation_key` | TEXT NOT NULL UNIQUE | deterministic: `worker:<work_id>:<through_date>:<attempt>`, `manual:<request_id>`, or `manual-retry:<request_id>` |
+| `operation_key` | TEXT NOT NULL UNIQUE | deterministic: `worker:<schedule_instance_id>:<attempt>`, `manual:<request_id>`, or `manual-retry:<request_id>`; rows written before Gate 7B may carry the Gate 5 form `worker:<work_id>:<through_date>:<attempt>` |
 | `trigger` | TEXT NOT NULL | `MANUAL` / `WORKER` |
 | `operation_kind` | TEXT NOT NULL DEFAULT `'FORWARD_RUN'` | `FORWARD_RUN` / `RETRY_FAILED_CYCLE`; rows created before Room v9 / `0011` are `FORWARD_RUN` |
 | `work_id` | TEXT nullable | WorkManager request id; required for WORKER, null for MANUAL |
@@ -312,6 +313,7 @@ Links:
 | `cycles_completed` | INTEGER NOT NULL | |
 | `cycles_failed` | INTEGER NOT NULL | |
 | `elapsed_ms` | INTEGER nullable | `finished_at - started_at`, never negative |
+| `schedule_instance_id` | TEXT nullable | Room v12 / `0014`: Auto slot `auto:<YYYY-MM-DD>:0730:KST`; required for new WORKER rows (service validation), NULL for MANUAL; pre-v12 rows stay NULL and are never backfilled or parsed from `operation_key` (20.9.4) |
 
 Status vocabulary (`ForwardOperationStatus`): `RUNNING`, `SUCCEEDED`, `NO_OP`, `PARTIAL`, `BLOCKED`, `FAILED`.
 
@@ -337,7 +339,7 @@ Minimum taxonomy (`OperationalEventType`):
 | `RUN_RESULT` | coordinator, per selected run | `op:<operation_id>:run:<run_id>:result` |
 | `CYCLE_STARTED` | coordinator, per cycle attempt | `op:<operation_id>:cycle:<cycle_id>:attempt:<n>:started` |
 | `CYCLE_FINISHED` | coordinator, per cycle attempt | `op:<operation_id>:cycle:<cycle_id>:attempt:<n>:finished` |
-| `WORKER_SCHEDULE_CHANGED` | scheduler (not yet emitted; scheduler gate) | `schedule:<action>:<epoch_millis>` |
+| `WORKER_SCHEDULE_CHANGED` | `ForwardTestScheduler` (Gate 7B, 20.9.9) | `schedule:slot:<schedule_instance_id>:enqueued`, `schedule:legacy:bjstock_forward_test_v1:cancelled`, `schedule:AUTO_DISABLED:<epoch_millis>` |
 
 The orchestrator reports through `ForwardExecutionObserver` hooks; the coordinator's recorder persists the events (20.4.4).
 
@@ -609,7 +611,7 @@ Changed (20.4):
 
 Unchanged:
 
-- Auto Forward Test still uses the existing periodic WorkManager request (1 day, `CONNECTED`, `KEEP`); the Auto flag check, 18:00 Asia/Seoul cutoff, and WorkManager retry backoff are untouched.
+- Auto Forward Test still uses the existing periodic WorkManager request (1 day, `CONNECTED`, `KEEP`); the Auto flag check, 18:00 Asia/Seoul cutoff, and WorkManager retry backoff are untouched. (Periodic work superseded by daily one-time slots in Gate 7B, 20.9.)
 - Trading math (fills, sizing, commission / tax, snapshots) is untouched.
 - `api_error_logs` still uses the 7-day rolling cleanup (D-141). The 90-day target applies when the lifecycle gate lands.
 - `trade_audit_logs` is still never deleted (D-138). The 400-day hot / 5-year archive target applies only after verified archiving exists.
@@ -619,7 +621,7 @@ Unchanged:
 
 | Deviation | Standard section | Target gate |
 | --- | --- | --- |
-| Auto ON can execute immediately (periodic work, no initial delay) | 5, 7 | scheduler + single-flight |
+| Auto ON can execute immediately (periodic work, no initial delay) | 5, 7 | **RESOLVED** — Phase 11 / Gate 7B: daily one-time slots with an initial delay; Auto ON never executes (see 20.9) |
 | No single-flight between Run Now and Worker | 7 | **RESOLVED** — Phase 11 / Gate 5 (see 20.4.2); also covers Retry Failed Cycle |
 | Orchestrator returns only the last Run's result | 5, 6 | **RESOLVED** — Phase 11 / Gate 5: aggregate outcome across all runs (see 20.4.5) |
 | A non-retryable block stops later Runs | 5, 6 | **Retained by decision** (Gate 5): later runs are recorded `SKIPPED` / `PRIOR_RUN_BLOCKED`; changing isolation needs its own gate |
@@ -706,13 +708,13 @@ The Worker keeps its Auto flag check before calling the coordinator. The legacy 
 | --- | --- |
 | `manual:<request_id>` | Run Now; `request_id` is a fresh UUID per tap, so each tap is its own operation |
 | `manual-retry:<request_id>` | Retry Failed Cycle; fresh UUID per tap. Never derived from `run_id` + cycle date |
-| `worker:<work_id>:<through_date>:<attempt>` | **Interim** key for the current `PeriodicWorkRequest` |
+| `worker:<work_id>:<through_date>:<attempt>` | **Interim** key for the Gate 5 `PeriodicWorkRequest`; **superseded in Gate 7B** by `worker:<schedule_instance_id>:<attempt>` (20.9.4). Existing rows keep it |
 
 Why the Worker key is interim: WorkManager reuses the same `work_id` for every period of a periodic request and resets `runAttemptCount` after each period, so `worker:<work_id>:<attempt>` (D-145) would collide across days. Adding the operation-level `through_date` separates periods; a redelivery of the same `work_id` + `through_date` + `attempt` resolves to the same row and does not re-execute (the stored row decides the Worker result).
 
 Known interim limitation: if periodic drift puts two periods in the same 18:00-to-18:00 KST window (e.g. 18:30 on day N and 17:50 on day N+1, both through-date N) with the same attempt, the second resolves to the first row instead of executing. The first already processed that through-date, so no market date is skipped.
 
-Future canonical key: `worker:<schedule_instance_id>:<attempt>`, with `schedule_instance_id` such as `auto:2026-10-01:0730:KST`. It is introduced when the later scheduler gate replaces periodic work. The scheduler is **not** redesigned in Gate 5.
+Future canonical key: `worker:<schedule_instance_id>:<attempt>`, with `schedule_instance_id` such as `auto:2026-10-01:0730:KST`. It is introduced when the later scheduler gate replaces periodic work. The scheduler is **not** redesigned in Gate 5. **Implemented in Gate 7B (20.9.4)**; the interim limitation above no longer applies to new rows.
 
 #### 20.4.4 Event coverage
 
@@ -756,7 +758,7 @@ The coordinator runs the executor inside `withContext(ForwardOperationContext(op
 #### 20.4.9 Remaining gaps (not resolved by Gate 5)
 
 - **Audit atomicity** (section 11): unchanged by Gate 5; resolved in Gate 6 (20.5).
-- **Scheduler redesign**: periodic work, immediate first execution on Auto ON, and the interim Worker key remain until the scheduler gate.
+- **Scheduler redesign**: periodic work, immediate first execution on Auto ON, and the interim Worker key remain until the scheduler gate. **RESOLVED in Gate 7B (20.9).**
 - **Orphan `RUNNING` operations**: if the process dies mid-operation the row stays `RUNNING`; a redelivery of the same Worker key returns `retry` without re-executing, and a new period / tap creates a new row. **RESOLVED in Gate 7A (20.8).**
 - **Retry precedence**: when an earlier run was retryable-blocked and a later run succeeded, the Worker now returns `retry` (previously the last run's success decided). Non-retryable blocks still decide `failure` first.
 - **Retention / archive / Operations UI**: not implemented.
@@ -874,7 +876,7 @@ Existing audit rows are never updated, including restored rows whose `decision_s
 
 #### 20.6.6 Remaining gaps (not resolved by Gate 6.1)
 
-- Scheduler redesign, archive / retention, Operations UI (20.4.9, 20.5.6). Orphan `RUNNING` operations were resolved later in Gate 7A (20.8).
+- Scheduler redesign, archive / retention, Operations UI (20.4.9, 20.5.6). Orphan `RUNNING` operations were resolved later in Gate 7A (20.8); the scheduler redesign in Gate 7B (20.9).
 - `market_date` of reconciled terminal-order audits stays NULL (not persisted on the order).
 
 ### 20.7 Execution invariant taxonomy (Phase 11 / Gate 6.2)
@@ -943,7 +945,7 @@ process start (cutoff captured)
   ↓
 recover interrupted operations
   ↓
-reconcile persisted Auto schedule (ForwardTestScheduler.reconcileOnAppStart, unchanged)
+reconcile persisted Auto schedule (ForwardTestScheduler.reconcileOnAppStart; daily slots since Gate 7B, 20.9.8)
   ↓
 background maintenance (7-day API error cleanup)
 ```
@@ -952,7 +954,7 @@ The sequence runs on the application IO scope (`runAppStartSequence`). A recover
 
 #### 20.8.8 Worker replay
 
-A Worker invocation whose key resolves to an existing row with `status = FAILED` and `final_code = PROCESS_INTERRUPTED` returns `WorkerDisposition.RETRY`. The same key is never re-executed; WorkManager's next attempt gets the next attempt identity through the existing Gate 5 key `worker:<work_id>:<through_date>:<attempt>` (unchanged in Gate 7A; `schedule_instance_id` belongs to Gate 7B) and executes normally. A redelivery that arrives before recovery still sees `RUNNING` and also returns `RETRY` (20.4.9). Manual operations need no replay: each tap gets a new UUID key.
+A Worker invocation whose key resolves to an existing row with `status = FAILED` and `final_code = PROCESS_INTERRUPTED` returns `WorkerDisposition.RETRY`. The same key is never re-executed; WorkManager's next attempt gets the next attempt identity through the existing Gate 5 key `worker:<work_id>:<through_date>:<attempt>` (unchanged in Gate 7A; `schedule_instance_id` belongs to Gate 7B) and executes normally. Since Gate 7B the next attempt is `worker:<schedule_instance_id>:<attempt + 1>` under the same slot (20.9.7). A redelivery that arrives before recovery still sees `RUNNING` and also returns `RETRY` (20.4.9). Manual operations need no replay: each tap gets a new UUID key.
 
 #### 20.8.9 Schema
 
@@ -960,9 +962,120 @@ No Room or PostgreSQL schema change. `PROCESS_INTERRUPTED` is stored in the exis
 
 #### 20.8.10 Remaining gaps (not resolved by Gate 7A)
 
-- Scheduler redesign (Gate 7B): periodic work, immediate first execution on Auto ON, interim Worker key, `schedule_instance_id`.
+- Scheduler redesign (Gate 7B): periodic work, immediate first execution on Auto ON, interim Worker key, `schedule_instance_id`. **RESOLVED in Gate 7B (20.9).**
 - A recovery pass aborted by the inconsistency in 20.8.5 is contained at startup but not yet surfaced to the user (no Operations UI).
 - Archive / retention, Operations UI.
+
+#### 20.8.11 Future Operations UI requirement (human decision, Gate 7A)
+
+A `RUNNING` operation that already has `OPERATION_FINISHED` (20.8.5) must eventually be surfaced in the Operations UI as a **high-priority local data-integrity warning**. It is a local evidence inconsistency, not an external API failure, so it must **not** be written to `api_error_logs`. Not implemented; the Operations UI is a later gate.
+
+### 20.9 Daily one-time Auto scheduler and schedule instance identity (Phase 11 / Gate 7B)
+
+#### 20.9.1 Scheduler type
+
+| Property | Value |
+| --- | --- |
+| Request | `OneTimeWorkRequest<ForwardTestWorker>` per daily slot; **no `PeriodicWorkRequest` in the production path** |
+| Target | 07:30 `ForwardTestConfig.MARKET_ZONE` (Asia/Seoul), `ForwardTestConfig.AUTO_TARGET_TIME`; independent of device timezone; Asia/Seoul has no DST and no DST logic is assumed |
+| Guarantee | **earliest eligible time**, not an exact alarm. WorkManager may run later (Doze, battery, network). No `AlarmManager` / exact-alarm permission |
+| Constraint | `NetworkType.CONNECTED` (unchanged) |
+| Backoff | WorkManager default (exponential, 30 s); no new policy |
+| Unique name | `bjstock_forward_test_auto_<YYYY-MM-DD>_0730_KST`, `ExistingWorkPolicy.KEEP` |
+| Tags | stable `bjstock_forward_test_auto_v2`, plus `bjstock_forward_test_auto_slot=<schedule_instance_id>` so the read model gets the slot from `WorkInfo` tags |
+| Input data | `schedule_instance_id`, `scheduled_at_epoch_millis` (must agree with the id) |
+| Calendar | every calendar day is a slot; no weekday or holiday logic. Market days are decided by the existing catch-up / through-date rules |
+
+Slot selection is strict: the next slot is the first 07:30 KST **strictly after** now (06:00 → same day; 07:29:59 → same day; 07:30:00 → next day; 15:00 → next day). The initial delay is `slot - now`, always positive; `AutoWorkRequests.build` rejects a zero or negative delay, so Auto can never enqueue immediate work.
+
+#### 20.9.2 Auto ON / OFF
+
+- **Auto ON**: persist the flag `true` → request legacy cancellation → if no active (ENQUEUED / RUNNING / BLOCKED) v2 work exists, enqueue exactly one next slot. The coordinator is never invoked and no zero-delay work is created. Repeated ON never duplicates (active check + unique name + KEEP).
+- **Auto OFF**: persist `false` → request legacy cancellation → cancel all v2 work by tag → `AUTO_DISABLED` event. A Worker racing with cancellation checks the Auto flag first and returns success without an operation.
+- **Run Now / Retry Failed Cycle** are unaffected by Auto and never touch scheduling.
+- The Auto flag stays in SharedPreferences (authoritative for ON / OFF only). WorkManager is the source of truth for what is scheduled.
+
+#### 20.9.3 Legacy periodic work
+
+`bjstock_forward_test_v1` (Gate 5 periodic work) is **legacy**. Every reconciliation (Auto ON, Auto OFF, app start) requests its cancellation; nothing ever enqueues it again. A legacy invocation that still runs is detected by the missing (or non-canonical) `schedule_instance_id` input:
+
+- it does not run the Forward Test and does not invent an id;
+- it creates no `forward_operations` row;
+- if Auto is ON it ensures the v2 slot **first**, then cancels the legacy work (cancelling may stop the calling Worker);
+- it returns success.
+
+#### 20.9.4 Schedule instance identity
+
+| Item | Value |
+| --- | --- |
+| Format | `auto:<YYYY-MM-DD>:0730:KST`, e.g. `auto:2026-10-01:0730:KST` |
+| Meaning | the intended slot. Not the market through-date, not the WorkManager UUID. A late Worker keeps it |
+| Worker key | `worker:<schedule_instance_id>:<attempt>`, e.g. `worker:auto:2026-10-01:0730:KST:0` |
+| `work_id` | WorkManager request id; operation metadata only, never identity |
+| `through_date` | computed at the actual run time by `ForwardTestClock` (18:00 cutoff unchanged); independent of the slot |
+| Persisted | `forward_operations.schedule_instance_id` (Room v12 / PostgreSQL `0014`, nullable) |
+
+Validation (`ForwardOperationLogService`): WORKER requires nonblank `work_id`, `work_attempt >= 0`, a canonical `schedule_instance_id` (`SafeLogText.scheduleInstanceId`), kind `FORWARD_RUN`, and key == `worker:<schedule_instance_id>:<attempt>`. MANUAL requires `schedule_instance_id` NULL; keys stay `manual:` / `manual-retry:`. `SafeLogText`'s Worker key pattern now accepts only the canonical form (stricter than Gate 5). Legacy rows (NULL id, Gate 5 key) stay readable; the id is never parsed out of `operation_key`.
+
+Two WorkManager UUIDs targeting the same slot and attempt resolve to one logical operation (unique key → replay, no second execution). Two calendar slots are different operations even if the through-date is the same.
+
+#### 20.9.5 Self-rescheduling
+
+A valid v2 invocation, in order:
+
+1. Auto flag OFF → success, no operation.
+2. Missing / non-canonical id → legacy path (20.9.3).
+3. Ensure the next slot strictly after `max(now, this slot)` exists (unique name + KEEP).
+4. `coordinator.runWorker(work_id, attempt, schedule_instance_id)`.
+5. Return the disposition.
+
+Because the next slot is scheduled **before** execution, success, non-retryable failure, retry, and cancellation all leave exactly one future slot. Repeated ensures are idempotent.
+
+#### 20.9.6 Delayed work
+
+A Worker that runs late keeps its original `schedule_instance_id`. Its through-date is computed at the actual time, so catch-up behavior is unchanged. Only the next future slot after the actual time is scheduled: missed slots are never enqueued as a burst.
+
+#### 20.9.7 Retry and replay
+
+- `PROCESS_INTERRUPTED` (Gate 7A) on attempt 0 → `RETRY`; the next attempt runs under the same slot with key `...:1`.
+- `ALREADY_RUNNING` → `Result.retry()`; the next attempt is `N + 1` under the same slot.
+- WorkManager retry keeps the same request id and increments `runAttemptCount`; the slot's next-day request already exists, so a retry never adds another slot.
+
+#### 20.9.8 App start
+
+Gate 7A order is kept: recovery → schedule reconciliation → maintenance. Reconciliation failures are contained (`runAppStartSequence`) and remain visible in the read model.
+
+- Auto OFF: cancel legacy and v2; enqueue nothing. `AUTO_DISABLED` is recorded at app start only if v2 work was actually pending.
+- Auto ON: cancel legacy; if ENQUEUED / RUNNING v2 work exists, keep it (no duplicate); otherwise enqueue the next slot.
+
+#### 20.9.9 `WORKER_SCHEDULE_CHANGED`
+
+`operation_id` is NULL (the only event type allowed to omit it). All text passes the unchanged `SafeLogText` allowlist.
+
+| Action | `event_key` | `result` | `market_date` | Message |
+| --- | --- | --- | --- | --- |
+| Slot enqueued | `schedule:slot:<schedule_instance_id>:enqueued` | `SLOT_ENQUEUED` | slot local date | fixed: "Auto Forward Test slot scheduled for 07:30 KST" |
+| Legacy cancelled | `schedule:legacy:bjstock_forward_test_v1:cancelled` | `LEGACY_PERIODIC_CANCELLED` | NULL | fixed; only when legacy work was active |
+| Auto disabled | `schedule:AUTO_DISABLED:<epoch_millis>` | `AUTO_DISABLED` | NULL | fixed |
+
+Idempotency: slot and legacy keys are deterministic, so repeated reconciliation records one event per slot (a slot re-enqueued after OFF → ON keeps its single event). **Failure boundary**: schedule events are diagnostics. A failed append never cancels or rolls back correctly enqueued work; the failure is returned in `ScheduleChange.eventFailures`, stored as `lastScheduleFailure` (`SCHEDULE_EVENT_NOT_PERSISTED:<ExceptionType>`), and logged with the exception type only. A WorkManager failure propagates to the caller (`SCHEDULE_UPDATE_FAILED:<ExceptionType>` in the read model); the Auto flag stays as the user set it and the next reconciliation retries.
+
+#### 20.9.10 Read model
+
+`ForwardTestScheduler.status()` → `AutoScheduleStatus(autoEnabled, nextScheduleInstanceId, nextScheduledAt, workId, workState, lastScheduleFailure)`. The next slot is the earliest non-RUNNING active v2 work (else the running one). The UI never parses WorkManager names or operation keys. Not yet shown in the UI (Operations UI is a later gate).
+
+#### 20.9.11 Schema
+
+Room v11 → v12 (`MIGRATION_11_12`) and PostgreSQL `0014` add only the nullable `schedule_instance_id` column. No CHECK change (`ck_forward_operations_worker_identity` still requires `work_id` / `work_attempt` for WORKER), no default, no backfill, no destructive step. The real Phase 10 DB copy (Room v7) migrates through v12 with every row preserved.
+
+#### 20.9.12 Unchanged
+
+18:00 Asia/Seoul cutoff, market-day / catch-up logic, run isolation, factor / strategy math, signal rules, fill price, sizing, commission / tax, ledger and snapshot math, Gate 7A recovery semantics.
+
+#### 20.9.13 Remaining gaps
+
+- Operations UI (schedule read model, 20.8.11 warning, schedule event failures) and archive / retention.
+- Test environment: Robolectric unit tests run with a plain `android.app.Application` so production startup (recovery, WorkManager reconciliation) does not run beside each test; startup ordering is covered by `AppStartSequenceTest`.
 
 ---
 
@@ -973,4 +1086,4 @@ No Room or PostgreSQL schema change. `PROCESS_INTERRUPTED` is stored in the exis
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-164)
+- `docs/060_DECISION_LOG.md` (D-143 – D-165)

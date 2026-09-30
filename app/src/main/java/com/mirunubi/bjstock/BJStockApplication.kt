@@ -49,7 +49,7 @@ class BJStockApplication : Application(), Configuration.Provider {
             runAppStartSequence(
                 recoverInterruptedOperations = { forwardOperationLog.recoverInterruptedOperations(processStartCutoff) },
                 // Auto scheduler remains OFF unless the user previously enabled it.
-                reconcileAutoSchedule = forwardTestScheduler::reconcileOnAppStart,
+                reconcileAutoSchedule = { forwardTestScheduler.reconcileOnAppStart() },
                 maintenance = { apiErrorLogService.cleanupOlderThanSevenDays() },
             )
         }

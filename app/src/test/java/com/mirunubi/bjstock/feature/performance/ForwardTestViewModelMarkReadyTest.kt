@@ -17,6 +17,7 @@ import com.mirunubi.bjstock.core.factor.FactorCalculationVersions
 import com.mirunubi.bjstock.core.factor.FactorCodes
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
 import com.mirunubi.bjstock.core.factor.SystemFactorRegistryFactory
+import com.mirunubi.bjstock.core.forward.FakeAutoWorkGateway
 import com.mirunubi.bjstock.core.forward.ForwardMarketDataGateway
 import com.mirunubi.bjstock.core.forward.ForwardTestClock
 import com.mirunubi.bjstock.core.forward.ForwardTestConfig
@@ -334,7 +335,12 @@ class ForwardTestViewModelMarkReadyTest {
                 operationLog = ForwardOperationLogService(database) { Instant.EPOCH },
                 clock = clock,
             ),
-            scheduler = ForwardTestScheduler(context, ForwardTestSchedulerSettings(context)),
+            scheduler = ForwardTestScheduler(
+                settings = ForwardTestSchedulerSettings(context),
+                gateway = FakeAutoWorkGateway(),
+                operationLog = ForwardOperationLogService(database) { Instant.EPOCH },
+                clock = clock,
+            ),
             runService = runService,
             cycleDao = database.forwardTestCycleDao(),
             universeDao = database.strategyRunInstrumentDao(),

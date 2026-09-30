@@ -236,7 +236,7 @@ class OperationalReliabilityMigrationTest {
         val database = openWithAllMigrations(V10_TEST_DB)
         try {
             val db = database.openHelper.writableDatabase
-            assertEquals(11, db.version)
+            assertEquals(BJStockDatabase.VERSION, db.version)
             assertEquals(ordersBefore, rows(db, ORDER_COLUMNS, "orders"))
             val audits = database.tradeAuditLogDao().findByRun(3).associateBy { it.eventKey }
             assertEquals(5, audits.size)
@@ -259,6 +259,104 @@ class OperationalReliabilityMigrationTest {
             BJStockMigrations.reconcileLegacyTerminalOrderAudits(db)
             assertEquals(5L, scalar(db, "SELECT COUNT(*) FROM trade_audit_logs"))
             db.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun migrate11To12_addsNullableScheduleInstance() = runBlocking<Unit> {
+        context.deleteDatabase(V11_TEST_DB)
+        val operationsBefore: List<String>
+        val eventsBefore: List<String>
+        val executionsBefore: List<String>
+        val ledgerBefore: List<String>
+        context.openOrCreateDatabase(V11_TEST_DB, Context.MODE_PRIVATE, null).use { sqlite ->
+            createSchemaFromExport(sqlite, version = 11)
+            listOf(
+                """
+                INSERT INTO instruments (id, market, symbol, name, currency, is_active, created_at, updated_at, board, instrument_type)
+                VALUES (3, 'KRX', '005930', 'Samsung Electronics', 'KRW', 1, 0, 0, 'KOSPI', 'COMMON_STOCK')
+                """,
+                """
+                INSERT INTO strategies (id, strategy_code, strategy_name, is_active, created_at, updated_at)
+                VALUES (1, 'V11', 'V11', 1, 0, 0)
+                """,
+                """
+                INSERT INTO strategy_versions (id, strategy_id, version_no, buy_threshold, sell_threshold, status, created_at)
+                VALUES (1, 1, 1, 700000, 400000, 'ACTIVE', 0)
+                """,
+                """
+                INSERT INTO strategy_runs (id, run_name, strategy_version_id, run_type, start_date, initial_cash, status, created_at, updated_at)
+                VALUES (3, 'Run 3', 1, 'PAPER', 20714, 100000000, 'RUNNING', 0, 0)
+                """,
+                """
+                INSERT INTO orders (id, client_order_id, strategy_run_id, instrument_id, side, order_type, quantity, status, created_at)
+                VALUES (1, 'paper-run-3-eval-1-BUY', 3, 3, 'BUY', 'MARKET', 37, 'VIRTUAL_FILLED', 0)
+                """,
+                """
+                INSERT INTO executions (id, order_id, execution_price, quantity, commission, tax, slippage, executed_at, created_at, execution_key)
+                VALUES (1, 1, 266000, 37, 1476, 0, 0, 0, 0, 'paper:order:1:fill:1')
+                """,
+                """
+                INSERT INTO cash_ledger (id, strategy_run_id, event_type, amount, balance_after, reference_type, reference_id, event_date, created_at, event_key)
+                VALUES (1, 3, 'INITIAL_DEPOSIT', 100000000, 100000000, 'STRATEGY_RUN', 3, 20714, 0, 'run:3:initial-deposit'),
+                       (2, 3, 'BUY', -9842000, 90158000, 'EXECUTION', 1, 20725, 0, 'execution:1:buy-principal'),
+                       (3, 3, 'COMMISSION', -1476, 90156524, 'EXECUTION', 1, 20725, 0, 'execution:1:buy-commission')
+                """,
+                """
+                INSERT INTO forward_operations (
+                    id, operation_key, `trigger`, operation_kind, work_id, work_attempt, through_date, status,
+                    started_at, finished_at, runs_considered, runs_processed, runs_skipped, cycles_completed, cycles_failed
+                ) VALUES
+                    (1, 'manual:req-1', 'MANUAL', 'FORWARD_RUN', NULL, NULL, 20725, 'SUCCEEDED', 0, 5, 1, 1, 0, 1, 0),
+                    (2, 'worker:w-1:2026-09-29:0', 'WORKER', 'FORWARD_RUN', 'w-1', 0, 20725, 'NO_OP', 0, 5, 0, 0, 0, 0, 0)
+                """,
+                """
+                INSERT INTO operational_events (id, event_key, operation_id, event_type, result, created_at)
+                VALUES (1, 'op:2:started', 2, 'OPERATION_STARTED', 'WORKER', 0),
+                       (2, 'schedule:ENABLED:1', NULL, 'WORKER_SCHEDULE_CHANGED', 'ENABLED', 0)
+                """,
+            ).forEach { sqlite.execSQL(it.trimIndent()) }
+            sqlite.version = 11
+            operationsBefore = rows(sqlite, "*", "forward_operations")
+            eventsBefore = rows(sqlite, "*", "operational_events")
+            executionsBefore = rows(sqlite, "*", "executions")
+            ledgerBefore = rows(sqlite, "*", "cash_ledger")
+        }
+
+        val database = openWithAllMigrations(V11_TEST_DB)
+        try {
+            val db = database.openHelper.writableDatabase
+            assertEquals(12, db.version)
+            db.query("PRAGMA table_info(forward_operations)").use { cursor ->
+                var found = false
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(cursor.getColumnIndexOrThrow("name")) == "schedule_instance_id") {
+                        found = true
+                        assertEquals("TEXT", cursor.getString(cursor.getColumnIndexOrThrow("type")))
+                        assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("notnull")))
+                        assertTrue(cursor.isNull(cursor.getColumnIndexOrThrow("dflt_value")))
+                    }
+                }
+                assertTrue(found)
+            }
+            assertEquals(
+                operationsBefore.map { "$it|NULL" },
+                rows(db, "*", "forward_operations"),
+            )
+            assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM forward_operations WHERE schedule_instance_id IS NOT NULL"))
+            assertEquals(eventsBefore, rows(db, "*", "operational_events"))
+            assertEquals(executionsBefore, rows(db, "*", "executions"))
+            assertEquals(ledgerBefore, rows(db, "*", "cash_ledger"))
+            val legacyWorker = database.forwardOperationDao().findById(2)!!
+            assertEquals("worker:w-1:2026-09-29:0", legacyWorker.operationKey)
+            assertNull(legacyWorker.scheduleInstanceId)
+            db.query("PRAGMA foreign_key_check").use { assertEquals(0, it.count) }
+            db.query("PRAGMA integrity_check").use {
+                it.moveToFirst()
+                assertEquals("ok", it.getString(0))
+            }
         } finally {
             database.close()
         }
@@ -339,6 +437,10 @@ class OperationalReliabilityMigrationTest {
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM trade_audit_logs WHERE decision_source = ''"))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM forward_operations"))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM operational_events"))
+            assertEquals(
+                0L,
+                scalar(db, "SELECT COUNT(*) FROM forward_operations WHERE schedule_instance_id IS NOT NULL"),
+            )
             val recovery = com.mirunubi.bjstock.core.audit.ForwardOperationLogService(database) { Instant.EPOCH }
             assertEquals(emptyList<Long>(), recovery.recoverInterruptedOperations(Instant.parse("2100-01-01T00:00:00Z")))
             assertEquals(0L, scalar(db, "SELECT COUNT(*) FROM forward_operations"))
@@ -375,6 +477,7 @@ class OperationalReliabilityMigrationTest {
                 BJStockMigrations.MIGRATION_8_9,
                 BJStockMigrations.MIGRATION_9_10,
                 BJStockMigrations.MIGRATION_10_11,
+                BJStockMigrations.MIGRATION_11_12,
             )
             .allowMainThreadQueries()
             .build()
@@ -559,6 +662,7 @@ class OperationalReliabilityMigrationTest {
         private const val V9_TEST_DB = "financial-keys-v9-migration-test"
         private const val V9_AMBIGUOUS_DB = "financial-keys-v9-ambiguous-migration-test"
         private const val V10_TEST_DB = "terminal-audit-v10-migration-test"
+        private const val V11_TEST_DB = "v11-schedule-test"
         private const val ORDER_COLUMNS =
             "id, client_order_id, strategy_run_id, instrument_id, evaluation_id, side, order_type, " +
                 "requested_price, quantity, status, created_at, executed_at, cancelled_at"
