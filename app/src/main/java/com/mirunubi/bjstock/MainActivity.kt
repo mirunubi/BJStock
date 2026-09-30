@@ -12,14 +12,20 @@ import com.mirunubi.bjstock.feature.ai.AiAdvisorScreen
 import com.mirunubi.bjstock.feature.dashboard.DashboardScreen
 import com.mirunubi.bjstock.feature.dashboard.DatabaseInfoScreen
 import com.mirunubi.bjstock.feature.factor.FactorTestScreen
+import com.mirunubi.bjstock.feature.home.HomeScreen
+import com.mirunubi.bjstock.feature.hub.TabHubScreen
 import com.mirunubi.bjstock.feature.instrument.InstrumentMasterScreen
 import com.mirunubi.bjstock.feature.kis.KisSettingsScreen
 import com.mirunubi.bjstock.feature.market.MarketDataTestScreen
 import com.mirunubi.bjstock.feature.paper.PaperTradingLabScreen
 import com.mirunubi.bjstock.feature.performance.CompareRunsScreen
 import com.mirunubi.bjstock.feature.performance.ForwardTestDashboardScreen
+import com.mirunubi.bjstock.feature.settings.SettingsScreen
 import com.mirunubi.bjstock.feature.strategy.StrategyLabScreen
 import com.mirunubi.bjstock.feature.theme.ThemesScreen
+import com.mirunubi.bjstock.ui.navigation.BJStockRoutes
+import com.mirunubi.bjstock.ui.navigation.PrimaryTab
+import com.mirunubi.bjstock.ui.navigation.navigateToTab
 import com.mirunubi.bjstock.ui.theme.BJStockTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -39,56 +45,73 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun BJStockNavHost() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "dashboard") {
-        composable("dashboard") {
+    val selectTab: (PrimaryTab) -> Unit = { navController.navigateToTab(it) }
+    val openSettings: () -> Unit = { navController.navigate(BJStockRoutes.SETTINGS) { launchSingleTop = true } }
+    val open: (String) -> Unit = { route -> navController.navigate(route) { launchSingleTop = true } }
+    val back: () -> Unit = { navController.popBackStack() }
+
+    NavHost(navController = navController, startDestination = BJStockRoutes.START) {
+        composable(BJStockRoutes.HOME) {
+            HomeScreen(onSelectTab = selectTab, onOpenSettings = openSettings)
+        }
+        listOf(PrimaryTab.STOCKS, PrimaryTab.STRATEGY, PrimaryTab.PAPER_TRADING, PrimaryTab.PERFORMANCE).forEach { tab ->
+            composable(tab.route) {
+                TabHubScreen(tab = tab, onSelectTab = selectTab, onOpenSettings = openSettings, onNavigate = open)
+            }
+        }
+        composable(BJStockRoutes.SETTINGS) {
+            SettingsScreen(onBack = back, onNavigate = open)
+        }
+
+        composable(BJStockRoutes.DEV_DASHBOARD) {
             DashboardScreen(
-                onOpenDatabaseInfo = { navController.navigate("database_info") },
-                onOpenKisSettings = { navController.navigate("kis_settings") },
-                onOpenMarketData = { navController.navigate("market_data_test") },
-                onOpenInstrumentMaster = { navController.navigate("instrument_master") },
-                onOpenThemes = { navController.navigate("themes") },
-                onOpenFactorTest = { navController.navigate("factor_test") },
-                onOpenStrategyLab = { navController.navigate("strategy_lab") },
-                onOpenPaperLab = { navController.navigate("paper_lab") },
-                onOpenForwardTest = { navController.navigate("forward_test") },
-                onOpenAiAdvisor = { navController.navigate("ai_advisor") },
+                onOpenDatabaseInfo = { open(BJStockRoutes.DATABASE_INFO) },
+                onOpenKisSettings = { open(BJStockRoutes.KIS_SETTINGS) },
+                onOpenMarketData = { open(BJStockRoutes.MARKET_DATA) },
+                onOpenInstrumentMaster = { open(BJStockRoutes.INSTRUMENT_MASTER) },
+                onOpenThemes = { open(BJStockRoutes.THEMES) },
+                onOpenFactorTest = { open(BJStockRoutes.FACTOR_TEST) },
+                onOpenStrategyLab = { open(BJStockRoutes.STRATEGY_LAB) },
+                onOpenPaperLab = { open(BJStockRoutes.PAPER_LAB) },
+                onOpenForwardTest = { open(BJStockRoutes.FORWARD_TEST) },
+                onOpenAiAdvisor = { open(BJStockRoutes.AI_ADVISOR) },
             )
         }
-        composable("database_info") {
-            DatabaseInfoScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.DATABASE_INFO) {
+            DatabaseInfoScreen(onBack = back)
         }
-        composable("themes") {
-            ThemesScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.THEMES) {
+            ThemesScreen(onBack = back)
         }
-        composable("kis_settings") {
-            KisSettingsScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.KIS_SETTINGS) {
+            KisSettingsScreen(onBack = back)
         }
-        composable("market_data_test") {
-            MarketDataTestScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.MARKET_DATA) {
+            MarketDataTestScreen(onBack = back)
         }
-        composable("instrument_master") {
-            InstrumentMasterScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.INSTRUMENT_MASTER) {
+            InstrumentMasterScreen(onBack = back)
         }
-        composable("factor_test") {
-            FactorTestScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.FACTOR_TEST) {
+            FactorTestScreen(onBack = back)
         }
-        composable("strategy_lab") {
-            StrategyLabScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.STRATEGY_LAB) {
+            StrategyLabScreen(onBack = back)
         }
-        composable("paper_lab") {
-            PaperTradingLabScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.PAPER_LAB) {
+            PaperTradingLabScreen(onBack = back)
         }
-        composable("forward_test") {
+        composable(BJStockRoutes.FORWARD_TEST) {
             ForwardTestDashboardScreen(
-                onBack = { navController.popBackStack() },
-                onOpenCompare = { navController.navigate("compare_runs") },
+                onBack = back,
+                onOpenCompare = { open(BJStockRoutes.COMPARE_RUNS) },
             )
         }
-        composable("compare_runs") {
-            CompareRunsScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.COMPARE_RUNS) {
+            CompareRunsScreen(onBack = back)
         }
-        composable("ai_advisor") {
-            AiAdvisorScreen(onBack = { navController.popBackStack() })
+        composable(BJStockRoutes.AI_ADVISOR) {
+            AiAdvisorScreen(onBack = back)
         }
     }
 }

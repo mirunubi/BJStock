@@ -3,11 +3,11 @@
 | Item | Value |
 | --- | --- |
 | Document status | **DRAFT — Human Review Required** |
-| Implementation | **NOT STARTED** |
-| Scope | Future MVP / real-use UI structure. Documentation only. |
+| Implementation | **PARTIAL** — UI-1 navigation shell IMPLEMENTED, UI-3 Home dashboard PARTIAL (first version); see §21 |
+| Scope | Future MVP / real-use UI structure. |
 | Phase context | Phase 11 — Documentation Interlude (not a Phase 11 gate) |
 
-This document defines the target UI structure. It does not change navigation, Compose code, Room / PostgreSQL schema, or any domain / runtime invariant. Everything below is a design target for future UI phases (§15).
+This document defines the target UI structure. It does not change Room / PostgreSQL schema or any domain / runtime invariant. Sections 1–20 are design targets for the UI phases (§15); §21 records what has been implemented.
 
 ---
 
@@ -383,20 +383,20 @@ Rows marked "proposed" or "open" are not decisions; see §19.
 
 ## 15. Future UI implementation phases
 
-Documentation only. No commits or dates are assigned.
+No dates are assigned.
 
-| Phase | Scope |
-| --- | --- |
-| UI-0 | Current screen / navigation inventory |
-| UI-1 | Navigation shell: 홈 / 종목 / 전략 / 모의투자 / 성과 |
-| UI-2 | Korean terminology cleanup |
-| UI-3 | Home dashboard |
-| UI-4 | Stocks + Themes consolidation |
-| UI-5 | Strategy UX consolidation |
-| UI-6 | Paper Trading / Forward Test UX consolidation |
-| UI-7 | Performance dashboard |
-| UI-8 | Settings + operational diagnostics |
-| UI-9 | Physical-device usability review |
+| Phase | Scope | Status |
+| --- | --- | --- |
+| UI-0 | Current screen / navigation inventory | done (§13) |
+| UI-1 | Navigation shell: 홈 / 종목 / 전략 / 모의투자 / 성과 | **IMPLEMENTED** (§21) |
+| UI-2 | Korean terminology cleanup | |
+| UI-3 | Home dashboard | **PARTIAL** — first version (§21) |
+| UI-4 | Stocks + Themes consolidation | |
+| UI-5 | Strategy UX consolidation | |
+| UI-6 | Paper Trading / Forward Test UX consolidation | |
+| UI-7 | Performance dashboard | |
+| UI-8 | Settings + operational diagnostics | |
+| UI-9 | Physical-device usability review | |
 
 Each UI phase is presentation-only unless a separate, explicitly approved gate says otherwise. None of them may change Auto / Worker scheduling, the 18:00 cutoff, strategy / factor / paper-trading math, or persisted identifiers.
 
@@ -491,3 +491,24 @@ This UI document **consumes** the following domain / runtime capabilities. It re
 - `docs/150_OPERATIONAL_RELIABILITY_STANDARD.md`
 
 If a UI need appears to require a domain change, it is raised as a separate gate; this document does not authorize it.
+
+---
+
+## 21. Implementation notes
+
+### 21.1 UI-1 navigation shell (IMPLEMENTED)
+
+- Start destination `home`. Bottom navigation: 홈 / 종목 / 전략 / 모의투자 / 성과 (`PrimaryTab`, Korean label + icon). Tab switches pop to Home with saved state and `launchSingleTop`, so tabs never stack; back from a tab returns to Home, back on Home leaves the app.
+- 설정 is the top-right gear on every tab root, not a sixth tab.
+- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7.
+- Icons are local Material path vectors (`BJStockIcons`); no dependency was added.
+
+### 21.2 Developer screen preservation
+
+No screen was removed and every pre-UI-1 route string is unchanged. 설정 lists 연결 및 데이터 (KIS 연결, DB 정보 · API 오류) and 개발자 도구 (the former start screen `dashboard`, Forward Test, Compare Runs, Strategy Lab, Paper Lab, Factor Test, Instrument Master, Market Data Test, Themes, AI Advisor). AI Advisor is reachable only there and stays OFF.
+
+### 21.3 UI-3 Home (PARTIAL — first version)
+
+Cards: 모의자산 (total paper asset, cumulative return / profit), 최근 전략 판단, 보유현황 (count, top three by market value), 자동운영 (ON / OFF, next run, latest operation), 운영 경고 (one line "운영 상태 정상" when there is nothing to report). Loading, error ("홈 정보를 불러오지 못했습니다…"), no Run ("실행 중인 모의투자가 없습니다"), no decision, and no holdings states are explicit. Data comes only from existing read APIs (`PerformanceAnalyticsService.calculateSummary` / `loadOpenPositionViews`, `PerformanceAnalyticsRepository`, `ForwardTestScheduler.status`, `ForwardOperationDao.findRecent`); Home computes no returns, scores, positions, or cash. Before the first valuation the card shows the Run's initial capital labelled "초기 자본 (아직 평가 전)". The next run is written as "<date> 오전 7:30 이후", never as an exact time. Canonical statuses and decisions are translated (§18, `KoreanLabels`); the decision shows the canonical value as small secondary text. Error and warning text is fixed Korean; `Throwable.message`, summary error text, and raw codes are not shown.
+
+**Temporary Run selection rule (open for human review, §19):** Home shows one Run. DRAFT and CANCELLED Runs are excluded; the rest are ordered RUNNING, READY, PAUSED, COMPLETED, then by highest `strategy_runs.id` (most recently created). If other candidates exist, Home notes their count and points to 모의투자. The latest decision is the Run's last `stock_evaluations` row by (`evaluation_date`, `id`), with a count of other decisions on the same date. The latest operation is the newest `forward_operations` row (`started_at`, `id`), across all Runs.
