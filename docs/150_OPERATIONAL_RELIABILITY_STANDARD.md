@@ -187,9 +187,13 @@ Gate 6.1 moved `LEDGER_MISMATCH` into 4.1 and added `EXECUTION_IDEMPOTENCY_CONFL
 | `KisMarketErrorKind.RATE_LIMITED` | `KIS_RATE_LIMIT` |
 | `KisMarketErrorKind.NETWORK_TIMEOUT` | `NETWORK_TIMEOUT` |
 | `KisMarketErrorKind.MALFORMED_RESPONSE` / `MAPPING_FAILURE` | `KIS_MALFORMED_RESPONSE` |
-| `KisAuthException` HTTP 401 / 403 | `CREDENTIAL_REJECTED` |
-| `KisAuthException` HTTP 5xx | `KIS_SERVER_ERROR` |
-| `KisAuthException` other / no HTTP code | `AUTH_REQUIRED` (typed kind needed; see 20.3) |
+| `KisMarketErrorKind.UNEXPECTED` (unrecognised local defect in the repository call boundary) | `UNEXPECTED_EXCEPTION` |
+| `KisMarketException` with `authKind` (token failure wrapped by the market repository) | the `KisAuthErrorKind` mapping below |
+| `KisAuthErrorKind.CREDENTIAL_MISSING` / `CREDENTIAL_REJECTED` / `AUTH_REQUIRED` | same name |
+| `KisAuthErrorKind.SERVER_ERROR` | `KIS_SERVER_ERROR` |
+| `KisAuthErrorKind.NETWORK_TIMEOUT` / `NETWORK_UNAVAILABLE` | same name |
+| `KisAuthErrorKind.MALFORMED_RESPONSE` | `KIS_MALFORMED_RESPONSE` |
+| `KisAuthErrorKind.UNEXPECTED` | `UNEXPECTED_EXCEPTION` |
 | `HistoricalSyncErrorKind.INSTRUMENT_NOT_FOUND` | `DATA_INTEGRITY_ERROR` |
 | `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` | `INTERNAL_INVARIANT_VIOLATION` |
 | `IntegrityViolationException` | its `code` (`LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` / `FILLED_ORDER_WITHOUT_EXECUTION` / `INTERNAL_INVARIANT_VIOLATION`), severity preserved |
@@ -628,9 +632,9 @@ Unchanged:
 | Orphan `RUNNING` operation after process death (no reconciliation; replay of the same key does not re-execute) | 7, 12 | **RESOLVED** — Phase 11 / Gate 7A: closed as `FAILED` / `PROCESS_INTERRUPTED` on app start (see 20.8) |
 | `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 3, commit `f2abe55` (see 20.3.1) |
 | Gateway collapses KIS `BUSINESS` / `MALFORMED_RESPONSE` / `MAPPING_FAILURE` / local `INVALID_SYMBOL` / `INVALID_DATE_RANGE` into retryable `NETWORK_FAILURE`; `api_error_logs.error_type` misleading (`NETWORK_TIMEOUT` for local and unexpected failures, `KIS_BUSINESS_ERROR` for rate limit and local validation); gateway appends a duplicate row for failures the repository already recorded | 4.3, 6, 9 | **RESOLVED** — Phase 11 / Gate 4 (see 20.3.2) |
-| **OPEN / DEFERRED:** `KisMarketRepositoryImpl` catch-all may classify an unexpected local defect as `MALFORMED_RESPONSE`. The gateway preserves the repository-provided classification. Repository-level refinement needs its own impact analysis | 4.3, 6 | later bounded gate |
-| API error logging / 7-day cleanup wrapped in discarded `runCatching` (still present after Gate 5) | 6 | instrumentation + isolation |
-| `KisAuthException` has no typed kind; token network failure surfaces as auth failure | 4.3 | audit atomicity + retry |
+| `KisMarketRepositoryImpl` catch-all may classify an unexpected local defect as `MALFORMED_RESPONSE`. The gateway preserves the repository-provided classification | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 8: `KisMarketErrorKind.UNEXPECTED` → `UNEXPECTED_EXCEPTION` / `UNEXPECTED`, non-retryable (see 20.10) |
+| **OPEN:** API error logging / 7-day cleanup wrapped in discarded `runCatching` (still present after Gate 8) | 6 | instrumentation + isolation |
+| `KisAuthException` has no typed kind; token network failure surfaces as auth failure | 4.3 | **RESOLVED** — Phase 11 / Gate 8: `KisAuthErrorKind` (see 20.10) |
 | Audit written outside business transaction; `ORDER_REJECTED` / `ORDER_CANCELLED` not emitted | 11 | **RESOLVED** — Phase 11 / Gate 6 for evaluation, order create / skip / reject / cancel, and fill (see 20.5) |
 | Executions / cash ledger lack canonical unique event keys | 12 | **RESOLVED** — Phase 11 / Gate 6, Room v10 / PostgreSQL `0012` (see 20.5) |
 | KIS `msg1` free text appended to `api_error_logs.safe_message` | 17 | instrumentation + isolation |
@@ -667,7 +671,8 @@ Final `api_error_logs.error_type` taxonomy (PostgreSQL `0010`, Kotlin `ApiErrorT
 | `EGW00201` after the bounded retry (3 attempts, 61 s wait) | `KIS_RATE_LIMIT` | `RATE_LIMIT` | `NETWORK_FAILURE` | true |
 | Transport timeout | `NETWORK_TIMEOUT` | `NETWORK_TIMEOUT` | `NETWORK_FAILURE` | true |
 | Network unavailable / HTTP 5xx / other non-2xx | `KIS_SERVER_ERROR` | `HTTP_ERROR` | `NETWORK_FAILURE` | true |
-| HTTP 401 / token or credential failure | `AUTH_REQUIRED` | `AUTH_ERROR` | `AUTH_REQUIRED` | false |
+| Market call HTTP 401 | `AUTH_REQUIRED` | `AUTH_ERROR` | `AUTH_REQUIRED` | false |
+| Token issuance / credential failure | typed since Gate 8 (see 20.10) | | | |
 | `CancellationException` | rethrown, never classified or recorded | — | — | — |
 
 Default retry semantics: only `TRANSIENT` codes and `KIS_SERVER_ERROR` retry automatically (`AppErrorCode.isRetryableAutomatically`); every other external, local, security, and unexpected failure is non-retryable. Retryable forward results keep the legacy `NETWORK_FAILURE` code; non-retryable results carry the canonical code name.
@@ -813,7 +818,7 @@ Current paper trading has exactly one `VIRTUAL_FILLED` execution per order (full
 - Scheduler redesign and archive / retention / Operations UI.
 - **RESOLVED in Gate 6.1 (20.6.2):** `finalizeRunEnd` committed cancellations and the run `COMPLETED` transition separately.
 - **RESOLVED in Gate 6.1 (20.6.1):** financial conflicts used `DATA_INTEGRITY_ERROR` (reported as `CRITICAL`). `LEDGER_MISMATCH` / `EXECUTION_IDEMPOTENCY_CONFLICT` now carry `FINANCIAL_INTEGRITY`; `DUPLICATE_EXECUTION` is intentionally not added.
-- The `KisAuthException` typed-kind deviation (20.3) is unrelated to audit atomicity and remains open.
+- The `KisAuthException` typed-kind deviation (20.3) is unrelated to audit atomicity. **RESOLVED in Gate 8 (20.10).**
 
 ### 20.6 Financial integrity closure (Phase 11 / Gate 6.1)
 
@@ -1077,6 +1082,61 @@ Room v11 → v12 (`MIGRATION_11_12`) and PostgreSQL `0014` add only the nullable
 - Operations UI (schedule read model, 20.8.11 warning, schedule event failures) and archive / retention.
 - Test environment: Robolectric unit tests run with a plain `android.app.Application` so production startup (recovery, WorkManager reconciliation) does not run beside each test; startup ordering is covered by `AppStartSequenceTest`.
 
+### 20.10 KIS error boundary closure (Phase 11 / Gate 8)
+
+#### 20.10.1 Typed OAuth failures
+
+`KisAuthException(kind: KisAuthErrorKind, publicMessage, httpCode?)`. Consumers classify by `kind` only; `httpCode` is diagnostic metadata (`SafeDiagnostics.httpStatus`). Message text is never parsed. `KisAuthRepository.getValidToken` classifies:
+
+| Token issuance failure | `KisAuthErrorKind` | `AppErrorCode` | `error_type` (`KIS_OAUTH`) | `retryable` |
+| --- | --- | --- | --- | --- |
+| Credentials not stored (no request sent) | `CREDENTIAL_MISSING` | `CREDENTIAL_MISSING` | no row at this layer | false |
+| HTTP 401 / 403 | `CREDENTIAL_REJECTED` | `CREDENTIAL_REJECTED` | `AUTH_ERROR` | false |
+| HTTP 5xx | `SERVER_ERROR` | `KIS_SERVER_ERROR` | `HTTP_ERROR` | true |
+| Other HTTP status | `AUTH_REQUIRED` | `AUTH_REQUIRED` | `AUTH_ERROR` | false |
+| `SerializationException` | `MALFORMED_RESPONSE` | `KIS_MALFORMED_RESPONSE` | `MALFORMED_RESPONSE` | false |
+| `InterruptedIOException` (incl. `SocketTimeoutException`, OkHttp call timeout) | `NETWORK_TIMEOUT` | `NETWORK_TIMEOUT` | `NETWORK_TIMEOUT` | true |
+| Other `IOException` | `NETWORK_UNAVAILABLE` | `NETWORK_UNAVAILABLE` | `NETWORK_TIMEOUT` (canonical transport type) | true |
+| Any other `Exception` | `UNEXPECTED` | `UNEXPECTED_EXCEPTION` | `UNEXPECTED` | false |
+| `CancellationException` | rethrown, never classified or recorded | — | — | — |
+
+`error_type` and `retryable` are derived from the canonical code (`KisApiErrorMapper.fromAuthKind` / `isRetryable(KisAuthErrorKind)`, checked against `fromAppErrorCode` and `isRetryableAutomatically` by `ApiErrorTaxonomyConsistencyTest`). No `ApiErrorType` value was added. The public message and log line are fixed texts; `Throwable.message` is never persisted or logged. Changes from Gate 4 rows: 403 is no longer a retryable `HTTP_ERROR`; other HTTP statuses are no longer retryable; a non-timeout network failure is no longer recorded as `NETWORK_TIMEOUT` with an auth code; an unexpected local defect is no longer `MALFORMED_RESPONSE`.
+
+`testConnection` is unchanged: no credentials → `NOT_CONFIGURED`; any typed failure with credentials → `ERROR`; success → `AUTHENTICATED`.
+
+#### 20.10.2 Token failures on the market path
+
+`KisMarketRepositoryImpl` still wraps a token failure as `KisMarketException(AUTHENTICATION, …)` so UI callers keep reading `publicMessage`, but it now carries `authKind`. `AppErrorMapper.fromKisMarketException` (used by `fromThrowable` and the forward gateway) maps a present `authKind` through the table above. A token network failure therefore reaches the forward gateway as retryable `NETWORK_FAILURE` instead of non-retryable `AUTH_REQUIRED`; the worker retry policy itself is unchanged. Public message: credential kinds keep `인증 필요`; server / network / malformed / unexpected token failures use `인증 토큰 발급 실패`.
+
+One API error row per failed external attempt: the failed token request is recorded once as `KIS_OAUTH` by `KisAuthRepository`. The market repository no longer adds a second `AUTH_ERROR` row under the market operation for the same attempt. It records a row only for `CREDENTIAL_MISSING` (no request was sent, so no other row exists; this preserves the pre-Gate-8 single row, now non-retryable `AUTH_ERROR` with code `CREDENTIAL_MISSING`). The gateway still treats `AUTHENTICATION` as repository-recorded.
+
+#### 20.10.3 Market repository catch-all
+
+| Failure inside the market call boundary | Before Gate 8 | After Gate 8 |
+| --- | --- | --- |
+| Unrecognised `Exception` | `MALFORMED_RESPONSE` / `KIS 응답 오류` | `KisMarketErrorKind.UNEXPECTED` / `예상치 못한 오류` → `UNEXPECTED_EXCEPTION`, `error_type` `UNEXPECTED`, non-retryable, one row |
+| `SerializationException`, `rt_cd` missing | `MALFORMED_RESPONSE` | unchanged |
+| Numeric / date `MAPPING_FAILURE` (after the call) | `KIS_MALFORMED_RESPONSE` | unchanged |
+| HTTP / 401 / `EGW00201` / `rt_cd != 0` / `IOException` | Gate 4 semantics | unchanged |
+| `KisMarketException`, `CancellationException` | rethrown | unchanged |
+| `IllegalStateException` | rethrown | unchanged (20.10.4) |
+
+The gateway adds `UNEXPECTED` to the repository-recorded kinds, so it does not append a second row.
+
+#### 20.10.4 `IllegalStateException` rethrow (preserved)
+
+Introduced with the read-only market data foundation (`3cd83a2`). `KisReadOnlyGuard` and `KisReadOnlyInterceptor` throw `IllegalStateException` for `/trading/` or non-quotation `/uapi/` paths (`docs/081_KIS_MARKET_DATA.md`). The rethrow keeps that architecture-guard violation from being disguised as a provider failure or recorded as a provider API error. Above the repository it is mapped safely: the forward gateway routes it through `AppErrorMapper.fromThrowable` → `UNEXPECTED_EXCEPTION` with the exception class name only, and UI callers show a fixed generic message. Not changed in Gate 8.
+
+#### 20.10.5 Unchanged
+
+Retry counts, the 61-second rate-limit wait, `EGW00201` classification, `KIS_BUSINESS_ERROR` semantics, WorkManager retry / backoff, the Auto scheduler (07:30 target, `scheduleInstanceId`), Gate 7A recovery, the 18:00 cutoff, factor / strategy / signal rules, paper trading, financial invariants, and snapshot math. No Room or PostgreSQL schema change (`UNEXPECTED` already exists in `ApiErrorType` and `ck_api_error_logs_error_type`).
+
+#### 20.10.6 Remaining gaps
+
+- API error persistence and 7-day cleanup still run inside a discarded `runCatching` (20.3, OPEN).
+- Retention / archive and the Operations UI.
+- Token issuance is classified by HTTP status only. If KIS reports its token issuance throttle (one request per minute) as HTTP 403, it becomes non-retryable `CREDENTIAL_REJECTED`. A business-code-aware token classification would need its own gate.
+
 ---
 
 ## Related
@@ -1086,4 +1146,4 @@ Room v11 → v12 (`MIGRATION_11_12`) and PostgreSQL `0014` add only the nullable
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-165)
+- `docs/060_DECISION_LOG.md` (D-143 – D-166)

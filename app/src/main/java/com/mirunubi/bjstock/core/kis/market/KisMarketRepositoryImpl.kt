@@ -2,6 +2,7 @@ package com.mirunubi.bjstock.core.kis.market
 
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.audit.KisApiErrorMapper
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.KisAuthException
 import com.mirunubi.bjstock.core.kis.KisAuthLogger
 import com.mirunubi.bjstock.core.kis.KisAuthRepository
@@ -150,20 +151,17 @@ class KisMarketRepositoryImpl(
         val token = try {
             authRepository.getValidToken(environment)
         } catch (error: KisAuthException) {
-            val wrapped = KisMarketException(
-                kind = KisMarketErrorKind.AUTHENTICATION,
-                publicMessage = "인증 필요",
-                audit = KisMarketErrorAudit(httpCode = error.httpCode),
-            )
-            recordError(operation, wrapped)
+            val wrapped = authFailure(error.kind, error.httpCode)
+            // KisAuthRepository already recorded the failed KIS_OAUTH attempt; only the
+            // no-attempt credential case has no row yet.
+            if (error.kind == KisAuthErrorKind.CREDENTIAL_MISSING) {
+                recordError(operation, wrapped)
+            }
             throw wrapped
         }
         val credentials = credentialStore.loadCredentials(environment)
             ?: run {
-                val wrapped = KisMarketException(
-                    kind = KisMarketErrorKind.AUTHENTICATION,
-                    publicMessage = "인증 필요",
-                )
+                val wrapped = authFailure(KisAuthErrorKind.CREDENTIAL_MISSING, httpCode = null)
                 recordError(operation, wrapped)
                 throw wrapped
             }
@@ -221,26 +219,49 @@ class KisMarketRepositoryImpl(
             recordError(operation, wrapped)
             throw wrapped
         } catch (error: IllegalStateException) {
+            // KisReadOnlyGuard / KisReadOnlyInterceptor trading-path violation: a programming
+            // defect, not a provider failure. Callers map it to UNEXPECTED_EXCEPTION.
             throw error
         } catch (_: Exception) {
             val wrapped = KisMarketException(
-                kind = KisMarketErrorKind.MALFORMED_RESPONSE,
-                publicMessage = "KIS 응답 오류",
+                kind = KisMarketErrorKind.UNEXPECTED,
+                publicMessage = "예상치 못한 오류",
             )
             recordError(operation, wrapped)
             throw wrapped
         }
     }
 
+    private fun authFailure(kind: KisAuthErrorKind, httpCode: Int?) = KisMarketException(
+        kind = KisMarketErrorKind.AUTHENTICATION,
+        publicMessage = when (kind) {
+            KisAuthErrorKind.CREDENTIAL_MISSING,
+            KisAuthErrorKind.CREDENTIAL_REJECTED,
+            KisAuthErrorKind.AUTH_REQUIRED,
+            -> "인증 필요"
+            KisAuthErrorKind.SERVER_ERROR,
+            KisAuthErrorKind.NETWORK_TIMEOUT,
+            KisAuthErrorKind.NETWORK_UNAVAILABLE,
+            KisAuthErrorKind.MALFORMED_RESPONSE,
+            KisAuthErrorKind.UNEXPECTED,
+            -> "인증 토큰 발급 실패"
+        },
+        audit = KisMarketErrorAudit(httpCode = httpCode),
+        authKind = kind,
+    )
+
     private suspend fun recordError(operation: String, error: KisMarketException) {
         val log = apiErrorLog ?: return
+        val authKind = error.authKind
         runCatching {
             log.record(
                 provider = ApiErrorProvider.KIS,
                 operation = operation,
-                errorType = KisApiErrorMapper.fromMarketKind(error.kind),
+                errorType = authKind?.let(KisApiErrorMapper::fromAuthKind)
+                    ?: KisApiErrorMapper.fromMarketKind(error.kind),
                 safeMessage = diagnosticMessage(error),
-                retryable = KisApiErrorMapper.isRetryable(error.kind),
+                retryable = authKind?.let(KisApiErrorMapper::isRetryable)
+                    ?: KisApiErrorMapper.isRetryable(error.kind),
                 httpStatus = error.audit?.httpCode,
                 businessCode = error.audit?.msgCd,
             )

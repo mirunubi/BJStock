@@ -1,6 +1,7 @@
 package com.mirunubi.bjstock.core.error
 
 import com.mirunubi.bjstock.core.forward.ForwardErrorCode
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.KisAuthException
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorKind
 import com.mirunubi.bjstock.core.kis.market.KisMarketException
@@ -45,13 +46,22 @@ object AppErrorMapper {
         KisMarketErrorKind.MALFORMED_RESPONSE,
         KisMarketErrorKind.MAPPING_FAILURE,
         -> AppErrorCode.KIS_MALFORMED_RESPONSE
+        KisMarketErrorKind.UNEXPECTED -> AppErrorCode.UNEXPECTED_EXCEPTION
     }
 
-    /** [KisAuthException] carries no typed kind yet; only the HTTP code is trusted. */
-    fun fromKisAuthHttpCode(httpCode: Int?): AppErrorCode = when {
-        httpCode == 401 || httpCode == 403 -> AppErrorCode.CREDENTIAL_REJECTED
-        httpCode != null && httpCode in 500..599 -> AppErrorCode.KIS_SERVER_ERROR
-        else -> AppErrorCode.AUTH_REQUIRED
+    /** A token failure wrapped by the market repository keeps its typed auth cause. */
+    fun fromKisMarketException(error: KisMarketException): AppErrorCode =
+        error.authKind?.let(::fromKisAuthErrorKind) ?: fromKisMarketErrorKind(error.kind)
+
+    fun fromKisAuthErrorKind(kind: KisAuthErrorKind): AppErrorCode = when (kind) {
+        KisAuthErrorKind.CREDENTIAL_MISSING -> AppErrorCode.CREDENTIAL_MISSING
+        KisAuthErrorKind.CREDENTIAL_REJECTED -> AppErrorCode.CREDENTIAL_REJECTED
+        KisAuthErrorKind.AUTH_REQUIRED -> AppErrorCode.AUTH_REQUIRED
+        KisAuthErrorKind.SERVER_ERROR -> AppErrorCode.KIS_SERVER_ERROR
+        KisAuthErrorKind.NETWORK_TIMEOUT -> AppErrorCode.NETWORK_TIMEOUT
+        KisAuthErrorKind.NETWORK_UNAVAILABLE -> AppErrorCode.NETWORK_UNAVAILABLE
+        KisAuthErrorKind.MALFORMED_RESPONSE -> AppErrorCode.KIS_MALFORMED_RESPONSE
+        KisAuthErrorKind.UNEXPECTED -> AppErrorCode.UNEXPECTED_EXCEPTION
     }
 
     fun fromHistoricalSyncErrorKind(kind: HistoricalSyncErrorKind): AppErrorCode = when (kind) {
@@ -70,7 +80,7 @@ object AppErrorMapper {
         val exceptionType = SafeLogText.exceptionType(throwable.javaClass.simpleName)
         return when (throwable) {
             is KisMarketException -> SafeAppError(
-                code = fromKisMarketErrorKind(throwable.kind),
+                code = fromKisMarketException(throwable),
                 diagnostics = SafeDiagnostics(
                     exceptionType = exceptionType,
                     httpStatus = throwable.audit?.httpCode?.takeIf { it in 100..599 },
@@ -80,7 +90,7 @@ object AppErrorMapper {
                 ),
             )
             is KisAuthException -> SafeAppError(
-                code = fromKisAuthHttpCode(throwable.httpCode),
+                code = fromKisAuthErrorKind(throwable.kind),
                 diagnostics = SafeDiagnostics(
                     exceptionType = exceptionType,
                     httpStatus = throwable.httpCode?.takeIf { it in 100..599 },

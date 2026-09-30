@@ -1,5 +1,7 @@
 package com.mirunubi.bjstock.core.kis.market
 
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
+
 enum class KisMarketErrorKind {
     AUTHENTICATION,
     HTTP,
@@ -10,6 +12,7 @@ enum class KisMarketErrorKind {
     INVALID_SYMBOL,
     INVALID_DATE_RANGE,
     MAPPING_FAILURE,
+    UNEXPECTED,
 }
 
 data class KisMarketErrorAudit(
@@ -19,8 +22,13 @@ data class KisMarketErrorAudit(
     val rtCd: String? = null,
 )
 
+/**
+ * [authKind] is set only for [KisMarketErrorKind.AUTHENTICATION] raised before the market call
+ * (token issuance or missing credentials) and then decides the canonical code.
+ */
 class KisMarketException(
     val kind: KisMarketErrorKind,
     val publicMessage: String,
     val audit: KisMarketErrorAudit? = null,
+    val authKind: KisAuthErrorKind? = null,
 ) : Exception(publicMessage)

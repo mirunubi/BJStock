@@ -91,7 +91,7 @@ class KisForwardMarketDataGateway(
     }
 
     private suspend fun marketFailure(ex: KisMarketException): MarketSyncOutcome {
-        val code = AppErrorMapper.fromKisMarketErrorKind(ex.kind)
+        val code = AppErrorMapper.fromKisMarketException(ex)
         if (ex.kind !in REPOSITORY_RECORDED_KINDS) {
             record(
                 code = code,
@@ -160,7 +160,8 @@ class KisForwardMarketDataGateway(
         const val OPERATION_HISTORICAL_SYNC = "KIS_HISTORICAL_SYNC"
 
         /**
-         * Kinds that KisMarketRepositoryImpl already records once per provider attempt.
+         * Kinds that KisMarketRepositoryImpl (or, for token failures, KisAuthRepository)
+         * already records once per provider attempt.
          * INVALID_SYMBOL / INVALID_DATE_RANGE are raised before the request and
          * MAPPING_FAILURE after it returns, so only the gateway records those.
          */
@@ -171,6 +172,7 @@ class KisForwardMarketDataGateway(
             KisMarketErrorKind.RATE_LIMITED,
             KisMarketErrorKind.NETWORK_TIMEOUT,
             KisMarketErrorKind.MALFORMED_RESPONSE,
+            KisMarketErrorKind.UNEXPECTED,
         )
     }
 }

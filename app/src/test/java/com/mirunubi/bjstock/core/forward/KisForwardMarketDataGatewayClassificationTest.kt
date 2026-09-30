@@ -11,6 +11,7 @@ import com.mirunubi.bjstock.core.error.AppErrorCode
 import com.mirunubi.bjstock.core.error.AppErrorMapper
 import com.mirunubi.bjstock.core.error.ErrorCategory
 import com.mirunubi.bjstock.core.kis.InMemoryKisSecretStore
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.KisEnvironment
 import com.mirunubi.bjstock.core.kis.market.CurrentStockQuote
 import com.mirunubi.bjstock.core.kis.market.DailyStockBar
@@ -203,6 +204,44 @@ class KisForwardMarketDataGatewayClassificationTest {
         assertFalse(gateway.ensureCredentials())
         secrets.saveCredentials(KisEnvironment.PRODUCTION, "TEST_APP_KEY", "TEST_APP_SECRET")
         assertTrue(gateway.ensureCredentials())
+    }
+
+    @Test
+    fun tokenNetworkFailure_isRetryableNotAuthRequired() = runBlocking {
+        listOf(KisAuthErrorKind.NETWORK_TIMEOUT, KisAuthErrorKind.NETWORK_UNAVAILABLE).forEach { authKind ->
+            marketRepository.failure = KisMarketException(
+                kind = KisMarketErrorKind.AUTHENTICATION,
+                publicMessage = "인증 토큰 발급 실패",
+                authKind = authKind,
+            )
+            val outcome = sync()
+            assertFailure(outcome, ForwardErrorCode.NETWORK_FAILURE.name, retryable = true)
+            assertTrue("KisAuthRepository records the OAuth attempt", apiErrors().isEmpty())
+        }
+    }
+
+    @Test
+    fun tokenRejection_isCredentialRejected() = runBlocking {
+        marketRepository.failure = KisMarketException(
+            kind = KisMarketErrorKind.AUTHENTICATION,
+            publicMessage = "인증 필요",
+            audit = KisMarketErrorAudit(httpCode = 403),
+            authKind = KisAuthErrorKind.CREDENTIAL_REJECTED,
+        )
+        val outcome = sync()
+        assertFailure(outcome, AppErrorCode.CREDENTIAL_REJECTED.name, retryable = false)
+        assertCanonical(outcome, AppErrorCode.CREDENTIAL_REJECTED, ErrorCategory.SECURITY)
+        assertTrue(apiErrors().isEmpty())
+    }
+
+    @Test
+    fun repositoryUnexpected_isUnexpectedWithoutSecondRow() = runBlocking {
+        marketRepository.failure = KisMarketException(KisMarketErrorKind.UNEXPECTED, "예상치 못한 오류")
+        val outcome = sync()
+        assertFailure(outcome, AppErrorCode.UNEXPECTED_EXCEPTION.name, retryable = false)
+        assertCanonical(outcome, AppErrorCode.UNEXPECTED_EXCEPTION, ErrorCategory.UNEXPECTED)
+        assertEquals("예상치 못한 오류", outcome.errorMessage)
+        assertTrue("repository records provider failures", apiErrors().isEmpty())
     }
 
     @Test

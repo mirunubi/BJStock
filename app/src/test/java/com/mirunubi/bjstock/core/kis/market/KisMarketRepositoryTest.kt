@@ -2,21 +2,27 @@ package com.mirunubi.bjstock.core.kis.market
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.InMemoryApiErrorLogDao
 import com.mirunubi.bjstock.core.audit.KisApiErrorMapper
-import com.mirunubi.bjstock.core.database.dao.ApiErrorLogDao
 import com.mirunubi.bjstock.core.database.entity.ApiErrorLogEntity
+import com.mirunubi.bjstock.core.error.AppErrorCode
+import com.mirunubi.bjstock.core.error.AppErrorMapper
+import com.mirunubi.bjstock.core.error.SafeAppError
 import com.mirunubi.bjstock.core.kis.InMemoryKisSecretStore
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.KisAuthRepository
 import com.mirunubi.bjstock.core.kis.KisEnvironment
 import com.mirunubi.bjstock.core.kis.KisToken
 import com.mirunubi.bjstock.core.kis.RecordingKisAuthLogger
 import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.network.kis.KisAuthApi
+import com.mirunubi.bjstock.core.network.kis.KisCurrentPriceResponseDto
+import com.mirunubi.bjstock.core.network.kis.KisDailyChartResponseDto
 import com.mirunubi.bjstock.core.network.kis.KisMarketApi
 import com.mirunubi.bjstock.core.network.kis.KisReadOnlyInterceptor
-import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -302,6 +308,179 @@ class KisMarketRepositoryTest {
     }
 
     @Test
+    fun unexpectedLocalDefect_isUnexpectedNotMalformed() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        val api = ThrowingKisMarketApi(IllegalArgumentException("appsecret TEST_APP_SECRET raw"))
+        val error = runCatching {
+            dailyBars(repository(apiErrorLog = ApiErrorLogService(dao), marketApi = api))
+        }.exceptionOrNull() as KisMarketException
+        assertEquals(KisMarketErrorKind.UNEXPECTED, error.kind)
+        assertEquals("예상치 못한 오류", error.publicMessage)
+        assertEquals(AppErrorCode.UNEXPECTED_EXCEPTION, AppErrorMapper.fromKisMarketException(error))
+        assertFalse(SafeAppError.fromThrowable(error).code.isRetryableAutomatically)
+        val row = dao.rows.single()
+        assertEquals("KIS_DAILY_PRICE", row.operation)
+        assertEquals(ApiErrorType.UNEXPECTED, row.errorType)
+        assertFalse(row.retryable)
+        assertEquals("예상치 못한 오류", row.safeMessage)
+        assertFalse(row.safeMessage.contains("raw"))
+        assertRowHasNoSecrets(row)
+    }
+
+    @Test
+    fun readOnlyGuardIllegalState_isRethrownUnrecorded() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        val guard = IllegalStateException("KIS trading endpoint is prohibited in current BJStock phase")
+        val error = runCatching {
+            dailyBars(repository(apiErrorLog = ApiErrorLogService(dao), marketApi = ThrowingKisMarketApi(guard)))
+        }.exceptionOrNull()
+        assertTrue(error === guard)
+        assertTrue(dao.rows.isEmpty())
+        assertEquals(AppErrorCode.UNEXPECTED_EXCEPTION, SafeAppError.fromThrowable(error!!).code)
+    }
+
+    @Test
+    fun marketCallCancellation_isRethrownUnrecorded() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        val cancel = CancellationException("stopped")
+        val error = runCatching {
+            dailyBars(repository(apiErrorLog = ApiErrorLogService(dao), marketApi = ThrowingKisMarketApi(cancel)))
+        }.exceptionOrNull()
+        assertTrue(error === cancel)
+        assertTrue(dao.rows.isEmpty())
+    }
+
+    @Test
+    fun providerMalformed_staysMalformedResponse() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        val repo = repository(apiErrorLog = ApiErrorLogService(dao))
+        enqueueJson("{not-json")
+        val parse = runCatching { dailyBars(repo) }.exceptionOrNull() as KisMarketException
+        enqueueJson("""{"msg_cd":"MCA00000"}""")
+        val noRtCd = runCatching { dailyBars(repo) }.exceptionOrNull() as KisMarketException
+        listOf(parse, noRtCd).forEach {
+            assertEquals(KisMarketErrorKind.MALFORMED_RESPONSE, it.kind)
+            assertEquals(AppErrorCode.KIS_MALFORMED_RESPONSE, AppErrorMapper.fromKisMarketException(it))
+        }
+        assertEquals(2, dao.rows.size)
+        dao.rows.forEach {
+            assertEquals(ApiErrorType.MALFORMED_RESPONSE, it.errorType)
+            assertFalse(it.retryable)
+        }
+    }
+
+    @Test
+    fun mappingFailure_staysCanonicalMalformed() = runBlocking {
+        enqueueJson(
+            """
+            {"rt_cd":"0","msg_cd":"MCA00000","output2":[{"stck_bsop_date":"20260916",
+            "stck_oprc":"abc","stck_hgpr":"110","stck_lwpr":"90","stck_clpr":"105","acml_vol":"1"}]}
+            """.trimIndent(),
+        )
+        val error = runCatching { dailyBars(repository()) }.exceptionOrNull() as KisMarketException
+        assertEquals(KisMarketErrorKind.MAPPING_FAILURE, error.kind)
+        assertEquals(AppErrorCode.KIS_MALFORMED_RESPONSE, AppErrorMapper.fromKisMarketException(error))
+        assertEquals(ApiErrorType.MALFORMED_RESPONSE, KisApiErrorMapper.fromMarketKind(error.kind))
+    }
+
+    @Test
+    fun businessRejection_semanticsUnchanged() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        enqueueJson("""{"rt_cd":"1","msg_cd":"EGW00123","msg1":"TEST business error"}""")
+        val error = runCatching {
+            dailyBars(repository(apiErrorLog = ApiErrorLogService(dao)))
+        }.exceptionOrNull() as KisMarketException
+        assertEquals(KisMarketErrorKind.BUSINESS, error.kind)
+        assertEquals(AppErrorCode.KIS_BUSINESS_ERROR, AppErrorMapper.fromKisMarketException(error))
+        val row = dao.rows.single()
+        assertEquals(ApiErrorType.KIS_BUSINESS_ERROR, row.errorType)
+        assertEquals("EGW00123", row.businessCode)
+        assertFalse(row.retryable)
+    }
+
+    @Test
+    fun tokenTimeout_isNetworkTimeoutWithOneOauthRow() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        expireCachedToken()
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val error = runCatching {
+            dailyBars(repository(callTimeoutMillis = 300, apiErrorLog = ApiErrorLogService(dao)))
+        }.exceptionOrNull() as KisMarketException
+        assertEquals(KisAuthErrorKind.NETWORK_TIMEOUT, error.authKind)
+        assertEquals(AppErrorCode.NETWORK_TIMEOUT, AppErrorMapper.fromKisMarketException(error))
+        assertEquals(AppErrorCode.NETWORK_TIMEOUT, SafeAppError.fromThrowable(error).code)
+        assertEquals("인증 토큰 발급 실패", error.publicMessage)
+        val row = dao.rows.single()
+        assertEquals("KIS_OAUTH", row.operation)
+        assertEquals(ApiErrorType.NETWORK_TIMEOUT, row.errorType)
+        assertTrue(row.retryable)
+        assertEquals(1, server.requestCount)
+        logger.assertNoSecrets(SECRET_VALUES)
+    }
+
+    @Test
+    fun tokenRejected_isCredentialRejectedWithOneOauthRow() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        expireCachedToken()
+        enqueueError(403, """{"error_code":"EGW00002"}""")
+        val error = runCatching {
+            dailyBars(repository(apiErrorLog = ApiErrorLogService(dao)))
+        }.exceptionOrNull() as KisMarketException
+        assertEquals(KisMarketErrorKind.AUTHENTICATION, error.kind)
+        assertEquals(KisAuthErrorKind.CREDENTIAL_REJECTED, error.authKind)
+        assertEquals(AppErrorCode.CREDENTIAL_REJECTED, AppErrorMapper.fromKisMarketException(error))
+        assertEquals("인증 필요", error.publicMessage)
+        assertEquals(403, error.audit?.httpCode)
+        val row = dao.rows.single()
+        assertEquals("KIS_OAUTH", row.operation)
+        assertEquals(ApiErrorType.AUTH_ERROR, row.errorType)
+        assertFalse(row.retryable)
+        assertEquals(403, row.httpStatus)
+    }
+
+    @Test
+    fun missingCredentials_isCredentialMissingWithOneRow() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        store.deleteToken(KisEnvironment.PRODUCTION)
+        store.deleteCredentials(KisEnvironment.PRODUCTION)
+        val error = runCatching {
+            dailyBars(repository(apiErrorLog = ApiErrorLogService(dao)))
+        }.exceptionOrNull() as KisMarketException
+        assertEquals(KisAuthErrorKind.CREDENTIAL_MISSING, error.authKind)
+        assertEquals(AppErrorCode.CREDENTIAL_MISSING, AppErrorMapper.fromKisMarketException(error))
+        assertEquals("인증 필요", error.publicMessage)
+        val row = dao.rows.single()
+        assertEquals("KIS_DAILY_PRICE", row.operation)
+        assertEquals(ApiErrorType.AUTH_ERROR, row.errorType)
+        assertFalse(row.retryable)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun marketHttp401_staysAuthRequiredSingleRow() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        enqueueError(401, """{"rt_cd":"1","msg_cd":"EGW00123"}""")
+        val error = runCatching {
+            dailyBars(repository(apiErrorLog = ApiErrorLogService(dao)))
+        }.exceptionOrNull() as KisMarketException
+        assertNull(error.authKind)
+        assertEquals(AppErrorCode.AUTH_REQUIRED, AppErrorMapper.fromKisMarketException(error))
+        val row = dao.rows.single()
+        assertEquals("KIS_DAILY_PRICE", row.operation)
+        assertEquals(ApiErrorType.AUTH_ERROR, row.errorType)
+        assertFalse(row.retryable)
+    }
+
+    @Test
+    fun success_recordsNoApiErrorRow() = runBlocking {
+        val dao = InMemoryApiErrorLogDao()
+        enqueueJson(dailyJsonNewestFirstWithDuplicate())
+        val bars = dailyBars(repository(apiErrorLog = ApiErrorLogService(dao)))
+        assertEquals(3, bars.size)
+        assertTrue(dao.rows.isEmpty())
+    }
+
+    @Test
     fun rateLimitedKind_mapsToRateLimitTypeAndIsRetryable() {
         assertEquals(
             ApiErrorType.RATE_LIMIT,
@@ -311,6 +490,17 @@ class KisMarketRepositoryTest {
         assertTrue(KisRequestPolicy.isRateLimit("EGW00201"))
         assertFalse(KisRequestPolicy.isRateLimit("EGW00500"))
         assertFalse(KisRequestPolicy.isRateLimit(null))
+    }
+
+    private suspend fun expireCachedToken() {
+        store.saveToken(
+            KisEnvironment.PRODUCTION,
+            KisToken(
+                accessToken = "TEST_ACCESS_TOKEN",
+                tokenType = "Bearer",
+                expiresAtEpochMillis = NOW,
+            ),
+        )
     }
 
     private suspend fun dailyBars(repository: KisMarketRepositoryImpl) = repository.inquireDailyBars(
@@ -336,6 +526,7 @@ class KisMarketRepositoryTest {
     private fun repository(
         callTimeoutMillis: Long = 5_000,
         apiErrorLog: ApiErrorLogService? = null,
+        marketApi: KisMarketApi? = null,
     ): KisMarketRepositoryImpl {
         val json = Json { ignoreUnknownKeys = true }
         val client = OkHttpClient.Builder()
@@ -356,11 +547,12 @@ class KisMarketRepositoryTest {
             tokenStore = store,
             settingsStore = store,
             logger = logger,
+            apiErrorLog = apiErrorLog,
             currentTimeMillis = { NOW },
             tokenUrl = { server.url("/oauth2/tokenP").toString() },
         )
         return KisMarketRepositoryImpl(
-            api = retrofit.create(KisMarketApi::class.java),
+            api = marketApi ?: retrofit.create(KisMarketApi::class.java),
             authRepository = auth,
             credentialStore = store,
             logger = logger,
@@ -456,23 +648,22 @@ class KisMarketRepositoryTest {
     }
 }
 
-private class InMemoryApiErrorLogDao : ApiErrorLogDao {
-    val rows = mutableListOf<ApiErrorLogEntity>()
+private class ThrowingKisMarketApi(private val failure: Throwable) : KisMarketApi {
+    override suspend fun inquirePrice(
+        url: String,
+        headers: Map<String, String>,
+        marketDivision: String,
+        symbol: String,
+    ): KisCurrentPriceResponseDto = throw failure
 
-    override suspend fun insert(entity: ApiErrorLogEntity): Long {
-        val row = entity.copy(id = rows.size + 1L)
-        rows += row
-        return row.id
-    }
-
-    override suspend fun findSince(since: Instant, limit: Int): List<ApiErrorLogEntity> =
-        rows.filter { !it.occurredAt.isBefore(since) }.take(limit)
-
-    override suspend fun deleteOlderThan(cutoff: Instant): Int {
-        val before = rows.size
-        rows.removeAll { it.occurredAt.isBefore(cutoff) }
-        return before - rows.size
-    }
-
-    override suspend fun countAll(): Int = rows.size
+    override suspend fun inquireDailyItemChartPrice(
+        url: String,
+        headers: Map<String, String>,
+        marketDivision: String,
+        symbol: String,
+        startDate: String,
+        endDate: String,
+        period: String,
+        adjustment: String,
+    ): KisDailyChartResponseDto = throw failure
 }

@@ -3,9 +3,11 @@ package com.mirunubi.bjstock.core.audit
 import com.mirunubi.bjstock.core.error.AppErrorCode
 import com.mirunubi.bjstock.core.error.AppErrorMapper
 import com.mirunubi.bjstock.core.error.ErrorCategory
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorKind
 import com.mirunubi.bjstock.core.model.ApiErrorType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -82,9 +84,60 @@ class ApiErrorTaxonomyConsistencyTest {
             KisMarketErrorKind.NETWORK_TIMEOUT to (AppErrorCode.NETWORK_TIMEOUT to ApiErrorType.NETWORK_TIMEOUT),
             KisMarketErrorKind.HTTP to (AppErrorCode.KIS_SERVER_ERROR to ApiErrorType.HTTP_ERROR),
             KisMarketErrorKind.AUTHENTICATION to (AppErrorCode.AUTH_REQUIRED to ApiErrorType.AUTH_ERROR),
+            KisMarketErrorKind.UNEXPECTED to (AppErrorCode.UNEXPECTED_EXCEPTION to ApiErrorType.UNEXPECTED),
         ).forEach { (kind, expected) ->
             assertEquals(kind.name, expected.first, AppErrorMapper.fromKisMarketErrorKind(kind))
             assertEquals(kind.name, expected.second, KisApiErrorMapper.fromMarketKind(kind))
+        }
+        assertFalse(KisApiErrorMapper.isRetryable(KisMarketErrorKind.UNEXPECTED))
+    }
+
+    @Test
+    fun everyAuthKind_repositoryTypeAndRetryMatchCanonicalCode() {
+        KisAuthErrorKind.entries.forEach { kind ->
+            val code = AppErrorMapper.fromKisAuthErrorKind(kind)
+            assertEquals(kind.name, KisApiErrorMapper.fromAppErrorCode(code), KisApiErrorMapper.fromAuthKind(kind))
+            assertEquals(kind.name, code.isRetryableAutomatically, KisApiErrorMapper.isRetryable(kind))
+        }
+    }
+
+    @Test
+    fun authKinds_mapToGateEightSemantics() {
+        data class Expected(val code: AppErrorCode, val type: ApiErrorType, val retryable: Boolean)
+        mapOf(
+            KisAuthErrorKind.CREDENTIAL_MISSING to
+                Expected(AppErrorCode.CREDENTIAL_MISSING, ApiErrorType.AUTH_ERROR, false),
+            KisAuthErrorKind.CREDENTIAL_REJECTED to
+                Expected(AppErrorCode.CREDENTIAL_REJECTED, ApiErrorType.AUTH_ERROR, false),
+            KisAuthErrorKind.AUTH_REQUIRED to
+                Expected(AppErrorCode.AUTH_REQUIRED, ApiErrorType.AUTH_ERROR, false),
+            KisAuthErrorKind.SERVER_ERROR to
+                Expected(AppErrorCode.KIS_SERVER_ERROR, ApiErrorType.HTTP_ERROR, true),
+            KisAuthErrorKind.NETWORK_TIMEOUT to
+                Expected(AppErrorCode.NETWORK_TIMEOUT, ApiErrorType.NETWORK_TIMEOUT, true),
+            KisAuthErrorKind.NETWORK_UNAVAILABLE to
+                Expected(AppErrorCode.NETWORK_UNAVAILABLE, ApiErrorType.NETWORK_TIMEOUT, true),
+            KisAuthErrorKind.MALFORMED_RESPONSE to
+                Expected(AppErrorCode.KIS_MALFORMED_RESPONSE, ApiErrorType.MALFORMED_RESPONSE, false),
+            KisAuthErrorKind.UNEXPECTED to
+                Expected(AppErrorCode.UNEXPECTED_EXCEPTION, ApiErrorType.UNEXPECTED, false),
+        ).also { assertEquals(KisAuthErrorKind.entries.toSet(), it.keys) }
+            .forEach { (kind, expected) ->
+                assertEquals(kind.name, expected.code, AppErrorMapper.fromKisAuthErrorKind(kind))
+                assertEquals(kind.name, expected.type, KisApiErrorMapper.fromAuthKind(kind))
+                assertEquals(kind.name, expected.retryable, KisApiErrorMapper.isRetryable(kind))
+            }
+    }
+
+    @Test
+    fun tokenHttpStatus_classification() {
+        assertEquals(KisAuthErrorKind.CREDENTIAL_REJECTED, KisAuthErrorKind.fromTokenHttpStatus(401))
+        assertEquals(KisAuthErrorKind.CREDENTIAL_REJECTED, KisAuthErrorKind.fromTokenHttpStatus(403))
+        listOf(500, 502, 503, 599).forEach {
+            assertEquals(it.toString(), KisAuthErrorKind.SERVER_ERROR, KisAuthErrorKind.fromTokenHttpStatus(it))
+        }
+        listOf(400, 404, 429, 600).forEach {
+            assertEquals(it.toString(), KisAuthErrorKind.AUTH_REQUIRED, KisAuthErrorKind.fromTokenHttpStatus(it))
         }
     }
 }

@@ -1,6 +1,8 @@
 package com.mirunubi.bjstock.core.audit
 
 import com.mirunubi.bjstock.core.error.AppErrorCode
+import com.mirunubi.bjstock.core.error.AppErrorMapper
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorKind
 import com.mirunubi.bjstock.core.model.ApiErrorType
 
@@ -17,6 +19,7 @@ object KisApiErrorMapper {
         KisMarketErrorKind.INVALID_SYMBOL,
         KisMarketErrorKind.INVALID_DATE_RANGE,
         -> ApiErrorType.LOCAL_INVARIANT
+        KisMarketErrorKind.UNEXPECTED -> ApiErrorType.UNEXPECTED
     }
 
     fun isRetryable(kind: KisMarketErrorKind): Boolean = when (kind) {
@@ -30,8 +33,26 @@ object KisApiErrorMapper {
         KisMarketErrorKind.INVALID_SYMBOL,
         KisMarketErrorKind.INVALID_DATE_RANGE,
         KisMarketErrorKind.MAPPING_FAILURE,
+        KisMarketErrorKind.UNEXPECTED,
         -> false
     }
+
+    /** Same result as [fromAppErrorCode] of [AppErrorMapper.fromKisAuthErrorKind]. */
+    fun fromAuthKind(kind: KisAuthErrorKind): ApiErrorType = when (kind) {
+        KisAuthErrorKind.CREDENTIAL_MISSING,
+        KisAuthErrorKind.CREDENTIAL_REJECTED,
+        KisAuthErrorKind.AUTH_REQUIRED,
+        -> ApiErrorType.AUTH_ERROR
+        KisAuthErrorKind.SERVER_ERROR -> ApiErrorType.HTTP_ERROR
+        KisAuthErrorKind.NETWORK_TIMEOUT,
+        KisAuthErrorKind.NETWORK_UNAVAILABLE,
+        -> ApiErrorType.NETWORK_TIMEOUT
+        KisAuthErrorKind.MALFORMED_RESPONSE -> ApiErrorType.MALFORMED_RESPONSE
+        KisAuthErrorKind.UNEXPECTED -> ApiErrorType.UNEXPECTED
+    }
+
+    fun isRetryable(kind: KisAuthErrorKind): Boolean =
+        AppErrorMapper.fromKisAuthErrorKind(kind).isRetryableAutomatically
 
     /**
      * API error type for a canonical code (docs/148 taxonomy).

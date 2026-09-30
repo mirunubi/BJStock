@@ -1,6 +1,7 @@
 package com.mirunubi.bjstock.core.error
 
 import com.mirunubi.bjstock.core.forward.ForwardErrorCode
+import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.KisAuthException
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorAudit
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorKind
@@ -106,9 +107,15 @@ class AppErrorModelTest {
         assertEquals(AppErrorCode.KIS_SERVER_ERROR, AppErrorMapper.fromKisMarketErrorKind(KisMarketErrorKind.HTTP))
         assertEquals(AppErrorCode.KIS_RATE_LIMIT, AppErrorMapper.fromKisMarketErrorKind(KisMarketErrorKind.RATE_LIMITED))
         assertEquals(AppErrorCode.KIS_MALFORMED_RESPONSE, AppErrorMapper.fromKisMarketErrorKind(KisMarketErrorKind.MAPPING_FAILURE))
-        assertEquals(AppErrorCode.CREDENTIAL_REJECTED, AppErrorMapper.fromKisAuthHttpCode(401))
-        assertEquals(AppErrorCode.KIS_SERVER_ERROR, AppErrorMapper.fromKisAuthHttpCode(503))
-        assertEquals(AppErrorCode.AUTH_REQUIRED, AppErrorMapper.fromKisAuthHttpCode(null))
+        assertEquals(AppErrorCode.UNEXPECTED_EXCEPTION, AppErrorMapper.fromKisMarketErrorKind(KisMarketErrorKind.UNEXPECTED))
+        assertEquals(
+            AppErrorCode.CREDENTIAL_REJECTED,
+            AppErrorMapper.fromKisAuthErrorKind(KisAuthErrorKind.fromTokenHttpStatus(401)),
+        )
+        assertEquals(
+            AppErrorCode.KIS_SERVER_ERROR,
+            AppErrorMapper.fromKisAuthErrorKind(KisAuthErrorKind.fromTokenHttpStatus(503)),
+        )
     }
 
     @Test
@@ -147,7 +154,11 @@ class AppErrorModelTest {
         assertEquals("EGW00201", rateLimited.diagnostics.businessCode)
         assertFalse(rateLimited.toString().contains("free text"))
 
-        assertEquals(AppErrorCode.CREDENTIAL_REJECTED, SafeAppError.fromThrowable(KisAuthException("x", 401)).code)
+        val rejected = SafeAppError.fromThrowable(
+            KisAuthException(KisAuthErrorKind.CREDENTIAL_REJECTED, "x", 401),
+        )
+        assertEquals(AppErrorCode.CREDENTIAL_REJECTED, rejected.code)
+        assertEquals(401, rejected.diagnostics.httpStatus)
         assertEquals(AppErrorCode.NETWORK_TIMEOUT, SafeAppError.fromThrowable(SocketTimeoutException("t")).code)
         assertEquals(AppErrorCode.NETWORK_UNAVAILABLE, SafeAppError.fromThrowable(IOException("io")).code)
         assertEquals(

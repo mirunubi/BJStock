@@ -36,19 +36,23 @@ Types (PostgreSQL CHECK `ck_api_error_logs_error_type`, `0010`):
 | --- | --- | --- |
 | `NETWORK_TIMEOUT` | Transport timeout or network unavailable | true |
 | `HTTP_ERROR` | Non-2xx HTTP or I/O failure without a KIS business code (incl. 5xx) | true |
-| `AUTH_ERROR` | Credential missing / rejected, token failure, HTTP 401 | false |
+| `AUTH_ERROR` | Credential missing / rejected (token HTTP 401 / 403), other token HTTP status, market HTTP 401 | false |
 | `KIS_BUSINESS_ERROR` | KIS answered `rt_cd != 0` (not rate limit), incl. provider symbol rejection | false |
 | `MALFORMED_RESPONSE` | KIS payload structurally invalid or unparseable (incl. numeric mapping failure) | false |
 | `MASTER_DOWNLOAD_ERROR` | Instrument master download failure | true |
 | `RATE_LIMIT` | KIS `EGW00201`; one row per actual provider attempt | true |
 | `LOCAL_INVARIANT` | Local validation / invariant failure (invalid date range, no latest bar, local invalid symbol, instrument not found) | false |
-| `UNEXPECTED` | Unrecognised exception at the forward gateway; message is `Unexpected error (ClassName)` | false |
+| `UNEXPECTED` | Unrecognised exception at the forward gateway (`Unexpected error (ClassName)`), in the market repository call boundary (`예상치 못한 오류`), or during token issuance (`KIS token request failed: unexpected error`) | false |
 
 `error_type` is derived from the canonical `AppErrorCode` (`KisApiErrorMapper.fromAppErrorCode`); non-transient codes never persist `NETWORK_TIMEOUT`.
+
+`KIS_OAUTH` rows (Phase 11 / Gate 8) derive `error_type` and `retryable` from `KisAuthErrorKind`: 401 / 403 and other HTTP statuses → `AUTH_ERROR`, false; 5xx → `HTTP_ERROR`, true; timeout and network unavailable → `NETWORK_TIMEOUT`, true; malformed token response → `MALFORMED_RESPONSE`, false; unexpected → `UNEXPECTED`, false. Missing credentials send no request and write no `KIS_OAUTH` row. The message is a fixed text; `Throwable.message` is never stored (`docs/150` 20.10.1).
 
 ## One row per failure
 
 One external KIS failure attempt produces exactly one row. `KisMarketRepositoryImpl` records provider/transport failures; `KisForwardMarketDataGateway` does not append a second row when it translates an already-recorded `KisMarketException` into a forward result. The gateway records only failures that originate at or above it: local `INVALID_SYMBOL` / `INVALID_DATE_RANGE` (raised before the request), `MAPPING_FAILURE` (raised after the response), local sync invariants, and unrecognised exceptions. `CancellationException` is rethrown and never recorded.
+
+A failed token request inside a market call is recorded once as `KIS_OAUTH` by `KisAuthRepository`; the market repository does not add a second row under the market operation. Only a market call that finds no stored credentials (no request sent) writes one `AUTH_ERROR` row under the market operation (`docs/150` 20.10.2).
 
 ## KIS error body
 

@@ -1,11 +1,12 @@
 package com.mirunubi.bjstock.core.kis
 
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.KisApiErrorMapper
 import com.mirunubi.bjstock.core.model.ApiErrorProvider
-import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.network.kis.KisAuthApi
 import com.mirunubi.bjstock.core.network.kis.KisTokenRequestDto
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -103,7 +104,10 @@ class KisAuthRepository(
                 ?: run {
                     publish(environment, KisAuthState.NOT_CONFIGURED)
                     logger.info("KIS token request failed: credentials missing")
-                    throw KisAuthException("KIS credentials are not configured")
+                    throw KisAuthException(
+                        KisAuthErrorKind.CREDENTIAL_MISSING,
+                        "KIS credentials are not configured",
+                    )
                 }
             return try {
                 val response = api.issueToken(
@@ -126,64 +130,72 @@ class KisAuthRepository(
                 logger.info("KIS token request success")
                 token
             } catch (error: HttpException) {
-                publish(environment, KisAuthState.ERROR)
-                logger.info("KIS token request failed: HTTP ${error.code()}")
-                recordAuthError(
-                    errorType = if (error.code() == 401) ApiErrorType.AUTH_ERROR else ApiErrorType.HTTP_ERROR,
+                tokenFailure(
+                    environment = environment,
+                    kind = KisAuthErrorKind.fromTokenHttpStatus(error.code()),
                     safeMessage = "KIS token request failed: HTTP ${error.code()}",
-                    httpStatus = error.code(),
-                    retryable = error.code() != 401,
+                    httpCode = error.code(),
                 )
-                throw KisAuthException("KIS token request failed: HTTP ${error.code()}", error.code())
-            } catch (error: SerializationException) {
-                publish(environment, KisAuthState.ERROR)
-                logger.info("KIS token request failed: malformed response")
-                recordAuthError(
-                    errorType = ApiErrorType.MALFORMED_RESPONSE,
-                    safeMessage = "KIS token request failed: malformed response",
+            } catch (_: SerializationException) {
+                tokenFailure(
+                    environment,
+                    KisAuthErrorKind.MALFORMED_RESPONSE,
+                    "KIS token request failed: malformed response",
                 )
-                throw KisAuthException("KIS token request failed: malformed response")
-            } catch (error: IOException) {
-                publish(environment, KisAuthState.ERROR)
-                logger.info("KIS token request failed: network error")
-                recordAuthError(
-                    errorType = ApiErrorType.NETWORK_TIMEOUT,
-                    safeMessage = "KIS token request failed: network error",
-                    retryable = true,
+            } catch (_: InterruptedIOException) {
+                tokenFailure(
+                    environment,
+                    KisAuthErrorKind.NETWORK_TIMEOUT,
+                    "KIS token request failed: network timeout",
                 )
-                throw KisAuthException("KIS token request failed: network error")
+            } catch (_: IOException) {
+                tokenFailure(
+                    environment,
+                    KisAuthErrorKind.NETWORK_UNAVAILABLE,
+                    "KIS token request failed: network error",
+                )
             } catch (error: KisAuthException) {
                 throw error
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                publish(environment, KisAuthState.ERROR)
-                logger.info("KIS token request failed: unexpected error")
-                recordAuthError(
-                    errorType = ApiErrorType.MALFORMED_RESPONSE,
-                    safeMessage = "KIS token request failed: unexpected error",
+                tokenFailure(
+                    environment,
+                    KisAuthErrorKind.UNEXPECTED,
+                    "KIS token request failed: unexpected error",
                 )
-                throw KisAuthException("KIS token request failed: unexpected error")
             } finally {
                 // Do not retain decrypted credentials beyond this request.
             }
         }
     }
 
-    private suspend fun recordAuthError(
-        errorType: ApiErrorType,
+    /** Records exactly one KIS_OAUTH row per failed token attempt; the message is always a fixed text. */
+    private suspend fun tokenFailure(
+        environment: KisEnvironment,
+        kind: KisAuthErrorKind,
         safeMessage: String,
-        httpStatus: Int? = null,
-        retryable: Boolean = false,
+        httpCode: Int? = null,
+    ): Nothing {
+        publish(environment, KisAuthState.ERROR)
+        logger.info(safeMessage)
+        recordAuthError(kind, safeMessage, httpCode)
+        throw KisAuthException(kind, safeMessage, httpCode)
+    }
+
+    private suspend fun recordAuthError(
+        kind: KisAuthErrorKind,
+        safeMessage: String,
+        httpStatus: Int?,
     ) {
         val log = apiErrorLog ?: return
         runCatching {
             log.record(
                 provider = ApiErrorProvider.KIS,
                 operation = "KIS_OAUTH",
-                errorType = errorType,
+                errorType = KisApiErrorMapper.fromAuthKind(kind),
                 safeMessage = safeMessage,
-                retryable = retryable,
+                retryable = KisApiErrorMapper.isRetryable(kind),
                 httpStatus = httpStatus,
             )
         }
