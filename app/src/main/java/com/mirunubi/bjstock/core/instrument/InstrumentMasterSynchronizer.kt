@@ -150,15 +150,13 @@ class InstrumentMasterSynchronizer(
         stats: InstrumentMasterParseStats?,
         reason: String,
     ): InstrumentMasterSyncResult {
-        runCatching {
-            apiErrorLog?.record(
-                provider = ApiErrorProvider.KIS,
-                operation = "KIS_MASTER_DOWNLOAD",
-                errorType = ApiErrorType.MASTER_DOWNLOAD_ERROR,
-                safeMessage = "$board: $reason",
-                retryable = true,
-            )
-        }
+        apiErrorLog?.recordOrReport(
+            provider = ApiErrorProvider.KIS,
+            operation = "KIS_MASTER_DOWNLOAD",
+            errorType = ApiErrorType.MASTER_DOWNLOAD_ERROR,
+            safeMessage = "$board: $reason",
+            retryable = true,
+        )
         return InstrumentMasterSyncResult(
             board = board,
             downloaded = downloaded,

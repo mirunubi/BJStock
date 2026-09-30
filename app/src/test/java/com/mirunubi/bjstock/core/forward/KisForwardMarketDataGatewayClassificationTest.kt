@@ -1,9 +1,11 @@
 package com.mirunubi.bjstock.core.forward
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
+import com.mirunubi.bjstock.core.audit.InMemoryApiErrorLogDao
 import com.mirunubi.bjstock.core.database.BJStockDatabase
 import com.mirunubi.bjstock.core.database.entity.ApiErrorLogEntity
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
@@ -13,6 +15,7 @@ import com.mirunubi.bjstock.core.error.ErrorCategory
 import com.mirunubi.bjstock.core.kis.InMemoryKisSecretStore
 import com.mirunubi.bjstock.core.kis.KisAuthErrorKind
 import com.mirunubi.bjstock.core.kis.KisEnvironment
+import com.mirunubi.bjstock.core.kis.RecordingKisAuthLogger
 import com.mirunubi.bjstock.core.kis.market.CurrentStockQuote
 import com.mirunubi.bjstock.core.kis.market.DailyStockBar
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorAudit
@@ -78,7 +81,7 @@ class KisForwardMarketDataGatewayClassificationTest {
             localRepository = localRepository,
             syncFromLatest = SyncDailyBarsFromLatestUseCase(localRepository, historical),
             historicalSync = historical,
-            apiErrorLog = ApiErrorLogService(database.apiErrorLogDao()) { NOW },
+            apiErrorLog = ApiErrorLogService(database.apiErrorLogDao(), RecordingKisAuthLogger()) { NOW },
         )
         instrumentId = database.instrumentDao().insert(
             InstrumentEntity(market = "KRX", symbol = "005930", name = "Samsung"),
@@ -242,6 +245,50 @@ class KisForwardMarketDataGatewayClassificationTest {
         assertCanonical(outcome, AppErrorCode.UNEXPECTED_EXCEPTION, ErrorCategory.UNEXPECTED)
         assertEquals("예상치 못한 오류", outcome.errorMessage)
         assertTrue("repository records provider failures", apiErrors().isEmpty())
+    }
+
+    @Test
+    fun evidenceFailure_gatewayUnexpectedAndInvariantPreserved() = runBlocking {
+        val dao = InMemoryApiErrorLogDao().apply {
+            insertFailure = SQLiteException("INSERT INTO api_error_logs failed near acct 1234")
+        }
+        val fallback = RecordingKisAuthLogger()
+        val historical = SyncHistoricalDailyBarsUseCase(
+            marketRepository = marketRepository,
+            localRepository = localRepository,
+            environment = { KisEnvironment.PRODUCTION },
+            sleep = {},
+        )
+        gateway = KisForwardMarketDataGateway(
+            credentials = secrets,
+            settings = secrets,
+            localRepository = localRepository,
+            syncFromLatest = SyncDailyBarsFromLatestUseCase(localRepository, historical),
+            historicalSync = historical,
+            apiErrorLog = ApiErrorLogService(dao, fallback) { NOW },
+        )
+
+        marketRepository.failure = IllegalArgumentException("unmapped local failure")
+        val unexpected = sync()
+        assertFailure(unexpected, AppErrorCode.UNEXPECTED_EXCEPTION.name, retryable = false)
+        assertEquals("Unexpected error (IllegalArgumentException)", unexpected.errorMessage)
+
+        marketRepository.failure = HistoricalSyncException(
+            HistoricalSyncErrorKind.INVALID_DATE_RANGE,
+            "startDate must be on or before endDate",
+        )
+        val invariant = sync()
+        assertFailure(invariant, AppErrorCode.INTERNAL_INVARIANT_VIOLATION.name, retryable = false)
+
+        assertEquals(2, dao.insertAttempts)
+        assertTrue(dao.rows.isEmpty())
+        assertEquals(
+            listOf(
+                "API error evidence write failed: KIS_FORWARD_SYNC (SQLiteException)",
+                "API error evidence write failed: KIS_HISTORICAL_SYNC (SQLiteException)",
+            ),
+            fallback.messages,
+        )
     }
 
     @Test

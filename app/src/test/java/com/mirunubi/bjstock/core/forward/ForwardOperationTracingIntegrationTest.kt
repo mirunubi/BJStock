@@ -18,6 +18,7 @@ import com.mirunubi.bjstock.core.factor.FactorCalculationService
 import com.mirunubi.bjstock.core.factor.FactorCodes
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
 import com.mirunubi.bjstock.core.factor.SystemFactorRegistryFactory
+import com.mirunubi.bjstock.core.kis.RecordingKisAuthLogger
 import com.mirunubi.bjstock.core.model.ApiErrorProvider
 import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.model.ForwardCycleStage
@@ -489,7 +490,7 @@ class ForwardOperationTracingIntegrationTest {
         val database: BJStockDatabase = Room.inMemoryDatabaseBuilder(context, BJStockDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        val apiErrorLog = ApiErrorLogService(database.apiErrorLogDao()) { NOW }
+        val apiErrorLog = ApiErrorLogService(database.apiErrorLogDao(), RecordingKisAuthLogger()) { NOW }
         val gateway = LocalGateway(apiErrorLog)
         private val audit = TradeAuditLogService(database.tradeAuditLogDao()) { NOW }
         private val operationLog = ForwardOperationLogService(database) { NOW }

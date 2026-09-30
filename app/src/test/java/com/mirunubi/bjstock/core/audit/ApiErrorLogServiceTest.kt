@@ -1,6 +1,7 @@
 package com.mirunubi.bjstock.core.audit
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.mirunubi.bjstock.core.database.BJStockDatabase
@@ -8,6 +9,7 @@ import com.mirunubi.bjstock.core.database.entity.StrategyEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyRunEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyVersionEntity
 import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
+import com.mirunubi.bjstock.core.kis.RecordingKisAuthLogger
 import com.mirunubi.bjstock.core.kis.market.KisMarketErrorKind
 import com.mirunubi.bjstock.core.model.ApiErrorProvider
 import com.mirunubi.bjstock.core.model.ApiErrorType
@@ -18,6 +20,7 @@ import com.mirunubi.bjstock.core.model.TradeAuditEventType
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -40,7 +43,7 @@ class ApiErrorLogServiceTest {
         database = Room.inMemoryDatabaseBuilder(context, BJStockDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        service = ApiErrorLogService(database.apiErrorLogDao()) { now }
+        service = ApiErrorLogService(database.apiErrorLogDao(), RecordingKisAuthLogger()) { now }
     }
 
     @After
@@ -159,6 +162,122 @@ class ApiErrorLogServiceTest {
     }
 
     @Test
+    fun recordOrReport_success_writesExactlyOneRowAndNoFallback() = runBlocking {
+        val fallback = RecordingKisAuthLogger()
+        val written = ApiErrorLogService(database.apiErrorLogDao(), fallback) { now }.recordOrReport(
+            provider = ApiErrorProvider.KIS,
+            operation = "KIS_OAUTH",
+            errorType = ApiErrorType.NETWORK_TIMEOUT,
+            safeMessage = "KIS token request failed: network timeout",
+            retryable = true,
+        )
+        assertTrue(written)
+        assertEquals(1, database.apiErrorLogDao().countAll())
+        assertTrue(fallback.messages.isEmpty())
+    }
+
+    @Test
+    fun recordOrReport_writeFailure_reportsClassOnlyWithoutRecursion() = runBlocking {
+        val dao = InMemoryApiErrorLogDao().apply { insertFailure = SQLiteException(SECRET_BEARING_SQL) }
+        val fallback = RecordingKisAuthLogger()
+        val written = ApiErrorLogService(dao, fallback) { now }.recordOrReport(
+            provider = ApiErrorProvider.KIS,
+            operation = "KIS_DAILY_PRICE",
+            errorType = ApiErrorType.HTTP_ERROR,
+            safeMessage = "연결 실패",
+            retryable = true,
+        )
+        assertFalse(written)
+        assertEquals(1, dao.insertAttempts)
+        assertTrue(dao.rows.isEmpty())
+        assertEquals(
+            listOf("API error evidence write failed: KIS_DAILY_PRICE (SQLiteException)"),
+            fallback.messages,
+        )
+        assertNoRawText(fallback.messages)
+    }
+
+    @Test
+    fun recordOrReport_unsafeOperationName_isNotEchoed() = runBlocking {
+        val dao = InMemoryApiErrorLogDao().apply { insertFailure = SQLiteException(SECRET_BEARING_SQL) }
+        val fallback = RecordingKisAuthLogger()
+        ApiErrorLogService(dao, fallback) { now }.recordOrReport(
+            provider = ApiErrorProvider.KIS,
+            operation = "appsecret TEST_APP_SECRET",
+            errorType = ApiErrorType.UNEXPECTED,
+            safeMessage = "x",
+        )
+        assertEquals(listOf("API error evidence write failed: UNKNOWN (SQLiteException)"), fallback.messages)
+    }
+
+    @Test
+    fun recordOrReport_cancellation_isRethrownWithoutFallback() {
+        val dao = InMemoryApiErrorLogDao().apply { insertFailure = CancellationException("stopped") }
+        val fallback = RecordingKisAuthLogger()
+        val thrown = runCatching {
+            runBlocking {
+                ApiErrorLogService(dao, fallback) { now }.recordOrReport(
+                    provider = ApiErrorProvider.KIS,
+                    operation = "KIS_OAUTH",
+                    errorType = ApiErrorType.AUTH_ERROR,
+                    safeMessage = "x",
+                )
+            }
+        }.exceptionOrNull()
+        assertTrue(thrown is CancellationException)
+        assertTrue(fallback.messages.isEmpty())
+    }
+
+    @Test
+    fun cleanupOrReport_success_deletesLikeSevenDayCleanup() = runBlocking {
+        val fallback = RecordingKisAuthLogger()
+        val reporting = ApiErrorLogService(database.apiErrorLogDao(), fallback) { now }
+        listOf(8L, 3L).forEach { daysAgo ->
+            reporting.record(
+                provider = ApiErrorProvider.KIS,
+                operation = "KIS_CURRENT_PRICE",
+                errorType = ApiErrorType.NETWORK_TIMEOUT,
+                safeMessage = "old-$daysAgo",
+                occurredAt = now.minus(daysAgo, ChronoUnit.DAYS),
+            )
+        }
+        assertEquals(1, reporting.cleanupOrReport(ApiErrorLogService.CLEANUP_APP_START))
+        assertEquals(1, database.apiErrorLogDao().countAll())
+        assertTrue(fallback.messages.isEmpty())
+    }
+
+    @Test
+    fun cleanupOrReport_failure_isContainedAndReportedSafely() = runBlocking {
+        val dao = InMemoryApiErrorLogDao().apply { cleanupFailure = SQLiteException(SECRET_BEARING_SQL) }
+        val fallback = RecordingKisAuthLogger()
+        val result = ApiErrorLogService(dao, fallback) { now }
+            .cleanupOrReport(ApiErrorLogService.CLEANUP_FORWARD_SUCCESS)
+        assertEquals(null, result)
+        assertEquals(listOf("API error cleanup failed: FORWARD_SUCCESS (SQLiteException)"), fallback.messages)
+        assertEquals(0, dao.insertAttempts)
+        assertNoRawText(fallback.messages)
+    }
+
+    @Test
+    fun cleanupOrReport_cancellation_isRethrown() {
+        val dao = InMemoryApiErrorLogDao().apply { cleanupFailure = CancellationException("stopped") }
+        val fallback = RecordingKisAuthLogger()
+        val thrown = runCatching {
+            runBlocking { ApiErrorLogService(dao, fallback) { now }.cleanupOrReport("APP_START") }
+        }.exceptionOrNull()
+        assertTrue(thrown is CancellationException)
+        assertTrue(fallback.messages.isEmpty())
+    }
+
+    private fun assertNoRawText(messages: List<String>) {
+        messages.forEach { message ->
+            listOf("INSERT", "api_error_logs", "appsecret", "TEST_APP_SECRET").forEach { fragment ->
+                assertFalse("leaked '$fragment' in '$message'", message.contains(fragment))
+            }
+        }
+    }
+
+    @Test
     fun mapper_mapsMarketKinds() {
         assertEquals(ApiErrorType.AUTH_ERROR, KisApiErrorMapper.fromMarketKind(KisMarketErrorKind.AUTHENTICATION))
         assertEquals(ApiErrorType.HTTP_ERROR, KisApiErrorMapper.fromMarketKind(KisMarketErrorKind.HTTP))
@@ -174,5 +293,9 @@ class ApiErrorLogServiceTest {
             ApiErrorType.MALFORMED_RESPONSE,
             KisApiErrorMapper.fromMarketKind(KisMarketErrorKind.MALFORMED_RESPONSE),
         )
+    }
+
+    private companion object {
+        const val SECRET_BEARING_SQL = "INSERT INTO api_error_logs failed near appsecret TEST_APP_SECRET"
     }
 }

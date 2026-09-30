@@ -1,12 +1,15 @@
 package com.mirunubi.bjstock.core.forward
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.audit.ForwardOperationContext
+import com.mirunubi.bjstock.core.audit.InMemoryApiErrorLogDao
 import com.mirunubi.bjstock.core.database.BJStockDatabase
+import com.mirunubi.bjstock.core.database.dao.ApiErrorLogDao
 import com.mirunubi.bjstock.core.database.entity.ApiErrorLogEntity
 import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
 import com.mirunubi.bjstock.core.error.AppErrorCode
@@ -59,6 +62,7 @@ class KisForwardGatewayApiErrorLoggingTest {
     private lateinit var localRepository: MarketDataLocalRepository
     private lateinit var gateway: KisForwardMarketDataGateway
     private val sleeps = mutableListOf<Long>()
+    private val fallback = RecordingKisAuthLogger()
     private var instrumentId: Long = 0
 
     @Before
@@ -240,6 +244,64 @@ class KisForwardGatewayApiErrorLoggingTest {
     }
 
     @Test
+    fun evidenceFailure_rateLimitBoundedRetryUnchanged() = runBlocking {
+        val failing = failingDao()
+        gateway = gateway(apiErrorDao = failing)
+        seedLatestBar()
+        repeat(KisRequestPolicy.RATE_LIMIT_MAX_ATTEMPTS) { enqueue(500, RATE_LIMIT_BODY) }
+        val outcome = sync()
+        assertOutcome(outcome, ForwardErrorCode.NETWORK_FAILURE.name, retryable = true)
+        assertEquals("KIS 요청 한도 초과", outcome.errorMessage)
+        assertEquals(KisRequestPolicy.RATE_LIMIT_MAX_ATTEMPTS, server.requestCount)
+        assertEquals(
+            List(KisRequestPolicy.RATE_LIMIT_MAX_ATTEMPTS - 1) { KisRequestPolicy.RATE_LIMIT_WAIT_MILLIS },
+            sleeps,
+        )
+        assertEquals(KisRequestPolicy.RATE_LIMIT_MAX_ATTEMPTS, failing.insertAttempts)
+        assertFallback(List(KisRequestPolicy.RATE_LIMIT_MAX_ATTEMPTS) { "KIS_DAILY_PRICE" })
+    }
+
+    @Test
+    fun evidenceFailure_businessAndMalformedPreserved() = runBlocking {
+        val failing = failingDao()
+        gateway = gateway(apiErrorDao = failing)
+        seedLatestBar()
+        enqueue(200, """{"rt_cd":"1","msg_cd":"TEST0001","msg1":"TEST rejected"}""")
+        assertOutcome(sync(), AppErrorCode.KIS_BUSINESS_ERROR.name, retryable = false)
+        enqueue(200, """{"msg_cd":"TEST0003"}""")
+        assertOutcome(sync(), AppErrorCode.KIS_MALFORMED_RESPONSE.name, retryable = false)
+        assertEquals(2, failing.insertAttempts)
+        assertFallback(List(2) { "KIS_DAILY_PRICE" })
+    }
+
+    @Test
+    fun evidenceFailure_networkStaysRetryable() = runBlocking {
+        val failing = failingDao()
+        gateway = gateway(apiErrorDao = failing)
+        seedLatestBar()
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+        assertOutcome(sync(), ForwardErrorCode.NETWORK_FAILURE.name, retryable = true)
+        assertEquals(1, failing.insertAttempts)
+        assertFallback(listOf("KIS_DAILY_PRICE"))
+    }
+
+    @Test
+    fun evidenceFailure_gatewayOwnedInvariantAndMappingPreserved() = runBlocking {
+        val failing = failingDao()
+        gateway = gateway(apiErrorDao = failing)
+        val invalid = database.instrumentDao().insert(
+            InstrumentEntity(market = "KRX", symbol = "12AB", name = "Invalid"),
+        )
+        val invariant = gateway.syncUniverseTo(listOf(invalid), THROUGH)
+        assertOutcome(invariant, AppErrorCode.INTERNAL_INVARIANT_VIOLATION.name, retryable = false)
+        seedLatestBar()
+        enqueue(200, dailyJson(THROUGH, close = "N/A"))
+        assertOutcome(sync(), AppErrorCode.KIS_MALFORMED_RESPONSE.name, retryable = false)
+        assertEquals(2, failing.insertAttempts)
+        assertFallback(List(2) { "KIS_FORWARD_SYNC" })
+    }
+
+    @Test
     fun successfulSync_unchanged_noRows() = runBlocking {
         seedLatestBar()
         enqueue(200, dailyJson(THROUGH, close = "70500"))
@@ -251,6 +313,22 @@ class KisForwardGatewayApiErrorLoggingTest {
     }
 
     private suspend fun sync(): MarketSyncOutcome = gateway.syncUniverseTo(listOf(instrumentId), THROUGH)
+
+    private fun failingDao() = InMemoryApiErrorLogDao().apply {
+        insertFailure = SQLiteException("INSERT INTO api_error_logs failed near appsecret TEST_APP_SECRET")
+    }
+
+    private suspend fun assertFallback(operations: List<String>) {
+        assertTrue("no row reaches the real table", rows().isEmpty())
+        assertEquals(
+            operations.map { "API error evidence write failed: $it (SQLiteException)" },
+            fallback.messages,
+        )
+        fallback.messages.forEach { message ->
+            listOf("INSERT", "api_error_logs", "appsecret").forEach { assertFalse(message, message.contains(it)) }
+        }
+        fallback.assertNoSecrets(SECRET_VALUES)
+    }
 
     private suspend fun rows(): List<ApiErrorLogEntity> =
         database.apiErrorLogDao().findSince(Instant.EPOCH)
@@ -307,7 +385,10 @@ class KisForwardGatewayApiErrorLoggingTest {
         )
     }
 
-    private suspend fun gateway(callTimeoutMillis: Long = 5_000): KisForwardMarketDataGateway {
+    private suspend fun gateway(
+        callTimeoutMillis: Long = 5_000,
+        apiErrorDao: ApiErrorLogDao = database.apiErrorLogDao(),
+    ): KisForwardMarketDataGateway {
         val store = InMemoryKisSecretStore()
         store.saveCredentials(KisEnvironment.PRODUCTION, "TEST_APP_KEY", "TEST_APP_SECRET")
         store.saveToken(
@@ -339,7 +420,7 @@ class KisForwardGatewayApiErrorLoggingTest {
             currentTimeMillis = { TOKEN_CLOCK },
             tokenUrl = { server.url("/oauth2/tokenP").toString() },
         )
-        val apiErrorLog = ApiErrorLogService(database.apiErrorLogDao()) { NOW }
+        val apiErrorLog = ApiErrorLogService(apiErrorDao, fallback) { NOW }
         val marketRepository = KisMarketRepositoryImpl(
             api = retrofit.create(KisMarketApi::class.java),
             authRepository = auth,

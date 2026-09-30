@@ -256,6 +256,53 @@ class KisAuthRepositoryTest {
     }
 
     @Test
+    fun evidenceWriteFailure_preservesTypedAuthFailures() = runBlocking {
+        saveProductionCredentials()
+        apiErrors.insertFailure = IllegalStateException(SECRET_BEARING_SQL)
+        val timeout = tokenFailure(authApi = FailingKisAuthApi(SocketTimeoutException("t")))
+        server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"invalid"}"""))
+        val rejected = tokenFailure()
+        val unexpected = tokenFailure(authApi = FailingKisAuthApi(IllegalArgumentException("defect")))
+
+        assertEquals(KisAuthErrorKind.NETWORK_TIMEOUT, timeout.kind)
+        assertEquals(AppErrorCode.NETWORK_TIMEOUT, SafeAppError.fromThrowable(timeout).code)
+        assertEquals(KisAuthErrorKind.CREDENTIAL_REJECTED, rejected.kind)
+        assertEquals(401, rejected.httpCode)
+        assertEquals(AppErrorCode.CREDENTIAL_REJECTED, SafeAppError.fromThrowable(rejected).code)
+        assertEquals(KisAuthErrorKind.UNEXPECTED, unexpected.kind)
+        assertEquals(AppErrorCode.UNEXPECTED_EXCEPTION, SafeAppError.fromThrowable(unexpected).code)
+        assertEquals("KIS token request failed: unexpected error", unexpected.publicMessage)
+
+        assertTrue(apiErrors.rows.isEmpty())
+        assertEquals(3, apiErrors.insertAttempts)
+        val fallback = logger.messages.filter { it.startsWith("API error evidence write failed") }
+        assertEquals(
+            List(3) { "API error evidence write failed: KIS_OAUTH (IllegalStateException)" },
+            fallback,
+        )
+        logger.messages.forEach { message ->
+            assertFalse(message, message.contains("INSERT"))
+            assertFalse(message, message.contains("api_error_logs"))
+        }
+        logger.assertNoSecrets(SECRET_VALUES)
+        assertEquals(
+            KisAuthState.ERROR,
+            repository(authApi = FailingKisAuthApi(IOException("x"))).testConnection(KisEnvironment.PRODUCTION),
+        )
+    }
+
+    @Test
+    fun evidenceWriteCancellation_isRethrownNotReported() = runBlocking {
+        saveProductionCredentials()
+        apiErrors.insertFailure = CancellationException("stopped")
+        val thrown = runCatching {
+            repository(authApi = FailingKisAuthApi(IOException("x"))).getValidToken(KisEnvironment.PRODUCTION)
+        }.exceptionOrNull()
+        assertTrue(thrown.toString(), thrown is CancellationException)
+        assertTrue(logger.messages.none { it.startsWith("API error evidence write failed") })
+    }
+
+    @Test
     fun testConnection_successIsAuthenticated() = runBlocking {
         enqueueSuccess()
         saveProductionCredentials()
@@ -392,7 +439,7 @@ class KisAuthRepositoryTest {
             tokenStore = store,
             settingsStore = store,
             logger = logger,
-            apiErrorLog = ApiErrorLogService(apiErrors),
+            apiErrorLog = ApiErrorLogService(apiErrors, logger),
             currentTimeMillis = { nowMillis },
             tokenUrl = { server.url("/oauth2/tokenP").toString() },
         )
@@ -400,6 +447,8 @@ class KisAuthRepositoryTest {
 
     companion object {
         private const val NOW = 1_700_000_000_000L
+        private const val SECRET_BEARING_SQL =
+            "INSERT INTO api_error_logs failed near appsecret TEST_APP_SECRET"
         private val SECRET_VALUES = listOf(
             "TEST_APP_KEY",
             "TEST_APP_SECRET",

@@ -351,7 +351,7 @@ class ForwardTestOrchestrator(
 
     private suspend fun cleanupApiErrorsOnSuccess(result: ForwardOrchestratorResult) {
         if (result is ForwardOrchestratorResult.Ok || result is ForwardOrchestratorResult.NoOp) {
-            runCatching { apiErrorLog?.cleanupOlderThanSevenDays() }
+            apiErrorLog?.cleanupOrReport(ApiErrorLogService.CLEANUP_FORWARD_SUCCESS)
         }
     }
 

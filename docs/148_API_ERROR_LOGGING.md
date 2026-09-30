@@ -18,6 +18,12 @@ Cleanup deletes rows with `occurred_at` strictly before `now - 7 days`. Invoked 
 
 Target: 90-day hot retention plus 400-day daily aggregates (`docs/150_OPERATIONAL_RELIABILITY_STANDARD.md`). Not active yet (D-149).
 
+A cleanup failure (`cleanupOrReport`, trigger `APP_START` or `FORWARD_SUCCESS`) is contained: the app keeps starting, scheduler reconciliation and the Auto flag are unaffected, and one safe fallback line is emitted (`docs/150` 20.11.5).
+
+## Evidence write failure
+
+The KIS failure being recorded is the primary error; a failed insert into this table is secondary and never changes the primary's kind, code, retryability, or public message. Writers call `ApiErrorLogService.recordOrReport`, which on failure emits one fixed line through `KisAuthLogger` (`API error evidence write failed: <operation> (<ExceptionSimpleName>)`) and never retries into this table. `Throwable.message` and SQL text are never logged. `CancellationException` is rethrown (`docs/150` 20.11).
+
 ## Operation correlation
 
 Room v8 adds nullable `operation_id` (soft reference to `forward_operations.id`). Existing rows stay NULL. Since Phase 11 / Gate 5, rows recorded inside a Forward Test operation carry its id; rows recorded elsewhere stay NULL (`docs/150` 20.4.7).

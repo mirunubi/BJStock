@@ -1,14 +1,20 @@
 package com.mirunubi.bjstock.core.forward
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.BackoffPolicy
 import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.WorkRequest
+import com.mirunubi.bjstock.core.audit.ApiErrorLogService
 import com.mirunubi.bjstock.core.audit.ForwardOperationLogService
+import com.mirunubi.bjstock.core.audit.InMemoryApiErrorLogDao
 import com.mirunubi.bjstock.core.database.BJStockDatabase
+import com.mirunubi.bjstock.core.kis.RecordingKisAuthLogger
+import com.mirunubi.bjstock.core.model.ApiErrorProvider
+import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import com.mirunubi.bjstock.core.model.OperationalEventType
@@ -18,6 +24,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -60,6 +67,61 @@ class ForwardAutoScheduleTest {
         settings.setAutoEnabled(false)
         database.close()
     }
+
+    // --- App start with API error cleanup (Gate 9) ---
+
+    @Test
+    fun startupCleanupFailure_keepsReconciliationAndAutoOn() = runBlocking<Unit> {
+        settings.setAutoEnabled(true)
+        val dao = InMemoryApiErrorLogDao().apply {
+            cleanupFailure = SQLiteException("DELETE FROM api_error_logs failed near appsecret TEST_APP_SECRET")
+        }
+        val fallback = RecordingKisAuthLogger()
+        startSequence(ApiErrorLogService(dao, fallback) { clock.instant() })
+
+        assertTrue(scheduler.isAutoEnabled())
+        assertEquals(listOf(slot(2026, 10, 1)), gateway.activeSlots)
+        assertNull(scheduler.status().lastScheduleFailure)
+        assertEquals(listOf("API error cleanup failed: APP_START (SQLiteException)"), fallback.messages)
+        assertEquals(0, dao.insertAttempts)
+    }
+
+    @Test
+    fun startupCleanupFailure_leavesAutoOffUnscheduled() = runBlocking<Unit> {
+        val dao = InMemoryApiErrorLogDao().apply { cleanupFailure = SQLiteException("disk I/O error") }
+        val fallback = RecordingKisAuthLogger()
+        startSequence(ApiErrorLogService(dao, fallback) { clock.instant() })
+
+        assertFalse(scheduler.isAutoEnabled())
+        assertTrue(gateway.enqueueCalls.isEmpty())
+        assertEquals(listOf("API error cleanup failed: APP_START (SQLiteException)"), fallback.messages)
+    }
+
+    @Test
+    fun startupCleanupSuccess_isUnchanged() = runBlocking<Unit> {
+        settings.setAutoEnabled(true)
+        val dao = InMemoryApiErrorLogDao()
+        val fallback = RecordingKisAuthLogger()
+        val apiErrors = ApiErrorLogService(dao, fallback) { clock.instant() }
+        apiErrors.record(
+            provider = ApiErrorProvider.KIS,
+            operation = "KIS_OAUTH",
+            errorType = ApiErrorType.AUTH_ERROR,
+            safeMessage = "old",
+            occurredAt = clock.instant().minus(8, ChronoUnit.DAYS),
+        )
+        startSequence(apiErrors)
+
+        assertTrue(dao.rows.isEmpty())
+        assertTrue(fallback.messages.isEmpty())
+        assertEquals(listOf(slot(2026, 10, 1)), gateway.activeSlots)
+    }
+
+    private suspend fun startSequence(apiErrors: ApiErrorLogService) = runAppStartSequence(
+        recoverInterruptedOperations = { operationLog.recoverInterruptedOperations(clock.instant()) },
+        reconcileAutoSchedule = { scheduler.reconcileOnAppStart() },
+        maintenance = { apiErrors.cleanupOrReport(ApiErrorLogService.CLEANUP_APP_START) },
+    )
 
     // --- Auto ON / OFF ---
 

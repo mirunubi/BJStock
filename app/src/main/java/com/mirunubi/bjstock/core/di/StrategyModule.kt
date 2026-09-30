@@ -14,6 +14,7 @@ import com.mirunubi.bjstock.core.database.dao.ThemeDao
 import com.mirunubi.bjstock.core.database.dao.TradeAuditLogDao
 import com.mirunubi.bjstock.core.factor.FactorRegistry
 import com.mirunubi.bjstock.core.factor.FactorValueRepository
+import com.mirunubi.bjstock.core.kis.KisAuthLogger
 import com.mirunubi.bjstock.core.paper.CashLedgerService
 import com.mirunubi.bjstock.core.paper.PaperTradingPolicy
 import com.mirunubi.bjstock.core.paper.PaperTradingPolicyService
@@ -41,8 +42,8 @@ object StrategyModule {
 
     @Provides
     @Singleton
-    fun provideApiErrorLogService(dao: ApiErrorLogDao): ApiErrorLogService =
-        ApiErrorLogService(dao)
+    fun provideApiErrorLogService(dao: ApiErrorLogDao, logger: KisAuthLogger): ApiErrorLogService =
+        ApiErrorLogService(dao, logger)
 
     @Provides
     @Singleton

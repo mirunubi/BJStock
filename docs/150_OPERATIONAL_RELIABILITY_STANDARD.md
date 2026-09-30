@@ -633,7 +633,7 @@ Unchanged:
 | `KisForwardMarketDataGateway` catches generic `Exception` as retryable `NETWORK_FAILURE`; maps local `HistoricalSyncErrorKind.INVALID_DATE_RANGE` / `NO_LATEST_BAR` to retryable `NETWORK_FAILURE` | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 3, commit `f2abe55` (see 20.3.1) |
 | Gateway collapses KIS `BUSINESS` / `MALFORMED_RESPONSE` / `MAPPING_FAILURE` / local `INVALID_SYMBOL` / `INVALID_DATE_RANGE` into retryable `NETWORK_FAILURE`; `api_error_logs.error_type` misleading (`NETWORK_TIMEOUT` for local and unexpected failures, `KIS_BUSINESS_ERROR` for rate limit and local validation); gateway appends a duplicate row for failures the repository already recorded | 4.3, 6, 9 | **RESOLVED** — Phase 11 / Gate 4 (see 20.3.2) |
 | `KisMarketRepositoryImpl` catch-all may classify an unexpected local defect as `MALFORMED_RESPONSE`. The gateway preserves the repository-provided classification | 4.3, 6 | **RESOLVED** — Phase 11 / Gate 8: `KisMarketErrorKind.UNEXPECTED` → `UNEXPECTED_EXCEPTION` / `UNEXPECTED`, non-retryable (see 20.10) |
-| **OPEN:** API error logging / 7-day cleanup wrapped in discarded `runCatching` (still present after Gate 8) | 6 | instrumentation + isolation |
+| API error logging / 7-day cleanup wrapped in discarded `runCatching` | 6 | **RESOLVED** — Phase 11 / Gate 9: `recordOrReport` / `cleanupOrReport`, primary error preserved, safe fallback (see 20.11) |
 | `KisAuthException` has no typed kind; token network failure surfaces as auth failure | 4.3 | **RESOLVED** — Phase 11 / Gate 8: `KisAuthErrorKind` (see 20.10) |
 | Audit written outside business transaction; `ORDER_REJECTED` / `ORDER_CANCELLED` not emitted | 11 | **RESOLVED** — Phase 11 / Gate 6 for evaluation, order create / skip / reject / cancel, and fill (see 20.5) |
 | Executions / cash ledger lack canonical unique event keys | 12 | **RESOLVED** — Phase 11 / Gate 6, Room v10 / PostgreSQL `0012` (see 20.5) |
@@ -1133,9 +1133,65 @@ Retry counts, the 61-second rate-limit wait, `EGW00201` classification, `KIS_BUS
 
 #### 20.10.6 Remaining gaps
 
-- API error persistence and 7-day cleanup still run inside a discarded `runCatching` (20.3, OPEN).
+- API error persistence and 7-day cleanup still run inside a discarded `runCatching` (resolved in Gate 9, 20.11).
 - Retention / archive and the Operations UI.
-- Token issuance is classified by HTTP status only. If KIS reports its token issuance throttle (one request per minute) as HTTP 403, it becomes non-retryable `CREDENTIAL_REJECTED`. A business-code-aware token classification would need its own gate.
+- Token issuance is classified by HTTP status only. If KIS reports its token issuance throttle (one request per minute) as HTTP 403, it becomes non-retryable `CREDENTIAL_REJECTED`. A business-code-aware token classification would need its own gate (decision recorded in 20.11.6).
+
+### 20.11 API error evidence persistence (Phase 11 / Gate 9)
+
+#### 20.11.1 Primary error precedence
+
+The primary error is the actual KIS / auth / network / provider / local failure being classified. A secondary error is a failure while persisting diagnostics about it (`api_error_logs` insert) or while running the 7-day cleanup. A secondary error never replaces, reclassifies, or suppresses the primary: the typed `KisAuthException` / `KisMarketException` / `MarketSyncOutcome` keeps its kind, `AppErrorCode`, retryability, and public message (e.g. `NETWORK_TIMEOUT` stays `NETWORK_TIMEOUT`, never `DATA_INTEGRITY_ERROR` / `UNEXPECTED_EXCEPTION` / `AUTH_REQUIRED`). Rate-limit bounded retry (attempt count, 61-second wait) is unchanged; a failed insert neither adds nor removes an attempt.
+
+#### 20.11.2 Explicit evidence write and cleanup
+
+`ApiErrorLogService` owns the handling; call sites no longer wrap it in `runCatching`:
+
+| Call site | Before Gate 9 | After Gate 9 |
+| --- | --- | --- |
+| `KisAuthRepository` (`KIS_OAUTH`) | `runCatching { record(...) }`, result discarded | `recordOrReport(...)` |
+| `KisMarketRepositoryImpl` (price / daily price) | `runCatching { record(...) }`, result discarded | `recordOrReport(...)` |
+| `KisForwardMarketDataGateway` (gateway-owned rows) | `runCatching { record(...) }`, result discarded | `recordOrReport(...)` |
+| `InstrumentMasterSynchronizer` (`KIS_MASTER_DOWNLOAD`) | `runCatching { record(...) }`, result discarded (also swallowed cancellation) | `recordOrReport(...)` |
+| `ForwardTestOrchestrator` success cleanup | `runCatching { cleanupOlderThanSevenDays() }` | `cleanupOrReport("FORWARD_SUCCESS")` |
+| App start maintenance (`BJStockApplication`) | cleanup failure silently swallowed by `runIgnoringFailure` | `cleanupOrReport("APP_START")`; nothing reaches `runIgnoringFailure` |
+
+`recordOrReport` returns `true` on insert, `false` after reporting a failure. `cleanupOrReport` returns the deleted count or `null` after reporting a failure. Both rethrow `CancellationException` without reporting. `record` and `cleanupOlderThanSevenDays` are unchanged (7-day cutoff, strict `occurred_at < now − 7 days`). No duplicate row is introduced: each failure still makes exactly one insert attempt at the layer that owns it (20.10.2, `docs/148`).
+
+#### 20.11.3 Safe fallback
+
+The fallback channel is the existing `KisAuthLogger` singleton (Logcat tag `BJStockKisAuth`), injected into `ApiErrorLogService` as a required constructor parameter. It already carries only fixed safe text and is replaceable in tests (`RecordingKisAuthLogger`); `api_error_logs` has only the KIS provider. No new logging subsystem.
+
+```text
+API error evidence write failed: <operation> (<ExceptionSimpleName>)
+API error cleanup failed: <trigger> (<ExceptionSimpleName>)
+```
+
+Only a fixed prefix, a logical name that passes `SafeLogText.isCode` (otherwise `UNKNOWN`), and the exception class name via `SafeLogText.exceptionType` (otherwise `Exception`). `Throwable.message`, SQL text, tokens, App Key / Secret, account numbers, HTTP bodies, and provider payloads are never included.
+
+#### 20.11.4 No recursion
+
+A secondary failure is reported only to the fallback logger, never to `api_error_logs` and never through `record` / `recordOrReport` again. One primary failure produces at most one insert attempt and at most one fallback line.
+
+#### 20.11.5 Cleanup failure containment
+
+A cleanup failure on app start is contained inside maintenance, reported once through the fallback, and never crashes the app. Startup order is unchanged (recovery → `reconcileOnAppStart` → maintenance), so scheduler reconciliation, Gate 7A recovery, and the Auto flag are unaffected. A cleanup failure after a successful Forward Test run does not change the run outcome. Cancellation propagates.
+
+#### 20.11.6 Token throttle (human decision, no code change)
+
+KIS documents a rate limit on `/oauth2/tokenP`, but BJStock has no approved evidence that HTTP 403 means throttling. HTTP 401 / 403 stay `CREDENTIAL_REJECTED`; throttling is never inferred from status alone. If a sanitized provider business code proving token throttling is observed, it is handled in a separate bounded gate.
+
+#### 20.11.7 Inventory and out-of-scope findings
+
+Search of production `runCatching`, `catch (Exception)`, and `catch (Throwable)`. Explicitly translated (unchanged): market error-body parse → generic HTTP, market / auth / gateway catch-alls → typed `UNEXPECTED`, strategy / AI advisory parse `getOrNull`, preference `valueOf` defaults. Propagated or safely recorded (unchanged): execution coordinator, scheduler event persistence (`lastScheduleFailure` + `Log.w`), orchestrator `addSuppressed`. Out of scope, recorded only:
+
+- `AppStartSequence.runIgnoringFailure` still silently swallows a recovery or reconciliation failure (reconciliation failures remain visible through scheduler status).
+- `ForwardTestViewModel` analytics loads use `getOrDefault(emptyList())`, discarding failures.
+- Several ViewModel `runCatching` blocks (Strategy Lab, Themes, Forward Test, Instrument Master, Market Data Test) show failures in the UI but also catch `CancellationException` and display `Throwable.message`.
+
+#### 20.11.8 Unchanged
+
+Gate 8 KIS taxonomy, token HTTP-status classification, `EGW00201` retry policy, retry counts, WorkManager retry / backoff, the Auto scheduler (07:30, `scheduleInstanceId`), Gate 7A recovery, the 18:00 cutoff, factor / strategy / signal rules, paper trading, financial invariants, and snapshots. No Room or PostgreSQL schema change. Still open: retention / archive, Operations UI, physical 07:30 acceptance.
 
 ---
 
@@ -1146,4 +1202,4 @@ Retry counts, the 61-second rate-limit wait, `EGW00201` classification, `KIS_BUS
 - `docs/147_TRADE_AUDIT_LOG.md`
 - `docs/148_API_ERROR_LOGGING.md`
 - `docs/023_ROOM_SCHEMA_MAPPING.md`
-- `docs/060_DECISION_LOG.md` (D-143 – D-166)
+- `docs/060_DECISION_LOG.md` (D-143 – D-167)

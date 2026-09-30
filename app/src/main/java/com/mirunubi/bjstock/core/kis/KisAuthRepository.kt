@@ -170,7 +170,10 @@ class KisAuthRepository(
         }
     }
 
-    /** Records exactly one KIS_OAUTH row per failed token attempt; the message is always a fixed text. */
+    /**
+     * Records exactly one KIS_OAUTH row per failed token attempt; the message is always a fixed text.
+     * A failed evidence write is reported by [ApiErrorLogService.recordOrReport] and never replaces the typed failure.
+     */
     private suspend fun tokenFailure(
         environment: KisEnvironment,
         kind: KisAuthErrorKind,
@@ -188,17 +191,14 @@ class KisAuthRepository(
         safeMessage: String,
         httpStatus: Int?,
     ) {
-        val log = apiErrorLog ?: return
-        runCatching {
-            log.record(
-                provider = ApiErrorProvider.KIS,
-                operation = "KIS_OAUTH",
-                errorType = KisApiErrorMapper.fromAuthKind(kind),
-                safeMessage = safeMessage,
-                retryable = KisApiErrorMapper.isRetryable(kind),
-                httpStatus = httpStatus,
-            )
-        }
+        apiErrorLog?.recordOrReport(
+            provider = ApiErrorProvider.KIS,
+            operation = "KIS_OAUTH",
+            errorType = KisApiErrorMapper.fromAuthKind(kind),
+            safeMessage = safeMessage,
+            retryable = KisApiErrorMapper.isRetryable(kind),
+            httpStatus = httpStatus,
+        )
     }
 
     private suspend fun computeState(environment: KisEnvironment): KisAuthState {

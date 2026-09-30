@@ -253,19 +253,17 @@ class KisMarketRepositoryImpl(
     private suspend fun recordError(operation: String, error: KisMarketException) {
         val log = apiErrorLog ?: return
         val authKind = error.authKind
-        runCatching {
-            log.record(
-                provider = ApiErrorProvider.KIS,
-                operation = operation,
-                errorType = authKind?.let(KisApiErrorMapper::fromAuthKind)
-                    ?: KisApiErrorMapper.fromMarketKind(error.kind),
-                safeMessage = diagnosticMessage(error),
-                retryable = authKind?.let(KisApiErrorMapper::isRetryable)
-                    ?: KisApiErrorMapper.isRetryable(error.kind),
-                httpStatus = error.audit?.httpCode,
-                businessCode = error.audit?.msgCd,
-            )
-        }
+        log.recordOrReport(
+            provider = ApiErrorProvider.KIS,
+            operation = operation,
+            errorType = authKind?.let(KisApiErrorMapper::fromAuthKind)
+                ?: KisApiErrorMapper.fromMarketKind(error.kind),
+            safeMessage = diagnosticMessage(error),
+            retryable = authKind?.let(KisApiErrorMapper::isRetryable)
+                ?: KisApiErrorMapper.isRetryable(error.kind),
+            httpStatus = error.audit?.httpCode,
+            businessCode = error.audit?.msgCd,
+        )
     }
 
     private fun diagnosticMessage(error: KisMarketException): String {

@@ -141,18 +141,15 @@ class KisForwardMarketDataGateway(
         httpStatus: Int? = null,
         businessCode: String? = null,
     ) {
-        val log = apiErrorLog ?: return
-        runCatching {
-            log.record(
-                provider = ApiErrorProvider.KIS,
-                operation = operation,
-                errorType = KisApiErrorMapper.fromAppErrorCode(code) ?: ApiErrorType.UNEXPECTED,
-                safeMessage = safeMessage,
-                retryable = code.isRetryableAutomatically,
-                httpStatus = httpStatus,
-                businessCode = businessCode,
-            )
-        }
+        apiErrorLog?.recordOrReport(
+            provider = ApiErrorProvider.KIS,
+            operation = operation,
+            errorType = KisApiErrorMapper.fromAppErrorCode(code) ?: ApiErrorType.UNEXPECTED,
+            safeMessage = safeMessage,
+            retryable = code.isRetryableAutomatically,
+            httpStatus = httpStatus,
+            businessCode = businessCode,
+        )
     }
 
     private companion object {

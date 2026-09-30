@@ -12,6 +12,7 @@ import com.mirunubi.bjstock.core.database.entity.TradeAuditLogEntity
 import com.mirunubi.bjstock.core.error.AppErrorCode
 import com.mirunubi.bjstock.core.error.SafeAppError
 import com.mirunubi.bjstock.core.error.SafeLogText
+import com.mirunubi.bjstock.core.kis.RecordingKisAuthLogger
 import com.mirunubi.bjstock.core.model.ApiErrorProvider
 import com.mirunubi.bjstock.core.model.ApiErrorType
 import com.mirunubi.bjstock.core.model.ForwardOperationKind
@@ -531,7 +532,7 @@ class ForwardOperationLogServiceTest {
             eventType = TradeAuditEventType.EVALUATION_DECIDED,
             eventKey = "evaluation:1:decision",
         )
-        val apiId = ApiErrorLogService(database.apiErrorLogDao()) { now }.record(
+        val apiId = ApiErrorLogService(database.apiErrorLogDao(), RecordingKisAuthLogger()) { now }.record(
             provider = ApiErrorProvider.KIS,
             operation = "KIS_DAILY_PRICE",
             errorType = ApiErrorType.HTTP_ERROR,
@@ -559,7 +560,7 @@ class ForwardOperationLogServiceTest {
         val runId = insertRun()
         val opId = service.startOperation(manualRequest("req-ctx")).operationId
         val audit = TradeAuditLogService(database.tradeAuditLogDao()) { now }
-        val api = ApiErrorLogService(database.apiErrorLogDao()) { now }
+        val api = ApiErrorLogService(database.apiErrorLogDao(), RecordingKisAuthLogger()) { now }
 
         val apiId = withContext(ForwardOperationContext(opId)) {
             audit.append(
