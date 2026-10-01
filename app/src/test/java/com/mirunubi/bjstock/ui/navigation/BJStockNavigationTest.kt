@@ -63,7 +63,7 @@ class BJStockNavigationTest {
 
     @Test
     fun stocksTab_opensTheStocksScreen_notADeveloperLinkHub() {
-        assertEquals(setOf(PrimaryTab.HOME, PrimaryTab.STOCKS), TabHubs.dedicated)
+        assertTrue(PrimaryTab.STOCKS in TabHubs.dedicated)
         assertTrue(TabHubs.forTab(PrimaryTab.STOCKS).isEmpty())
         val hubRoutes = PrimaryTab.entries.flatMap { TabHubs.forTab(it) }.map { it.route }
         listOf(BJStockRoutes.MARKET_DATA, BJStockRoutes.INSTRUMENT_MASTER, BJStockRoutes.FACTOR_TEST, BJStockRoutes.THEMES)
@@ -79,9 +79,25 @@ class BJStockNavigationTest {
     }
 
     @Test
+    fun strategyTab_opensTheStrategyScreen_notTheStrategyLabLink() {
+        assertEquals(setOf(PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY), TabHubs.dedicated)
+        assertTrue(TabHubs.forTab(PrimaryTab.STRATEGY).isEmpty())
+        val hubRoutes = PrimaryTab.entries.flatMap { TabHubs.forTab(it) }.map { it.route }
+        assertFalse(BJStockRoutes.STRATEGY_LAB in hubRoutes)
+        assertEquals("strategy", PrimaryTab.STRATEGY.route)
+    }
+
+    @Test
+    fun strategyLab_staysReachableUnderDeveloperTools_withItsRouteUnchanged() {
+        val developer = SettingsMenu.sections.single { it.title == "개발자 도구" }.entries
+        val lab = developer.single { it.route == BJStockRoutes.STRATEGY_LAB }
+        assertEquals("strategy_lab", lab.route)
+        assertEquals("전략 실험실", lab.title)
+    }
+
+    @Test
     fun tabShells_linkToTheirExistingScreens() {
         assertTrue(TabHubs.forTab(PrimaryTab.HOME).isEmpty())
-        assertEquals(listOf(BJStockRoutes.STRATEGY_LAB), TabHubs.strategy.map { it.route })
         assertTrue(BJStockRoutes.FORWARD_TEST in TabHubs.paperTrading.map { it.route })
         assertTrue(BJStockRoutes.COMPARE_RUNS in TabHubs.performance.map { it.route })
         val settings = SettingsMenu.sections.first().entries.map { it.route }

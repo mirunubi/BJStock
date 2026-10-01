@@ -23,6 +23,7 @@ import com.mirunubi.bjstock.feature.performance.ForwardTestDashboardScreen
 import com.mirunubi.bjstock.feature.settings.SettingsScreen
 import com.mirunubi.bjstock.feature.stocks.StocksScreen
 import com.mirunubi.bjstock.feature.strategy.StrategyLabScreen
+import com.mirunubi.bjstock.feature.strategy.StrategyScreen
 import com.mirunubi.bjstock.feature.theme.ThemesScreen
 import com.mirunubi.bjstock.ui.navigation.BJStockRoutes
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
@@ -63,6 +64,9 @@ private fun BJStockNavHost() {
                 onOpenSettings = openSettings,
                 onOpenThemeManagement = { open(StocksLinks.THEME_MANAGEMENT) },
             )
+        }
+        composable(BJStockRoutes.STRATEGY) {
+            StrategyScreen(onSelectTab = selectTab, onOpenSettings = openSettings)
         }
         PrimaryTab.entries.filterNot { it in TabHubs.dedicated }.forEach { tab ->
             composable(tab.route) {

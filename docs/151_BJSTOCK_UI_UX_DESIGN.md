@@ -193,7 +193,7 @@ Lifecycle labels (display only; persisted values stay English):
 
 The UI must make immutability obvious: only a `DRAFT` version is editable; `ACTIVE` and `RETIRED` versions are read-only (edit controls absent or disabled with a Korean explanation, and a clear path to "copy to new draft"). Signal rule semantics follow `docs/146_SIGNAL_RULES.md`. Strategy activation is a high-impact action (§17).
 
-The exact Strategy detail navigation structure is open (§19).
+The exact Strategy detail navigation structure is open (§19). The first version (strategy list → versions → version detail) is described in §21.5.
 
 ---
 
@@ -392,7 +392,7 @@ No dates are assigned.
 | UI-2 | Korean terminology cleanup | |
 | UI-3 | Home dashboard | **PARTIAL** — first version (§21) |
 | UI-4 | Stocks + Themes consolidation | **PARTIAL** — Stocks screen (§21.4); stock-level strategy evaluation deferred |
-| UI-5 | Strategy UX consolidation | |
+| UI-5 | Strategy UX consolidation | **PARTIAL** — Strategy screen (§21.5); 버전 종료 (retire) not exposed |
 | UI-6 | Paper Trading / Forward Test UX consolidation | |
 | UI-7 | Performance dashboard | |
 | UI-8 | Settings + operational diagnostics | |
@@ -422,7 +422,7 @@ Exact numeric thresholds (font sizes, contrast ratios, target sizes) are set in 
 
 ## 17. Safety / high-impact action UX
 
-Future UI safety principles. **No implementation yet.**
+Future UI safety principles. Implemented so far: Strategy activation confirmation (§21.5).
 
 High-impact actions:
 
@@ -469,7 +469,7 @@ Left **OPEN** — no final answers in this document:
 - exact chart library
 - whether Home aggregates all active Runs or highlights one
 - exact Auto ON / OFF placement
-- Strategy detail navigation structure
+- Strategy detail navigation structure (first version in §21.5; open for human visual review)
 - multiple simultaneous paper Run presentation
 - whether Operations is normally exposed or Settings-only
 - foldable / tablet layout
@@ -500,7 +500,7 @@ If a UI need appears to require a domain change, it is raised as a separate gate
 
 - Start destination `home`. Bottom navigation: 홈 / 종목 / 전략 / 모의투자 / 성과 (`PrimaryTab`, Korean label + icon). Tab switches pop to Home with saved state and `launchSingleTop`, so tabs never stack; back from a tab returns to Home, back on Home leaves the app.
 - 설정 is the top-right gear on every tab root, not a sixth tab.
-- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7. 종목 has been replaced by the Stocks screen (§21.4).
+- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7. 종목 has been replaced by the Stocks screen (§21.4) and 전략 by the Strategy screen (§21.5).
 - Icons are local Material path vectors (`BJStockIcons`); no dependency was added.
 
 ### 21.2 Developer screen preservation
@@ -530,3 +530,23 @@ The 종목 tab is a stock-analysis screen (`StocksScreen`, `StocksViewModel`, `S
 Deferred: the latest strategy evaluation for a stock. No cross-Run "latest decision" rule is invented; stock-level evaluation waits for the Strategy / Paper Trading UI to define the Run context. Home keeps showing the selected Run's latest decision (§21.3).
 
 Existing developer screens (Market Data Test, Instrument Master, Themes, Factor Test) are unchanged and stay under 설정 > 개발자 도구; the Stocks tab no longer links to them.
+
+### 21.5 UI-5 Strategy UX consolidation (PARTIAL — Strategy screen)
+
+The 전략 tab is a strategy management screen (`StrategyScreen`, `StrategyViewModel`, `StrategyPresenter`, `StrategyDataSource`) inside the normal chrome (title 전략, settings gear, bottom bar with 전략 selected). Hierarchy with progressive disclosure: 전략 목록 → 버전 → version detail (판단 기준, 팩터 가중치, 신호 규칙, 판단 미리보기); back closes the top layer. All writes delegate to the existing `StrategyVersionService`; no domain rule was changed or duplicated as a second source of truth.
+
+- **Strategy list**: cards with the strategy name, `strategy_code` as secondary text, version count, and status summary (`사용중 2개 · 작성중 1개`). **Multiple ACTIVE versions are supported**: every ACTIVE version is shown as 사용중 and none is labelled "현재 버전" (the domain has no such concept).
+- **Statuses**: `DRAFT` 작성중 / `ACTIVE` 사용중 / `RETIRED` 종료, each with text and an icon (pencil / check / block); color is secondary. Versions are listed highest number first.
+- **판단 기준**: 매도 `S 이하`, 관망 `S 초과 ~ B 미만`, 매수 `B 이상`, exactly the `StrategyScoreMath.decide` boundaries (score ≤ sell is SELL, score ≥ buy is BUY, otherwise HOLD). Display scores, not stored scaled integers.
+- **팩터 가중치**: the six system factors with Korean names, code as secondary text, enabled state, `비중 25%`, `계산버전 v1`. 사용 팩터 총 비중 is shown prominently; when it is not 100% the screen says "활성화하려면 사용 팩터의 총 비중이 100%여야 합니다." (display only; activation validation stays in the service). Gates (최소 / 최대 점수) and calculation version are under 고급 설정 per factor; editable on a DRAFT, read-only text otherwise.
+- **신호 규칙**: `일간 등락률 -5% 이하 → 매수 · 우선순위 10` with "숫자가 작은 우선순위가 먼저 적용됩니다." Only the supported `DAILY_CHANGE_PCT` metric is offered.
+- **DRAFT explicit edit model**: only DRAFT versions are editable. Edits stay local until the user taps 판단 기준 저장 / 팩터 비중 저장 / 규칙 저장 (되돌리기 discards); only changed factor rows are saved. Rules can be added, updated (same `rule_code`, existing upsert semantics; the name is locked while editing), and deleted after a confirmation. The UI shows immediate input hints (numbers, sell < buy, 0–100), but the service validates every save.
+- **ACTIVE / RETIRED immutable**: no edit controls; the screen explains why — "사용 중인 버전은 수정할 수 없습니다. 변경하려면 새 작성본을 만드세요." / "종료된 버전은 수정할 수 없습니다." — and offers 이 버전을 복사해 새 작성본 만들기 (`copyDraftFrom`).
+- **Lifecycle actions**: 새 전략 (dialog with 전략 이름 / 전략 코드; creates the strategy and its DRAFT V1 like Strategy Lab, then opens it; a duplicate code is reported in Korean), 새 작성본 (`createDraftVersion` with the default thresholds), copy (`copyDraftFrom`), 버전 사용 시작 (`activateStrategyVersion`).
+- **Activation confirmation**: 버전 사용 시작 opens a dialog naming the strategy and version ("V3을 사용 시작하시겠습니까?") and stating that thresholds, factor weights, factor gates, and signal rules become immutable and later changes need a new draft; 취소 / 사용 시작. Activation is not offered while edits are unsaved.
+- **버전 종료 (retire) not exposed**: `retireVersion` exists, but the domain does not check whether a READY / RUNNING Run uses the version, and run evaluation requires an ACTIVE version (`EvaluateStrategyRunUseCase`). Retiring from the UI could therefore stop a running Forward Test's evaluations. It stays unexposed (as in Strategy Lab) until a separate gate defines the guard. No reactivation exists.
+- **Safe errors**: activation failures map from `StrategyActivationFailure` and service exceptions from `StrategyErrorKind` to fixed Korean text (e.g. CONFLICTING_SIGNAL_RULES → "서로 충돌하는 신호 규칙이 있어 사용할 수 없습니다. 신호 규칙을 확인해 주세요."). `Throwable.message`, service messages, ids, and SQL text are never shown. Rule conflicts are detected only by the activation service.
+- **판단 미리보기 (non-executing)**: 종목 검색 (active instruments) → 종목 선택 → 평가일 (latest stored trade dates as chips, newest prefilled, or typed `YYYY-MM-DD`) → 미리보기, via `PreviewStrategyEvaluationUseCase` on the saved version. It writes no `stock_evaluations`, orders, executions, cash, or audit rows and is labelled as not an order. Result: 종목, 날짜, 판단 (매수 / 매도 / 관망; 판단 없음 for a failed gate), 판단 방식 (팩터 전략 / 신호 규칙), and for factor decisions the score plus per-factor 점수 / 비중 / 기여도. A failed gate shows "팩터 조건 미충족"; missing factor values show "평가에 필요한 팩터 데이터가 부족합니다." with the missing factors, never zeros. **A signal-rule decision shows no quant score** (the engine's placeholder 0 is not displayed), only the observed daily change and the triggered rule.
+- **No automatic mutation**: opening the tab and browsing only read. Factor definitions are ensured only inside an explicit factor-weight save (and by the service during activation), not on open.
+
+Existing Strategy Lab (`StrategyLabScreen`, `StrategyLabViewModel`, route `strategy_lab`) is unchanged and stays under 설정 > 개발자 도구; the Strategy tab no longer links to it.
