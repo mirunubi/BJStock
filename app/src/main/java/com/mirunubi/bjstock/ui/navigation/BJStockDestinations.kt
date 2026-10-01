@@ -69,12 +69,8 @@ data class NavSection(val title: String, val entries: List<NavEntry>)
 /** Temporary tab content for UI-1: links to the existing screens until each tab is redesigned. */
 object TabHubs {
     /** Tabs with their own product screen; the others still use the temporary link hub. */
-    val dedicated: Set<PrimaryTab> = setOf(PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY)
-
-    val paperTrading = listOf(
-        NavEntry("포워드 테스트", "모의투자 Run, 자동운영, 지금 실행", BJStockRoutes.FORWARD_TEST),
-        NavEntry("모의매매 실험실", "주문·체결 규칙 수동 점검", BJStockRoutes.PAPER_LAB),
-    )
+    val dedicated: Set<PrimaryTab> =
+        setOf(PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY, PrimaryTab.PAPER_TRADING)
 
     val performance = listOf(
         NavEntry("Run 성과", "누적수익률·MDD·자산 추이 (포워드 테스트 화면)", BJStockRoutes.FORWARD_TEST),
@@ -82,8 +78,7 @@ object TabHubs {
     )
 
     fun forTab(tab: PrimaryTab): List<NavEntry> = when (tab) {
-        PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY -> emptyList()
-        PrimaryTab.PAPER_TRADING -> paperTrading
+        PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY, PrimaryTab.PAPER_TRADING -> emptyList()
         PrimaryTab.PERFORMANCE -> performance
     }
 }

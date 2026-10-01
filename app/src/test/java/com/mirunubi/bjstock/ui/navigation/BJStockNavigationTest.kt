@@ -80,7 +80,7 @@ class BJStockNavigationTest {
 
     @Test
     fun strategyTab_opensTheStrategyScreen_notTheStrategyLabLink() {
-        assertEquals(setOf(PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY), TabHubs.dedicated)
+        assertTrue(PrimaryTab.STRATEGY in TabHubs.dedicated)
         assertTrue(TabHubs.forTab(PrimaryTab.STRATEGY).isEmpty())
         val hubRoutes = PrimaryTab.entries.flatMap { TabHubs.forTab(it) }.map { it.route }
         assertFalse(BJStockRoutes.STRATEGY_LAB in hubRoutes)
@@ -96,9 +96,28 @@ class BJStockNavigationTest {
     }
 
     @Test
+    fun paperTradingTab_opensThePaperTradingScreen_notTheForwardTestLinkHub() {
+        assertEquals(
+            setOf(PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY, PrimaryTab.PAPER_TRADING),
+            TabHubs.dedicated,
+        )
+        assertTrue(TabHubs.forTab(PrimaryTab.PAPER_TRADING).isEmpty())
+        assertEquals("paper_trading", PrimaryTab.PAPER_TRADING.route)
+        assertEquals("모의투자", PrimaryTab.PAPER_TRADING.label)
+    }
+
+    @Test
+    fun forwardTestDashboard_andPaperLab_stayReachableUnderDeveloperTools_withRoutesUnchanged() {
+        val developer = SettingsMenu.sections.single { it.title == "개발자 도구" }.entries
+        assertEquals("forward_test", developer.single { it.route == BJStockRoutes.FORWARD_TEST }.route)
+        assertEquals("paper_lab", developer.single { it.route == BJStockRoutes.PAPER_LAB }.route)
+        assertEquals("모의매매 실험실", developer.single { it.route == BJStockRoutes.PAPER_LAB }.title)
+    }
+
+    @Test
     fun tabShells_linkToTheirExistingScreens() {
         assertTrue(TabHubs.forTab(PrimaryTab.HOME).isEmpty())
-        assertTrue(BJStockRoutes.FORWARD_TEST in TabHubs.paperTrading.map { it.route })
+        assertTrue(BJStockRoutes.FORWARD_TEST in TabHubs.performance.map { it.route })
         assertTrue(BJStockRoutes.COMPARE_RUNS in TabHubs.performance.map { it.route })
         val settings = SettingsMenu.sections.first().entries.map { it.route }
         assertEquals(listOf(BJStockRoutes.KIS_SETTINGS, BJStockRoutes.DATABASE_INFO), settings)

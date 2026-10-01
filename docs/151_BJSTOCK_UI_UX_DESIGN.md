@@ -3,7 +3,7 @@
 | Item | Value |
 | --- | --- |
 | Document status | **DRAFT — Human Review Required** |
-| Implementation | **PARTIAL** — UI-1 navigation shell IMPLEMENTED, UI-3 Home dashboard PARTIAL (first version); see §21 |
+| Implementation | **PARTIAL** — UI-1 navigation shell IMPLEMENTED; Home, Stocks, Strategy, and Paper Trading screens PARTIAL (first versions); Performance not started; see §21 |
 | Scope | Future MVP / real-use UI structure. |
 | Phase context | Phase 11 — Documentation Interlude (not a Phase 11 gate) |
 
@@ -393,7 +393,7 @@ No dates are assigned.
 | UI-3 | Home dashboard | **PARTIAL** — first version (§21) |
 | UI-4 | Stocks + Themes consolidation | **PARTIAL** — Stocks screen (§21.4); stock-level strategy evaluation deferred |
 | UI-5 | Strategy UX consolidation | **PARTIAL** — Strategy screen (§21.5); 버전 종료 (retire) not exposed |
-| UI-6 | Paper Trading / Forward Test UX consolidation | |
+| UI-6 | Paper Trading / Forward Test UX consolidation | **PARTIAL** — Paper Trading screen (§21.6); performance analytics stay with UI-7; physical unattended scheduler acceptance HOLD |
 | UI-7 | Performance dashboard | |
 | UI-8 | Settings + operational diagnostics | |
 | UI-9 | Physical-device usability review | |
@@ -422,7 +422,7 @@ Exact numeric thresholds (font sizes, contrast ratios, target sizes) are set in 
 
 ## 17. Safety / high-impact action UX
 
-Future UI safety principles. Implemented so far: Strategy activation confirmation (§21.5).
+Future UI safety principles. Implemented so far: Strategy activation confirmation (§21.5); Auto ON / OFF, 지금 실행, 실패한 날짜 다시 처리, and 운영 준비 완료 confirmations (§21.6).
 
 High-impact actions:
 
@@ -468,9 +468,9 @@ Left **OPEN** — no final answers in this document:
 - exact colors / theme
 - exact chart library
 - whether Home aggregates all active Runs or highlights one
-- exact Auto ON / OFF placement
+- exact Auto ON / OFF placement (first version in the 모의투자 tab, §21.6)
 - Strategy detail navigation structure (first version in §21.5; open for human visual review)
-- multiple simultaneous paper Run presentation
+- multiple simultaneous paper Run presentation (first version: Run list + selected Run, §21.6)
 - whether Operations is normally exposed or Settings-only
 - foldable / tablet layout
 - dark mode policy
@@ -500,7 +500,7 @@ If a UI need appears to require a domain change, it is raised as a separate gate
 
 - Start destination `home`. Bottom navigation: 홈 / 종목 / 전략 / 모의투자 / 성과 (`PrimaryTab`, Korean label + icon). Tab switches pop to Home with saved state and `launchSingleTop`, so tabs never stack; back from a tab returns to Home, back on Home leaves the app.
 - 설정 is the top-right gear on every tab root, not a sixth tab.
-- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7. 종목 has been replaced by the Stocks screen (§21.4) and 전략 by the Strategy screen (§21.5).
+- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7. 종목 has been replaced by the Stocks screen (§21.4), 전략 by the Strategy screen (§21.5), and 모의투자 by the Paper Trading screen (§21.6). 성과 is still a temporary shell.
 - Icons are local Material path vectors (`BJStockIcons`); no dependency was added.
 
 ### 21.2 Developer screen preservation
@@ -550,3 +550,31 @@ The 전략 tab is a strategy management screen (`StrategyScreen`, `StrategyViewM
 - **No automatic mutation**: opening the tab and browsing only read. Factor definitions are ensured only inside an explicit factor-weight save (and by the service during activation), not on open.
 
 Existing Strategy Lab (`StrategyLabScreen`, `StrategyLabViewModel`, route `strategy_lab`) is unchanged and stays under 설정 > 개발자 도구; the Strategy tab no longer links to it.
+
+### 21.6 UI-6 Paper Trading / Forward Test UX consolidation (PARTIAL — Paper Trading screen)
+
+The 모의투자 tab is the operating screen for paper Runs (`PaperTradingScreen`, `PaperTradingViewModel`, `PaperTradingPresenter`, `PaperTradingDataSource`) inside the normal chrome (title 모의투자, settings gear, bottom bar with 모의투자 selected). It consolidates the Run list, the selected Run's account / holdings / orders / policy / universe, Auto, and operation history. It is paper trading only: no real brokerage order path exists or was added, and the data source depends on no KIS class.
+
+- **No execution on open**: opening the tab, selecting a Run, and refreshing only read (Runs, `PerformanceAnalyticsService` summaries, positions, executions, policy, universe, cycles, `TradeAuditLogService`, `ForwardTestScheduler.status`, `ForwardOperationDao.findRecent`). They never call `runManualNow`, `retryFailedCycle`, KIS, the paper engine, Run creation, `markReady`, or `setAutoEnabled`. A scheduled Worker dispatched by Android is independent of the screen.
+- **Run list**: every Run, none filtered. Name, strategy + version (`기본 모멘텀 전략 V2`), status, `2026.09.18부터`, and an asset summary (total paper asset and return, or `초기자금 … · 평가 전`). Order: RUNNING, READY, PAUSED, DRAFT, COMPLETED, CANCELLED, then highest id. The first Run is selected by default; no database id is primary text.
+- **Run status**: `DRAFT` 설정중 / `READY` 실행 준비 / `RUNNING` 운영 중 / `PAUSED` 일시정지 / `COMPLETED` 완료 / `CANCELLED` 취소, each with text and an icon.
+- **Selected Run**: name, strategy, version, status, period (`…부터`, `…까지` when an end date exists), initial capital (`100,000,000원`).
+- **모의계좌**: 총 모의자산, 현금, 보유주식 평가액, 누적 손익, 누적 수익률 straight from `calculateSummary`; no second accounting implementation. Without a snapshot the initial capital is shown with "아직 평가 기록이 없어 초기자금을 표시합니다." (never 0원); a `DATA_ERROR` summary shows a warning.
+- **보유 종목**: name, code, quantity, average price, latest stored close, market value, and price-basis P/L from `loadOpenPositionViews`, noted as excluding commission and tax.
+- **최근 주문·체결**: executions are always 가상 체결 (`09.29 · 매수 · 가상 체결` / `삼성전자 37주 × 266,000원` / `수수료 1,476원`, with 매도세 only when a tax exists); orders show side and status (생성 / 체결 대기 / 가상 체결 / 취소 / 거절).
+- **거래 정책** (expandable): the Run's stored snapshot — 1회 매수 비중, 수수료 가정, 매도세 가정, 슬리피지, 체결가격 정책 (다음 거래일 시가), 추가매수 (허용 안 함), 매도방식 (전량 매도), 공매도 (허용 안 함). A DRAFT shows that the policy is fixed at 운영 준비 완료.
+- **자동운영**: Auto 켜짐 / 꺼짐 and the slot from `scheduler.status()`. A future slot reads "다음 자동 실행 10월 2일 오전 7:00 이후" (earliest eligible time); a slot whose time has passed while the work is still queued reads "<date> 오전 7:00 예약 작업 · 실행/재시도 대기 중", never a future time. No backoff timing is inferred. The switch only opens a confirmation (ON: "자동 모의투자를 켜시겠습니까? … 자동운영을 켜도 지금 즉시 실행되지는 않습니다." / OFF: "자동 모의투자를 끄시겠습니까? 예약된 자동 실행 작업이 취소됩니다."); only 켜기 / 끄기 calls `setAutoEnabled`.
+- **지금 실행**: a confirmation states that no real stock order is placed and that paper evaluations / orders / executions / account records may be created; only 실행 calls `coordinator.runManualNow()`. The result is shown from the outcome status and canonical code in Korean.
+- **최근 실행 기록**: `forward_operations` rows as 자동 실행 / 수동 실행 / 실패 재시도 with status (실행 중 / 완료 / 처리할 항목 없음 / 일부 처리 / 실행 차단 / 실패), start / finish time, 기준일, a Korean message for the canonical code, and the code and stored safe message as small text. `operation_key`, `work_id`, schedule instance ids, and stack traces are not shown.
+- **거래일 처리 / 재시도**: recent cycles (대기 / 처리 중 / 완료 / 실패). Only a real FAILED cycle produces a retry block: retryable → "실패한 날짜 다시 처리 (date)" behind a confirmation, calling `retryFailedCycle` for that Run, date, and cycle; non-retryable → "자동 복구할 수 없는 오류입니다." with no action. Operation failures and cycle failures are shown separately.
+- **활동 기록**: `TradeAuditLogService` events (신호 규칙 발생, 전략 판단, 모의주문 생성, 주문 건너뜀, 주문 거절, 주문 취소, 가상 체결) with the stored reason text as secondary text.
+- **새 모의투자**: dialog with 전략 버전 (ACTIVE versions only, `listActiveVersions`), 모의투자 이름, 시작일 (today), 초기자금 (default 100,000,000). Nothing is created until 만들기; the Run starts as 설정중 (`createDraftRun`).
+- **투자 대상**: on a DRAFT, search + 추가, 제외, and 테마로 추가 (active themes) through `addInstrument` / `removeInstrument` / `addThemeToUniverse`. After READY it is read-only with "실행 준비가 완료된 모의투자의 투자 대상은 변경할 수 없습니다."
+- **운영 준비 완료** (DRAFT only): a confirmation lists name, strategy + version, start date, initial capital, and universe count, and states that the universe and trading policy become fixed and the initial capital is credited; only then `StrategyRunService.markReady`. Failures map from the actual domain categories: EMPTY_UNIVERSE "투자 대상 종목을 하나 이상 추가해 주세요.", AUTH_REQUIRED "KIS 연결 설정을 확인해 주세요.", INSUFFICIENT_WARMUP_DATA "전략 계산에 필요한 과거 시세 데이터가 부족합니다.", VERSION_NOT_ACTIVE "사용 중인 전략 버전이 필요합니다."; anything else gets fixed Korean text.
+- **Safe errors**: messages come from canonical codes (`ForwardOutcomeReason`, `ForwardErrorCode`, `AppErrorCode`) and exception types only; `Throwable.message`, HTTP bodies, SQL, tokens, secrets, and paths are never shown.
+
+Deferred to the 성과 tab (UI-7): equity curve, MDD, monthly returns, win rate, and Run comparison. Performance is not complete.
+
+Open for human visual review: the 모의투자 tab uses the Run and operation status labels above, while Home and §18 still use the earlier ones (작성중 / 준비됨 / 실행중 / 취소됨; 정상 완료 / 실행 중단 / 오류). Physical unattended scheduler acceptance remains **HOLD**; this screen only displays the scheduler state.
+
+Existing Forward Test Dashboard (`ForwardTestDashboardScreen`, `ForwardTestViewModel`, route `forward_test`) and Paper Trading Lab (`PaperTradingLabScreen`, `PaperTradingLabViewModel`, route `paper_lab`) are unchanged and stay under 설정 > 개발자 도구; the 모의투자 tab no longer links to them.
