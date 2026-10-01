@@ -26,13 +26,14 @@ object KoreanLabels {
         ForwardOperationStatus.FAILED -> "오류"
     }
 
+    /** Canonical product wording for every product screen (Home, 모의투자, 성과). */
     fun runStatus(status: RunStatus): String = when (status) {
-        RunStatus.DRAFT -> "작성중"
-        RunStatus.READY -> "준비됨"
-        RunStatus.RUNNING -> "실행중"
+        RunStatus.DRAFT -> "설정중"
+        RunStatus.READY -> "실행 준비"
+        RunStatus.RUNNING -> "운영 중"
         RunStatus.PAUSED -> "일시정지"
         RunStatus.COMPLETED -> "완료"
-        RunStatus.CANCELLED -> "취소됨"
+        RunStatus.CANCELLED -> "취소"
     }
 
     fun versionStatus(status: StrategyVersionStatus): String = when (status) {
@@ -74,4 +75,17 @@ object KoreanLabels {
         val hour = (local.hour + 11) % 12 + 1
         return "${date(local.toLocalDate())} $meridiem $hour:${"%02d".format(local.minute)}"
     }
+
+    /**
+     * A scheduled Auto slot. 07:00 is the earliest eligible time, never an exact execution time; a slot whose
+     * time has passed is shown as waiting, never as a future time, and no WorkManager backoff time is inferred.
+     */
+    fun autoSlot(scheduledAt: Instant, workState: String?, now: Instant): String = when {
+        workState == "RUNNING" -> "${dateTime(scheduledAt)} 예약 작업 · 실행 중"
+        !scheduledAt.isAfter(now) -> "${dateTime(scheduledAt)} 예약 작업 · 실행/재시도 대기 중"
+        else -> "다음 자동 실행 ${dateTime(scheduledAt)} 이후"
+    }
+
+    fun isSlotPastDue(scheduledAt: Instant, workState: String?, now: Instant): Boolean =
+        workState == "RUNNING" || !scheduledAt.isAfter(now)
 }

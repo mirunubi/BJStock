@@ -34,7 +34,7 @@ class HomePresenterTest {
         assertEquals("+0.33%", portfolio.cumulativeReturn)
         assertEquals("+₩331,524", portfolio.cumulativeProfit)
         assertEquals("go hbm · Momentum V2", portfolio.runLabel)
-        assertEquals("실행중", portfolio.runStatus)
+        assertEquals("운영 중", portfolio.runStatus)
         assertNull(portfolio.otherRunsNote)
 
         val decision = content.decision as DecisionCard.Latest
@@ -91,9 +91,40 @@ class HomePresenterTest {
         val content = HomePresenter.present(HomeFixtures.snapshot(auto = AUTO_ON, operation = HomeFixtures.operation()))
         assertTrue(content.auto.enabled)
         assertEquals("켜짐", content.auto.stateLabel)
-        assertEquals("10월 1일 오전 7:00 이후", content.auto.nextRun)
+        assertEquals("다음 자동 실행 10월 1일 오전 7:00 이후", content.auto.nextRun)
         assertEquals("정상 완료 · 9월 30일 오전 7:34 · 자동", content.auto.latestOperation)
         assertTrue(content.alerts.isEmpty())
+    }
+
+    @Test
+    fun runStatus_usesTheCanonicalProductWording() {
+        mapOf(
+            RunStatus.DRAFT to "설정중",
+            RunStatus.READY to "실행 준비",
+            RunStatus.RUNNING to "운영 중",
+            RunStatus.PAUSED to "일시정지",
+            RunStatus.COMPLETED to "완료",
+            RunStatus.CANCELLED to "취소",
+        ).forEach { (status, label) ->
+            val data = HomeFixtures.runData().copy(run = HomeFixtures.run(3, status))
+            val portfolio = HomePresenter.present(HomeFixtures.snapshot(run = data)).portfolio as PortfolioCard.Summary
+            assertEquals(label, portfolio.runStatus)
+        }
+    }
+
+    @Test
+    fun pastDueEnqueuedSlot_isWaiting_neverAFutureTime() {
+        val content = HomePresenter.present(HomeFixtures.snapshot(auto = AUTO_ON, now = HomeFixtures.AFTER_SLOT))
+        assertEquals("10월 1일 오전 7:00 예약 작업 · 실행/재시도 대기 중", content.auto.nextRun)
+        assertFalse(content.auto.nextRun.endsWith("이후"))
+    }
+
+    @Test
+    fun runningSlot_isShownAsRunning() {
+        val content = HomePresenter.present(
+            HomeFixtures.snapshot(auto = AUTO_ON.copy(workState = "RUNNING"), now = HomeFixtures.AFTER_SLOT),
+        )
+        assertEquals("10월 1일 오전 7:00 예약 작업 · 실행 중", content.auto.nextRun)
     }
 
     @Test

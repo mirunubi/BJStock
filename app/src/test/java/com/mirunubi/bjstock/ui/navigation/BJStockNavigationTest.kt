@@ -97,10 +97,7 @@ class BJStockNavigationTest {
 
     @Test
     fun paperTradingTab_opensThePaperTradingScreen_notTheForwardTestLinkHub() {
-        assertEquals(
-            setOf(PrimaryTab.HOME, PrimaryTab.STOCKS, PrimaryTab.STRATEGY, PrimaryTab.PAPER_TRADING),
-            TabHubs.dedicated,
-        )
+        assertTrue(PrimaryTab.PAPER_TRADING in TabHubs.dedicated)
         assertTrue(TabHubs.forTab(PrimaryTab.PAPER_TRADING).isEmpty())
         assertEquals("paper_trading", PrimaryTab.PAPER_TRADING.route)
         assertEquals("모의투자", PrimaryTab.PAPER_TRADING.label)
@@ -115,10 +112,27 @@ class BJStockNavigationTest {
     }
 
     @Test
-    fun tabShells_linkToTheirExistingScreens() {
-        assertTrue(TabHubs.forTab(PrimaryTab.HOME).isEmpty())
-        assertTrue(BJStockRoutes.FORWARD_TEST in TabHubs.performance.map { it.route })
-        assertTrue(BJStockRoutes.COMPARE_RUNS in TabHubs.performance.map { it.route })
+    fun performanceTab_opensThePerformanceScreen_andEveryTabIsAProductScreen() {
+        assertEquals(PrimaryTab.entries.toSet(), TabHubs.dedicated)
+        PrimaryTab.entries.forEach { assertTrue(it.name, TabHubs.forTab(it).isEmpty()) }
+        assertEquals("performance", PrimaryTab.PERFORMANCE.route)
+        assertEquals("성과", PrimaryTab.PERFORMANCE.label)
+        val hubRoutes = PrimaryTab.entries.flatMap { TabHubs.forTab(it) }.map { it.route }
+        assertFalse(BJStockRoutes.FORWARD_TEST in hubRoutes)
+        assertFalse(BJStockRoutes.COMPARE_RUNS in hubRoutes)
+    }
+
+    @Test
+    fun forwardTestDashboard_andCompareRuns_stayUnderDeveloperTools_withRoutesUnchanged() {
+        val developer = SettingsMenu.sections.single { it.title == "개발자 도구" }.entries
+        assertEquals("forward_test", developer.single { it.route == BJStockRoutes.FORWARD_TEST }.route)
+        assertEquals("compare_runs", developer.single { it.route == BJStockRoutes.COMPARE_RUNS }.route)
+        assertTrue(BJStockRoutes.FORWARD_TEST in BJStockRoutes.LEGACY)
+        assertTrue(BJStockRoutes.COMPARE_RUNS in BJStockRoutes.LEGACY)
+    }
+
+    @Test
+    fun settingsMenu_firstSectionIsConnectionAndData() {
         val settings = SettingsMenu.sections.first().entries.map { it.route }
         assertEquals(listOf(BJStockRoutes.KIS_SETTINGS, BJStockRoutes.DATABASE_INFO), settings)
     }

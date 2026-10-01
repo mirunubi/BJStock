@@ -142,5 +142,12 @@ object HomeFixtures {
         candidates: Int = if (run == null) 0 else 1,
         auto: AutoScheduleStatus = AUTO_OFF,
         operation: ForwardOperationEntity? = null,
-    ) = HomeSnapshot(run = run, candidateRunCount = candidates, auto = auto, latestOperation = operation)
+        now: Instant = BEFORE_SLOT,
+    ) = HomeSnapshot(run = run, candidateRunCount = candidates, auto = auto, latestOperation = operation, now = now)
+
+    /** 2026-09-30 21:00 KST, before [AUTO_ON]'s 10-01 07:00 slot. */
+    val BEFORE_SLOT: Instant = Instant.parse("2026-09-30T12:00:00Z")
+
+    /** 2026-10-01 13:22 KST, after [AUTO_ON]'s 10-01 07:00 slot. */
+    val AFTER_SLOT: Instant = Instant.parse("2026-10-01T04:22:00Z")
 }

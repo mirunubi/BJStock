@@ -11,8 +11,10 @@ import com.mirunubi.bjstock.core.database.entity.InstrumentEntity
 import com.mirunubi.bjstock.core.database.entity.StockEvaluationEntity
 import com.mirunubi.bjstock.core.database.entity.StrategyRunEntity
 import com.mirunubi.bjstock.core.forward.AutoScheduleStatus
+import com.mirunubi.bjstock.core.forward.ForwardTestClock
 import com.mirunubi.bjstock.core.forward.ForwardTestScheduler
 import com.mirunubi.bjstock.core.model.RunStatus
+import java.time.Instant
 import javax.inject.Inject
 
 /** Raw read data for Home; presentation happens in [HomePresenter]. */
@@ -21,6 +23,7 @@ data class HomeSnapshot(
     val candidateRunCount: Int,
     val auto: AutoScheduleStatus,
     val latestOperation: ForwardOperationEntity?,
+    val now: Instant,
 )
 
 data class HomeRunData(
@@ -63,6 +66,7 @@ class RoomHomeReadModelLoader @Inject constructor(
     private val scheduler: ForwardTestScheduler,
     private val instrumentDao: InstrumentDao,
     private val operationDao: ForwardOperationDao,
+    private val clock: ForwardTestClock,
 ) : HomeReadModelLoader {
     override suspend fun load(): HomeSnapshot {
         val candidates = HomeRunSelection.candidates(repository.loadAllRuns())
@@ -71,6 +75,7 @@ class RoomHomeReadModelLoader @Inject constructor(
             candidateRunCount = candidates.size,
             auto = scheduler.status(),
             latestOperation = operationDao.findRecent(limit = 1).firstOrNull(),
+            now = clock.nowInstant(),
         )
     }
 

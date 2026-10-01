@@ -21,6 +21,7 @@ import com.mirunubi.bjstock.feature.paper.PaperTradingLabScreen
 import com.mirunubi.bjstock.feature.paper.PaperTradingScreen
 import com.mirunubi.bjstock.feature.performance.CompareRunsScreen
 import com.mirunubi.bjstock.feature.performance.ForwardTestDashboardScreen
+import com.mirunubi.bjstock.feature.performance.PerformanceScreen
 import com.mirunubi.bjstock.feature.settings.SettingsScreen
 import com.mirunubi.bjstock.feature.stocks.StocksScreen
 import com.mirunubi.bjstock.feature.strategy.StrategyLabScreen
@@ -71,6 +72,9 @@ private fun BJStockNavHost() {
         }
         composable(BJStockRoutes.PAPER_TRADING) {
             PaperTradingScreen(onSelectTab = selectTab, onOpenSettings = openSettings)
+        }
+        composable(BJStockRoutes.PERFORMANCE) {
+            PerformanceScreen(onSelectTab = selectTab, onOpenSettings = openSettings)
         }
         PrimaryTab.entries.filterNot { it in TabHubs.dedicated }.forEach { tab ->
             composable(tab.route) {

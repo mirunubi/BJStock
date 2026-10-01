@@ -39,7 +39,7 @@ class HomeViewModelTest {
 
         gate.complete(HomeFixtures.snapshot(auto = HomeFixtures.AUTO_ON))
         val content = viewModel.uiState.value as HomeUiState.Content
-        assertEquals("10월 1일 오전 7:00 이후", content.auto.nextRun)
+        assertEquals("다음 자동 실행 10월 1일 오전 7:00 이후", content.auto.nextRun)
     }
 
     @Test

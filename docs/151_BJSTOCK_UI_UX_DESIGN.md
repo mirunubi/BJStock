@@ -3,7 +3,7 @@
 | Item | Value |
 | --- | --- |
 | Document status | **DRAFT — Human Review Required** |
-| Implementation | **PARTIAL** — UI-1 navigation shell IMPLEMENTED; Home, Stocks, Strategy, and Paper Trading screens PARTIAL (first versions); Performance not started; see §21 |
+| Implementation | **PARTIAL** — UI-1 navigation shell IMPLEMENTED; all five tabs are product screens; Home, Stocks, Strategy, and Paper Trading screens PARTIAL (first versions); Performance screen IMPLEMENTED (first version, physical visual check pending); see §21 |
 | Scope | Future MVP / real-use UI structure. |
 | Phase context | Phase 11 — Documentation Interlude (not a Phase 11 gate) |
 
@@ -393,8 +393,8 @@ No dates are assigned.
 | UI-3 | Home dashboard | **PARTIAL** — first version (§21) |
 | UI-4 | Stocks + Themes consolidation | **PARTIAL** — Stocks screen (§21.4); stock-level strategy evaluation deferred |
 | UI-5 | Strategy UX consolidation | **PARTIAL** — Strategy screen (§21.5); 버전 종료 (retire) not exposed |
-| UI-6 | Paper Trading / Forward Test UX consolidation | **PARTIAL** — Paper Trading screen (§21.6); performance analytics stay with UI-7; physical unattended scheduler acceptance HOLD |
-| UI-7 | Performance dashboard | |
+| UI-6 | Paper Trading / Forward Test UX consolidation | **PARTIAL** — Paper Trading screen (§21.6); performance analytics live in the 성과 tab (UI-7); physical unattended scheduler acceptance HOLD |
+| UI-7 | Performance dashboard | **IMPLEMENTED** — Performance screen, first version (§21.7); physical-device visual check pending |
 | UI-8 | Settings + operational diagnostics | |
 | UI-9 | Physical-device usability review | |
 
@@ -459,6 +459,8 @@ Normal UI translates internal states; the canonical English code stays available
 
 Korean labels for other internal states (`RunStatus`, `ForwardRunResult`, order status, decision `BUY` / `HOLD` / `SELL` / `NO_ACTION`) are defined in UI-2; they follow the same rule (display-only translation, persisted value unchanged).
 
+`RunStatus` canonical product wording (Human decision): `DRAFT` 설정중 / `READY` 실행 준비 / `RUNNING` 운영 중 / `PAUSED` 일시정지 / `COMPLETED` 완료 / `CANCELLED` 취소, used by every product screen (홈, 모의투자, 성과) through `KoreanLabels.runStatus`. Enums and persisted values are unchanged; developer screens keep their own wording.
+
 ---
 
 ## 19. Open design questions
@@ -466,7 +468,7 @@ Korean labels for other internal states (`RunStatus`, `ForwardRunResult`, order 
 Left **OPEN** — no final answers in this document:
 
 - exact colors / theme
-- exact chart library
+- exact chart library (first versions use a plain Compose Canvas line: Stocks §21.4, 성과 §21.7)
 - whether Home aggregates all active Runs or highlights one
 - exact Auto ON / OFF placement (first version in the 모의투자 tab, §21.6)
 - Strategy detail navigation structure (first version in §21.5; open for human visual review)
@@ -500,7 +502,7 @@ If a UI need appears to require a domain change, it is raised as a separate gate
 
 - Start destination `home`. Bottom navigation: 홈 / 종목 / 전략 / 모의투자 / 성과 (`PrimaryTab`, Korean label + icon). Tab switches pop to Home with saved state and `launchSingleTop`, so tabs never stack; back from a tab returns to Home, back on Home leaves the app.
 - 설정 is the top-right gear on every tab root, not a sixth tab.
-- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7. 종목 has been replaced by the Stocks screen (§21.4), 전략 by the Strategy screen (§21.5), and 모의투자 by the Paper Trading screen (§21.6). 성과 is still a temporary shell.
+- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7. 종목 has been replaced by the Stocks screen (§21.4), 전략 by the Strategy screen (§21.5), 모의투자 by the Paper Trading screen (§21.6), and 성과 by the Performance screen (§21.7). All five tabs are now product screens; no tab uses the temporary link hub.
 - Icons are local Material path vectors (`BJStockIcons`); no dependency was added.
 
 ### 21.2 Developer screen preservation
@@ -509,7 +511,7 @@ No screen was removed and every pre-UI-1 route string is unchanged. 설정 lists
 
 ### 21.3 UI-3 Home (PARTIAL — first version)
 
-Cards: 모의자산 (total paper asset, cumulative return / profit), 최근 전략 판단, 보유현황 (count, top three by market value), 자동운영 (ON / OFF, next run, latest operation), 운영 경고 (one line "운영 상태 정상" when there is nothing to report). Loading, error ("홈 정보를 불러오지 못했습니다…"), no Run ("실행 중인 모의투자가 없습니다"), no decision, and no holdings states are explicit. Data comes only from existing read APIs (`PerformanceAnalyticsService.calculateSummary` / `loadOpenPositionViews`, `PerformanceAnalyticsRepository`, `ForwardTestScheduler.status`, `ForwardOperationDao.findRecent`); Home computes no returns, scores, positions, or cash. Before the first valuation the card shows the Run's initial capital labelled "초기 자본 (아직 평가 전)". The next run is written as "<date> 오전 7:00 이후" (07:00 KST earliest eligible target, `docs/060` D-168), never as an exact time. Canonical statuses and decisions are translated (§18, `KoreanLabels`); the decision shows the canonical value as small secondary text. Error and warning text is fixed Korean; `Throwable.message`, summary error text, and raw codes are not shown.
+Cards: 모의자산 (total paper asset, cumulative return / profit), 최근 전략 판단, 보유현황 (count, top three by market value), 자동운영 (ON / OFF, next run, latest operation), 운영 경고 (one line "운영 상태 정상" when there is nothing to report). Loading, error ("홈 정보를 불러오지 못했습니다…"), no Run ("실행 중인 모의투자가 없습니다"), no decision, and no holdings states are explicit. Data comes only from existing read APIs (`PerformanceAnalyticsService.calculateSummary` / `loadOpenPositionViews`, `PerformanceAnalyticsRepository`, `ForwardTestScheduler.status`, `ForwardOperationDao.findRecent`); Home computes no returns, scores, positions, or cash. Before the first valuation the card shows the Run's initial capital labelled "초기 자본 (아직 평가 전)". The next run uses the same rule as 모의투자 (`KoreanLabels.autoSlot`): a future slot reads "다음 자동 실행 <date> 오전 7:00 이후" (07:00 KST earliest eligible target, `docs/060` D-168), never an exact time; a slot whose time has passed while the work is still queued reads "<date> 오전 7:00 예약 작업 · 실행/재시도 대기 중"; a running slot reads "<date> 오전 7:00 예약 작업 · 실행 중". No WorkManager backoff time is inferred. Canonical statuses and decisions are translated (§18, `KoreanLabels`); the decision shows the canonical value as small secondary text. Error and warning text is fixed Korean; `Throwable.message`, summary error text, and raw codes are not shown.
 
 **Temporary Run selection rule (open for human review, §19):** Home shows one Run. DRAFT and CANCELLED Runs are excluded; the rest are ordered RUNNING, READY, PAUSED, COMPLETED, then by highest `strategy_runs.id` (most recently created). If other candidates exist, Home notes their count and points to 모의투자. The latest decision is the Run's last `stock_evaluations` row by (`evaluation_date`, `id`), with a count of other decisions on the same date. The latest operation is the newest `forward_operations` row (`started_at`, `id`), across all Runs.
 
@@ -573,8 +575,32 @@ The 모의투자 tab is the operating screen for paper Runs (`PaperTradingScreen
 - **운영 준비 완료** (DRAFT only): a confirmation lists name, strategy + version, start date, initial capital, and universe count, and states that the universe and trading policy become fixed and the initial capital is credited; only then `StrategyRunService.markReady`. Failures map from the actual domain categories: EMPTY_UNIVERSE "투자 대상 종목을 하나 이상 추가해 주세요.", AUTH_REQUIRED "KIS 연결 설정을 확인해 주세요.", INSUFFICIENT_WARMUP_DATA "전략 계산에 필요한 과거 시세 데이터가 부족합니다.", VERSION_NOT_ACTIVE "사용 중인 전략 버전이 필요합니다."; anything else gets fixed Korean text.
 - **Safe errors**: messages come from canonical codes (`ForwardOutcomeReason`, `ForwardErrorCode`, `AppErrorCode`) and exception types only; `Throwable.message`, HTTP bodies, SQL, tokens, secrets, and paths are never shown.
 
-Deferred to the 성과 tab (UI-7): equity curve, MDD, monthly returns, win rate, and Run comparison. Performance is not complete.
+Equity curve, MDD, monthly returns, win rate, and Run comparison are in the 성과 tab (§21.7).
 
-Open for human visual review: the 모의투자 tab uses the Run and operation status labels above, while Home and §18 still use the earlier ones (작성중 / 준비됨 / 실행중 / 취소됨; 정상 완료 / 실행 중단 / 오류). Physical unattended scheduler acceptance remains **HOLD**; this screen only displays the scheduler state.
+Run status labels are now unified across product screens (§18). Still open for human visual review: the operation status labels here (실행 중 / 완료 / 실행 차단 / 실패) differ from Home and §18 (실행중 / 정상 완료 / 실행 중단 / 오류). Physical unattended scheduler acceptance remains **HOLD**; this screen only displays the scheduler state.
 
 Existing Forward Test Dashboard (`ForwardTestDashboardScreen`, `ForwardTestViewModel`, route `forward_test`) and Paper Trading Lab (`PaperTradingLabScreen`, `PaperTradingLabViewModel`, route `paper_lab`) are unchanged and stay under 설정 > 개발자 도구; the 모의투자 tab no longer links to them.
+
+### 21.7 UI-7 Performance dashboard (IMPLEMENTED — Performance screen, first version)
+
+The 성과 tab is a read-only analysis screen for paper Run results (`PerformanceScreen`, `PerformanceViewModel`, `PerformancePresenter`, `PerformanceDataSource`) inside the normal chrome (title 성과, settings gear, bottom bar with 성과 selected). It answers how much a Run gained or lost, its maximum drawdown, how assets moved by date, monthly results, virtual trade results, strategy decision / virtual fill counts, and how Runs differ. Developer Tools are not needed for any of it.
+
+- **Read-only by structure**: `PerformanceDataSource` has only read functions (`runs`, `detail`, `compare`) backed by `PerformanceAnalyticsService` and `PerformanceAnalyticsRepository`, which never write and never call the network. Its only dependencies are those two classes: no KIS, scheduler, Worker, coordinator, or paper-engine class. Opening, selecting, refreshing, and comparing create no snapshot, evaluation, order, execution, cash-ledger row, or position change, execute no Forward Test, and touch no Auto setting (a Room test checks every table's row count before / after).
+- **No duplicated finance**: every figure (total asset, cumulative profit / return, MDD, CAGR, daily / monthly returns, trade statistics, signal and fill counts) is exactly what the analytics layer returns; the presenter only formats it. MDD is the summary's `maxDrawdown`, not recomputed.
+- **Run selector**: every Run, ordered like 모의투자 (RUNNING, READY, PAUSED, DRAFT, COMPLETED, CANCELLED, then newest). Row: 모의투자 이름, `전략 · V2`, status (canonical wording, §18, text + icon), period (`2026.09.18 ~ 2026.09.30` or `…부터`), and `총 모의자산 … · +0.33%` / `초기자금 … · 평가 전` / `데이터 확인 필요`. No database id is primary text.
+- **Summary**: name, `전략 · 버전`, Run status, 성과 상태 (`EMPTY` 평가 전 / `IN_PROGRESS` 진행 중 / `COMPLETE` 집계 완료 / `DATA_ERROR` 데이터 확인 필요; enums unchanged), 분석기간, 거래일 수; then 총 모의자산 (large), 누적 손익 (`+331,524원`), 누적 수익률 (`+0.33%`), 최대 낙폭(MDD) (`-8.42%`, "—" without a valid series), CAGR(연환산) ("계산 불가" with a note when analytics returns null; it needs at least one year).
+- **EMPTY**: "아직 일별 평가 기록이 없습니다." and the initial capital; never 0원 / 0.00% / MDD 0% as measured values. Genuine trade / signal counts are still shown.
+- **DATA_ERROR**: a prominent warning "성과 데이터를 계산할 수 없습니다." / "저장된 모의투자 기록의 정합성을 확인해야 합니다." and no metrics. The raw summary error, SQL, ids, and stack traces are never shown; diagnostics stay in Developer Tools.
+- **자산 추이**: `calculateDailySeries` total assets as a plain Compose Canvas line in date order over the actual snapshot dates only (no interpolation of missing trading days), latest point marked, start / end date and first / latest asset visible, period high / low, accessible description, and an explicit empty state. No chart library, zoom, gestures, or candlesticks. Long assets are normalized on Long values before only the final ratio becomes a Float.
+- **최근 일별 기록**: the latest 15 rows, newest first: 날짜, 총자산, 일 손익 (일 수익률), 누적 수익률, 낙폭.
+- **월간 수익률**: `calculateMonthlyReturns` as `2026년 9월 +3.21%` with the month-end asset; direction is the written sign, color is secondary. Empty: "월간 성과 데이터가 아직 없습니다."
+- **거래 통계**: 완료 거래, 수익 거래, 손실 거래, 손익 없음, 승률, 평균 / 최고 / 최저 거래 수익률, 평균 보유일 (`3.5일`), 미종결 거래 from the summary. A null win rate (no winning or losing closed trade; analytics uses wins + losses as the denominator) is "—" with "수익/손실로 종료된 거래가 아직 없습니다."; 0% only when analytics returns zero.
+- **전략 판단 · 가상 체결**: 매수 / 매도 / 관망 판단, 조치 없음 and 매수 / 매도 체결, noting that a strategy decision is not an order.
+- **보유 현황**: one line "현재 보유 종목 n개 · 미종결 거래 n건"; holdings detail stays in 모의투자.
+- **모의투자 비교**: select 2–3 Runs (name, `전략 · 버전`, status) and compare via the existing `PerformanceAnalyticsService.compareRuns`. Per Run: 기간, 거래일 수, 초기자금, 최근 / 최종 자산, 누적 수익률, MDD, 완료 거래, 승률, and policy context (정책 버전, 1회 매수 비중, 수수료 가정, 매도세 가정; "운영 준비 전이라 아직 없음" for a DRAFT). Facts only: no winner, rank, score, recommendation, or normalization; the note "기간과 거래 정책이 다른 모의투자는 단순 비교에 주의하세요." is always shown. A DATA_ERROR Run shows the warning instead of its metrics.
+
+Cross-screen consistency in the same gate (presentation only): product Run status wording unified (§18), and Home's next-run line aligned with 모의투자 for past-due and running slots (§21.3). Home was not otherwise redesigned.
+
+Existing Forward Test Dashboard (`forward_test`) and Compare Runs (`compare_runs`) are unchanged and stay under 설정 > 개발자 도구; the 성과 tab no longer links to them.
+
+Physical scheduler: the delayed-recovery verification of the 2026-10-01 07:00 slot remains **HOLD** as a separate read-only gate that was not performed as part of this work; original unattended 07:00 acceptance remains unproven. No scheduler, Worker, or retry behavior was changed.

@@ -8,6 +8,7 @@ import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.strategy.StrategyScoreMath
 import com.mirunubi.bjstock.ui.text.KoreanLabels
 import java.math.RoundingMode
+import java.time.Instant
 
 sealed interface HomeUiState {
     data object Loading : HomeUiState
@@ -151,7 +152,7 @@ object HomePresenter {
         return AutoCard(
             enabled = status.autoEnabled,
             stateLabel = if (status.autoEnabled) "켜짐" else "꺼짐",
-            nextRun = nextRun(status),
+            nextRun = nextRun(status, snapshot.now),
             latestOperation = snapshot.latestOperation?.let { operation ->
                 listOf(
                     KoreanLabels.operationStatus(operation.status),
@@ -163,11 +164,10 @@ object HomePresenter {
     }
 
     /** 07:00 is the earliest eligible time, never an exact execution time (docs/150 §20.9). */
-    private fun nextRun(status: AutoScheduleStatus): String {
+    private fun nextRun(status: AutoScheduleStatus, now: Instant): String {
         if (!status.autoEnabled) return AUTO_OFF_NEXT
         val at = status.nextScheduledAt ?: return AUTO_NO_SLOT
-        if (status.workState == "RUNNING") return "${KoreanLabels.dateTime(at)} 예약분 실행중"
-        return "${KoreanLabels.dateTime(at)} 이후"
+        return KoreanLabels.autoSlot(at, status.workState, now)
     }
 
     private fun alerts(snapshot: HomeSnapshot): List<HomeAlert> = buildList {

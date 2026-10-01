@@ -252,14 +252,7 @@ object PaperTradingPresenter {
 
     // region Run list and header
 
-    fun runStatus(status: RunStatus): String = when (status) {
-        RunStatus.DRAFT -> "설정중"
-        RunStatus.READY -> "실행 준비"
-        RunStatus.RUNNING -> "운영 중"
-        RunStatus.PAUSED -> "일시정지"
-        RunStatus.COMPLETED -> "완료"
-        RunStatus.CANCELLED -> "취소"
-    }
+    fun runStatus(status: RunStatus): String = KoreanLabels.runStatus(status)
 
     fun badge(status: RunStatus) = RunStatusBadge(status, runStatus(status))
 
@@ -514,19 +507,10 @@ object PaperTradingPresenter {
         )
     }
 
-    /**
-     * 07:00 is the earliest eligible time, never an exact execution time. A slot whose time has passed is
-     * shown as waiting, never as a future time; no backoff timing is inferred.
-     */
     fun slot(status: AutoScheduleStatus, now: Instant): Pair<String, Boolean> {
         if (!status.autoEnabled) return AUTO_OFF_LINE to false
         val at = status.nextScheduledAt ?: return AUTO_NO_SLOT to false
-        val label = KoreanLabels.dateTime(at)
-        return when {
-            status.workState == RUNNING_STATE -> "$label 예약 작업 · 실행 중" to true
-            !at.isAfter(now) -> "$label 예약 작업 · 실행/재시도 대기 중" to true
-            else -> "다음 자동 실행 $label 이후" to false
-        }
+        return KoreanLabels.autoSlot(at, status.workState, now) to KoreanLabels.isSlotPastDue(at, status.workState, now)
     }
 
     fun operationTitle(trigger: ForwardOperationTrigger, kind: ForwardOperationKind): String = when {
@@ -717,7 +701,6 @@ object PaperTradingPresenter {
     private const val NOT_VALUED = "평가 전"
     private const val AUTH_MESSAGE = "KIS 연결 설정을 확인해 주세요."
     private const val WARMUP_MESSAGE = "전략 계산에 필요한 과거 시세 데이터가 부족합니다."
-    private const val RUNNING_STATE = "RUNNING"
     private const val ORDER_ROWS = 10
     private const val REASON_MAX = 120
     private const val SAFE_MESSAGE_MAX = 160
