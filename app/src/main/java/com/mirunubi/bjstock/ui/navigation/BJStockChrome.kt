@@ -28,11 +28,19 @@ fun BJStockBottomBar(selected: PrimaryTab, onSelect: (PrimaryTab) -> Unit) {
     }
 }
 
+/** [onBack] adds a back arrow for in-tab layers (e.g. a stock detail) while keeping the tab chrome. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TabTopBar(title: String, onOpenSettings: () -> Unit) {
+fun TabTopBar(title: String, onOpenSettings: () -> Unit, onBack: (() -> Unit)? = null) {
     TopAppBar(
         title = { Text(title, fontWeight = FontWeight.Bold) },
+        navigationIcon = {
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(BJStockIcons.Back, contentDescription = "뒤로")
+                }
+            }
+        },
         actions = {
             IconButton(onClick = onOpenSettings) {
                 Icon(BJStockIcons.Settings, contentDescription = "설정")

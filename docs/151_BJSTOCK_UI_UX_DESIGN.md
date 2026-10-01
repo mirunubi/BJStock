@@ -391,7 +391,7 @@ No dates are assigned.
 | UI-1 | Navigation shell: 홈 / 종목 / 전략 / 모의투자 / 성과 | **IMPLEMENTED** (§21) |
 | UI-2 | Korean terminology cleanup | |
 | UI-3 | Home dashboard | **PARTIAL** — first version (§21) |
-| UI-4 | Stocks + Themes consolidation | |
+| UI-4 | Stocks + Themes consolidation | **PARTIAL** — Stocks screen (§21.4); stock-level strategy evaluation deferred |
 | UI-5 | Strategy UX consolidation | |
 | UI-6 | Paper Trading / Forward Test UX consolidation | |
 | UI-7 | Performance dashboard | |
@@ -500,7 +500,7 @@ If a UI need appears to require a domain change, it is raised as a separate gate
 
 - Start destination `home`. Bottom navigation: 홈 / 종목 / 전략 / 모의투자 / 성과 (`PrimaryTab`, Korean label + icon). Tab switches pop to Home with saved state and `launchSingleTop`, so tabs never stack; back from a tab returns to Home, back on Home leaves the app.
 - 설정 is the top-right gear on every tab root, not a sixth tab.
-- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7.
+- 종목 / 전략 / 모의투자 / 성과 are temporary shells that link to the existing screens (종목: 시세 조회, 테마, 종목 마스터, 팩터 점수; 전략: Strategy Lab; 모의투자: Forward Test with Run / Auto / Run Now, Paper Lab; 성과: Forward Test analytics, Compare Runs). Full redesigns stay with UI-4 – UI-7. 종목 has been replaced by the Stocks screen (§21.4).
 - Icons are local Material path vectors (`BJStockIcons`); no dependency was added.
 
 ### 21.2 Developer screen preservation
@@ -512,3 +512,21 @@ No screen was removed and every pre-UI-1 route string is unchanged. 설정 lists
 Cards: 모의자산 (total paper asset, cumulative return / profit), 최근 전략 판단, 보유현황 (count, top three by market value), 자동운영 (ON / OFF, next run, latest operation), 운영 경고 (one line "운영 상태 정상" when there is nothing to report). Loading, error ("홈 정보를 불러오지 못했습니다…"), no Run ("실행 중인 모의투자가 없습니다"), no decision, and no holdings states are explicit. Data comes only from existing read APIs (`PerformanceAnalyticsService.calculateSummary` / `loadOpenPositionViews`, `PerformanceAnalyticsRepository`, `ForwardTestScheduler.status`, `ForwardOperationDao.findRecent`); Home computes no returns, scores, positions, or cash. Before the first valuation the card shows the Run's initial capital labelled "초기 자본 (아직 평가 전)". The next run is written as "<date> 오전 7:00 이후" (07:00 KST earliest eligible target, `docs/060` D-168), never as an exact time. Canonical statuses and decisions are translated (§18, `KoreanLabels`); the decision shows the canonical value as small secondary text. Error and warning text is fixed Korean; `Throwable.message`, summary error text, and raw codes are not shown.
 
 **Temporary Run selection rule (open for human review, §19):** Home shows one Run. DRAFT and CANCELLED Runs are excluded; the rest are ordered RUNNING, READY, PAUSED, COMPLETED, then by highest `strategy_runs.id` (most recently created). If other candidates exist, Home notes their count and points to 모의투자. The latest decision is the Run's last `stock_evaluations` row by (`evaluation_date`, `id`), with a count of other decisions on the same date. The latest operation is the newest `forward_operations` row (`started_at`, `id`), across all Runs.
+
+### 21.4 UI-4 Stocks + Themes consolidation (PARTIAL — Stocks screen)
+
+The 종목 tab is a stock-analysis screen (`StocksScreen`, `StocksViewModel`, `StocksPresenter`, read-only `StocksDataSource`) inside the normal chrome (title 종목, settings gear, bottom bar with 종목 selected). It is not an order screen: no order book, order buttons, or account actions.
+
+- **Search**: "종목명 또는 종목코드 검색" over active instruments only (`InstrumentDao.searchActive`, symbol or name, partial match; inactive instruments never appear). Rows show name and `005930 · KOSPI` / `KOSDAQ`; no database ids. Searching, no-result, and failure states are explicit.
+- **Initial state**: guidance "종목명이나 종목코드를 검색해 보세요.", active themes as quick-access chips, and 테마 관리. No stock is preselected and no recent-stock history is invented.
+- **Theme browsing (IMPLEMENTED)**: a theme chip lists its active member instruments (`ThemeService.listInstrumentIds`); selecting one opens the same stock detail. 테마 관리 opens the existing Themes screen, where theme CRUD stays.
+- **Stock detail**: name, `code · board`, and sector / industry only when stored. 저장 일봉 기준 card: latest stored close, trade date (`2026.09.29`), volume (`주`), and 전일 대비 as amount and signed percent against the previous stored trading close (display arithmetic only, never persisted; "—" without a previous bar; "저장된 시세 데이터가 없습니다." without bars). Direction is written as text (+ / − and 상승 / 하락 / 보합); color is secondary.
+- **Chart**: Compose Canvas line of up to the latest 30 stored closes in date order, straight segments between real bars, latest close marked, start / end dates and high / low labels. No chart dependency, candlesticks, zoom, or indicators.
+- **Factors**: the six system factors with Korean names (20일 이동평균 대비, 60일 이동평균 대비, 20일 모멘텀, 60일 모멘텀, 20일 변동성, 20일 거래량 비율), the code as small secondary text, raw value, and normalized score. Calculated by the existing `FactorCalculationService.calculateAllSystemFactors` with **`persist = false`** as of the **latest stored trade date**, so browsing never writes `factor_values`. Insufficient history shows "계산에 필요한 과거 데이터가 부족합니다." instead of a value; scores are never turned into recommendations. (The service's existing idempotent seeding of the six system factor definitions still applies; it inserts only when a definition is missing.)
+- **Themes**: active themes containing the stock (`ThemeService`), plus 테마 관리.
+- **현재가 조회 (manual only)**: KIS is called only when the user taps the button (`KisMarketRepository.inquireCurrentPrice`, read-only); never on opening the tab, searching, or selecting. The result is labelled "현재가 조회 결과" with the lookup time, separate from stored data, and not called real-time. Failures show only the existing safe public message ("현재가 조회 실패 · 인증 필요" etc.) or a fixed Korean fallback.
+- **Back**: the stock detail returns to the theme list or search results, which return to the Stocks root; tab switching is unchanged (§21.1).
+
+Deferred: the latest strategy evaluation for a stock. No cross-Run "latest decision" rule is invented; stock-level evaluation waits for the Strategy / Paper Trading UI to define the Run context. Home keeps showing the selected Run's latest decision (§21.3).
+
+Existing developer screens (Market Data Test, Instrument Master, Themes, Factor Test) are unchanged and stay under 설정 > 개발자 도구; the Stocks tab no longer links to them.

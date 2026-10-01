@@ -1,5 +1,6 @@
 package com.mirunubi.bjstock.ui.text
 
+import com.mirunubi.bjstock.core.factor.FactorCodes
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.core.model.ForwardOperationTrigger
 import com.mirunubi.bjstock.core.model.RunStatus
@@ -50,6 +51,17 @@ object KoreanLabels {
     fun trigger(trigger: ForwardOperationTrigger): String = when (trigger) {
         ForwardOperationTrigger.MANUAL -> "수동"
         ForwardOperationTrigger.WORKER -> "자동"
+    }
+
+    /** Korean name of a system factor; unknown codes are shown as-is. */
+    fun factorName(code: String): String = when (code) {
+        FactorCodes.PRICE_VS_MA20 -> "20일 이동평균 대비"
+        FactorCodes.PRICE_VS_MA60 -> "60일 이동평균 대비"
+        FactorCodes.MOMENTUM_20D -> "20일 모멘텀"
+        FactorCodes.MOMENTUM_60D -> "60일 모멘텀"
+        FactorCodes.VOLATILITY_20D -> "20일 변동성"
+        FactorCodes.VOLUME_RATIO_20D -> "20일 거래량 비율"
+        else -> code
     }
 
     /** e.g. `9월 30일`. */

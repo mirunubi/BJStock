@@ -21,10 +21,13 @@ import com.mirunubi.bjstock.feature.paper.PaperTradingLabScreen
 import com.mirunubi.bjstock.feature.performance.CompareRunsScreen
 import com.mirunubi.bjstock.feature.performance.ForwardTestDashboardScreen
 import com.mirunubi.bjstock.feature.settings.SettingsScreen
+import com.mirunubi.bjstock.feature.stocks.StocksScreen
 import com.mirunubi.bjstock.feature.strategy.StrategyLabScreen
 import com.mirunubi.bjstock.feature.theme.ThemesScreen
 import com.mirunubi.bjstock.ui.navigation.BJStockRoutes
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
+import com.mirunubi.bjstock.ui.navigation.StocksLinks
+import com.mirunubi.bjstock.ui.navigation.TabHubs
 import com.mirunubi.bjstock.ui.navigation.navigateToTab
 import com.mirunubi.bjstock.ui.theme.BJStockTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -54,7 +57,14 @@ private fun BJStockNavHost() {
         composable(BJStockRoutes.HOME) {
             HomeScreen(onSelectTab = selectTab, onOpenSettings = openSettings)
         }
-        listOf(PrimaryTab.STOCKS, PrimaryTab.STRATEGY, PrimaryTab.PAPER_TRADING, PrimaryTab.PERFORMANCE).forEach { tab ->
+        composable(BJStockRoutes.STOCKS) {
+            StocksScreen(
+                onSelectTab = selectTab,
+                onOpenSettings = openSettings,
+                onOpenThemeManagement = { open(StocksLinks.THEME_MANAGEMENT) },
+            )
+        }
+        PrimaryTab.entries.filterNot { it in TabHubs.dedicated }.forEach { tab ->
             composable(tab.route) {
                 TabHubScreen(tab = tab, onSelectTab = selectTab, onOpenSettings = openSettings, onNavigate = open)
             }

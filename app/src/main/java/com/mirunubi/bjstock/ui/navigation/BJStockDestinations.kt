@@ -68,12 +68,8 @@ data class NavSection(val title: String, val entries: List<NavEntry>)
 
 /** Temporary tab content for UI-1: links to the existing screens until each tab is redesigned. */
 object TabHubs {
-    val stocks = listOf(
-        NavEntry("시세 조회", "KIS 현재가·일봉 조회", BJStockRoutes.MARKET_DATA),
-        NavEntry("테마", "테마와 관심종목 관리", BJStockRoutes.THEMES),
-        NavEntry("종목 마스터", "KOSPI·KOSDAQ 종목 목록 동기화", BJStockRoutes.INSTRUMENT_MASTER),
-        NavEntry("팩터 점수", "종목별 팩터 계산 결과", BJStockRoutes.FACTOR_TEST),
-    )
+    /** Tabs with their own product screen; the others still use the temporary link hub. */
+    val dedicated: Set<PrimaryTab> = setOf(PrimaryTab.HOME, PrimaryTab.STOCKS)
 
     val strategy = listOf(
         NavEntry("전략 관리", "전략·버전·팩터 가중치·신호 규칙", BJStockRoutes.STRATEGY_LAB),
@@ -90,12 +86,16 @@ object TabHubs {
     )
 
     fun forTab(tab: PrimaryTab): List<NavEntry> = when (tab) {
-        PrimaryTab.HOME -> emptyList()
-        PrimaryTab.STOCKS -> stocks
+        PrimaryTab.HOME, PrimaryTab.STOCKS -> emptyList()
         PrimaryTab.STRATEGY -> strategy
         PrimaryTab.PAPER_TRADING -> paperTrading
         PrimaryTab.PERFORMANCE -> performance
     }
+}
+
+/** Routes the Stocks screen links to; theme CRUD stays on the existing Themes screen. */
+object StocksLinks {
+    const val THEME_MANAGEMENT = BJStockRoutes.THEMES
 }
 
 object SettingsMenu {

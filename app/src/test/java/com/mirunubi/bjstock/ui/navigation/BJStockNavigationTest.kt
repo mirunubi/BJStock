@@ -62,10 +62,25 @@ class BJStockNavigationTest {
     }
 
     @Test
+    fun stocksTab_opensTheStocksScreen_notADeveloperLinkHub() {
+        assertEquals(setOf(PrimaryTab.HOME, PrimaryTab.STOCKS), TabHubs.dedicated)
+        assertTrue(TabHubs.forTab(PrimaryTab.STOCKS).isEmpty())
+        val hubRoutes = PrimaryTab.entries.flatMap { TabHubs.forTab(it) }.map { it.route }
+        listOf(BJStockRoutes.MARKET_DATA, BJStockRoutes.INSTRUMENT_MASTER, BJStockRoutes.FACTOR_TEST, BJStockRoutes.THEMES)
+            .forEach { assertFalse(it in hubRoutes) }
+    }
+
+    @Test
+    fun stocksDeveloperScreens_stayUnderDeveloperTools_andThemeManagementLinksToThemes() {
+        val developer = SettingsMenu.sections.single { it.title == "개발자 도구" }.entries.map { it.route }
+        listOf(BJStockRoutes.MARKET_DATA, BJStockRoutes.INSTRUMENT_MASTER, BJStockRoutes.THEMES, BJStockRoutes.FACTOR_TEST)
+            .forEach { assertTrue(it, it in developer) }
+        assertEquals(BJStockRoutes.THEMES, StocksLinks.THEME_MANAGEMENT)
+    }
+
+    @Test
     fun tabShells_linkToTheirExistingScreens() {
         assertTrue(TabHubs.forTab(PrimaryTab.HOME).isEmpty())
-        assertTrue(BJStockRoutes.MARKET_DATA in TabHubs.stocks.map { it.route })
-        assertTrue(BJStockRoutes.INSTRUMENT_MASTER in TabHubs.stocks.map { it.route })
         assertEquals(listOf(BJStockRoutes.STRATEGY_LAB), TabHubs.strategy.map { it.route })
         assertTrue(BJStockRoutes.FORWARD_TEST in TabHubs.paperTrading.map { it.route })
         assertTrue(BJStockRoutes.COMPARE_RUNS in TabHubs.performance.map { it.route })
