@@ -53,6 +53,10 @@ import com.mirunubi.bjstock.core.model.SignalAction
 import com.mirunubi.bjstock.core.model.SignalOperator
 import com.mirunubi.bjstock.core.model.StrategyVersionStatus
 import com.mirunubi.bjstock.core.model.TradeDecision
+import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewDetail
+import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewDialogs
+import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewSection
+import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewViewModel
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
@@ -63,17 +67,21 @@ fun StrategyScreen(
     onSelectTab: (PrimaryTab) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: StrategyViewModel = hiltViewModel(),
+    previewViewModel: TemplatePreviewViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val layered = state.strategy != null || state.version != null
-    BackHandler(enabled = layered) { viewModel.back() }
+    val preview by previewViewModel.uiState.collectAsStateWithLifecycle()
+    val previewOpen = preview.selectedId != null
+    val layered = previewOpen || state.strategy != null || state.version != null
+    val back: () -> Unit = { if (previewOpen) previewViewModel.close() else viewModel.back() }
+    BackHandler(enabled = layered) { back() }
 
     Scaffold(
         topBar = {
             TabTopBar(
                 title = PrimaryTab.STRATEGY.label,
                 onOpenSettings = onOpenSettings,
-                onBack = if (layered) ({ viewModel.back() }) else null,
+                onBack = if (layered) back else null,
             )
         },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.STRATEGY, onSelect = onSelectTab) },
@@ -84,13 +92,19 @@ fun StrategyScreen(
                 val version = state.version
                 val strategy = state.strategy
                 when {
+                    previewOpen -> TemplatePreviewDetail(preview, previewViewModel)
                     version != null -> VersionContent(version, state.busy, viewModel)
                     strategy != null -> StrategyContent(strategy, state.busy, viewModel)
-                    else -> ListContent(state.list, viewModel)
+                    else -> {
+                        TemplatePreviewSection(preview, previewViewModel)
+                        ListContent(state.list, viewModel)
+                    }
                 }
             }
         }
     }
+
+    TemplatePreviewDialogs(preview, previewViewModel)
 
     when (val dialog = state.dialog) {
         null -> Unit
