@@ -25,6 +25,9 @@ interface OperationalEventDao {
     )
     suspend fun findByOperation(operationId: Long): List<OperationalEventEntity>
 
+    @Query("SELECT * FROM operational_events ORDER BY created_at DESC, id DESC LIMIT :limit")
+    suspend fun findRecent(limit: Int = 100): List<OperationalEventEntity>
+
     @Query("SELECT COUNT(*) FROM operational_events WHERE operation_id = :operationId AND event_type = :eventType")
     suspend fun countByOperationAndType(operationId: Long, eventType: OperationalEventType): Int
 

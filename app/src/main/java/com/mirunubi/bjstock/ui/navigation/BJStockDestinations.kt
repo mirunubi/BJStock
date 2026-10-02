@@ -10,6 +10,7 @@ object BJStockRoutes {
     const val PAPER_TRADING = "paper_trading"
     const val PERFORMANCE = "performance"
     const val SETTINGS = "settings"
+    const val ADMIN = "admin"
 
     /** Route strings of screens that existed before UI-1; kept unchanged. */
     const val DEV_DASHBOARD = "dashboard"
@@ -88,6 +89,12 @@ object SettingsMenu {
             listOf(
                 NavEntry("KIS 연결", "KIS API 인증 설정", BJStockRoutes.KIS_SETTINGS),
                 NavEntry("DB 정보 · API 오류", "로컬 DB 상태와 최근 7일 API 오류", BJStockRoutes.DATABASE_INFO),
+            ),
+        ),
+        NavSection(
+            "운영",
+            listOf(
+                NavEntry("운영 · 감사", "운영 상태 · 최근 실행 · Audit · 오류 (읽기 전용)", BJStockRoutes.ADMIN),
             ),
         ),
         NavSection(

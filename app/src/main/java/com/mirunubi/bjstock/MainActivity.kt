@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.mirunubi.bjstock.feature.admin.AdminScreen
 import com.mirunubi.bjstock.feature.ai.AiAdvisorScreen
 import com.mirunubi.bjstock.feature.dashboard.DashboardScreen
 import com.mirunubi.bjstock.feature.dashboard.DatabaseInfoScreen
@@ -83,6 +84,9 @@ private fun BJStockNavHost() {
         }
         composable(BJStockRoutes.SETTINGS) {
             SettingsScreen(onBack = back, onNavigate = open)
+        }
+        composable(BJStockRoutes.ADMIN) {
+            AdminScreen(onBack = back)
         }
 
         composable(BJStockRoutes.DEV_DASHBOARD) {
