@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-only. The official KIS VIRTUAL WebSocket endpoint is cleartext (ws://ops.koreainvestment.com:31000).
+    Cleartext is permitted for that single host only; the probe allowlist additionally pins port 31000 and /tryitout.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">ops.koreainvestment.com</domain>
+    </domain-config>
+</network-security-config>
