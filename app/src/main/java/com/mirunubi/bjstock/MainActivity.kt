@@ -59,7 +59,7 @@ private fun BJStockNavHost() {
 
     NavHost(navController = navController, startDestination = BJStockRoutes.START) {
         composable(BJStockRoutes.HOME) {
-            HomeScreen(onSelectTab = selectTab, onOpenSettings = openSettings)
+            HomeScreen(onSelectTab = selectTab, onOpenSettings = openSettings, onOpenAdmin = { open(BJStockRoutes.ADMIN) })
         }
         composable(BJStockRoutes.STOCKS) {
             StocksScreen(
