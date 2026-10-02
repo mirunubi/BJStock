@@ -44,7 +44,6 @@ import com.mirunubi.bjstock.ui.navigation.TabTopBar
 @Composable
 fun HomeScreen(
     onSelectTab: (PrimaryTab) -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenAdmin: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     activityViewModel: HomeActivityViewModel = hiltViewModel(),
@@ -63,7 +62,7 @@ fun HomeScreen(
     }
 
     Scaffold(
-        topBar = { TabTopBar(title = "BJStock", onOpenSettings = onOpenSettings) },
+        topBar = { TabTopBar(title = "BJStock") },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.HOME, onSelect = onSelectTab) },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {

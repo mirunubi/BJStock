@@ -1,6 +1,5 @@
 package com.mirunubi.bjstock.feature.strategy
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,13 +58,13 @@ import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewSection
 import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewViewModel
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
+import com.mirunubi.bjstock.ui.navigation.LayerBackHandler
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
 import com.mirunubi.bjstock.ui.navigation.TabTopBar
 
 @Composable
 fun StrategyScreen(
     onSelectTab: (PrimaryTab) -> Unit,
-    onOpenSettings: () -> Unit,
     viewModel: StrategyViewModel = hiltViewModel(),
     previewViewModel: TemplatePreviewViewModel = hiltViewModel(),
 ) {
@@ -74,13 +73,12 @@ fun StrategyScreen(
     val previewOpen = preview.selectedId != null
     val layered = previewOpen || state.strategy != null || state.version != null
     val back: () -> Unit = { if (previewOpen) previewViewModel.close() else viewModel.back() }
-    BackHandler(enabled = layered) { back() }
+    LayerBackHandler(hasInScreenLayer = layered) { back() }
 
     Scaffold(
         topBar = {
             TabTopBar(
                 title = PrimaryTab.STRATEGY.label,
-                onOpenSettings = onOpenSettings,
                 onBack = if (layered) back else null,
             )
         },

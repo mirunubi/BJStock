@@ -59,13 +59,12 @@ import com.mirunubi.bjstock.ui.navigation.TabTopBar
 @Composable
 fun PaperTradingScreen(
     onSelectTab: (PrimaryTab) -> Unit,
-    onOpenSettings: () -> Unit,
     viewModel: PaperTradingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { TabTopBar(title = PrimaryTab.PAPER_TRADING.label, onOpenSettings = onOpenSettings) },
+        topBar = { TabTopBar(title = PrimaryTab.PAPER_TRADING.label) },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.PAPER_TRADING, onSelect = onSelectTab) },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {

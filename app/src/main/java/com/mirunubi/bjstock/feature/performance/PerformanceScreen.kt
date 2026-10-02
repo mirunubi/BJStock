@@ -54,13 +54,12 @@ import com.mirunubi.bjstock.ui.navigation.TabTopBar
 @Composable
 fun PerformanceScreen(
     onSelectTab: (PrimaryTab) -> Unit,
-    onOpenSettings: () -> Unit,
     viewModel: PerformanceViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { TabTopBar(title = PrimaryTab.PERFORMANCE.label, onOpenSettings = onOpenSettings) },
+        topBar = { TabTopBar(title = PrimaryTab.PERFORMANCE.label) },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.PERFORMANCE, onSelect = onSelectTab) },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {

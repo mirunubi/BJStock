@@ -44,7 +44,10 @@ object BJStockRoutes {
     )
 }
 
-/** The five bottom-navigation destinations (docs/151 §3). Settings is a top-right action, not a tab. */
+/**
+ * The five top-level destinations (docs/151 §3, docs/165). All five stay in the drawer and rail;
+ * the compact bottom bar shows only [BottomNav.tabs]. Settings is never a tab.
+ */
 enum class PrimaryTab(val route: String, val label: String) {
     HOME(BJStockRoutes.HOME, "홈"),
     STOCKS(BJStockRoutes.STOCKS, "종목"),
@@ -67,6 +70,83 @@ data class NavEntry(val title: String, val description: String, val route: Strin
 
 data class NavSection(val title: String, val entries: List<NavEntry>)
 
+/** Compact bottom navigation (docs/165 HD-NAV-03). 종목 and 성과 stay top-level destinations via drawer and rail. */
+object BottomNav {
+    val tabs: List<PrimaryTab> = listOf(PrimaryTab.HOME, PrimaryTab.STRATEGY, PrimaryTab.PAPER_TRADING)
+
+    /** Bottom item to highlight on [current]; null on 종목 / 성과, so no bottom item is falsely selected. */
+    fun selectedItem(current: PrimaryTab): PrimaryTab? = current.takeIf { it in tabs }
+}
+
+/** Where a drawer or rail item leads. Tabs keep the [navigateToTab] back stack; pushes use launchSingleTop. */
+sealed interface ShellTarget {
+    data class Tab(val tab: PrimaryTab) : ShellTarget
+
+    data class Push(val route: String) : ShellTarget
+
+    /** Opens the Developer Tools group inside the drawer; not a NavHost destination. */
+    data object DevTools : ShellTarget
+}
+
+data class ShellItem(val label: String, val icon: ImageVector?, val target: ShellTarget)
+
+data class ShellGroup(val title: String, val items: List<ShellItem>)
+
+/** Compact drawer IA (docs/165 HD-NAV-04 / HD-NAV-05). */
+object DrawerMenu {
+    val primary: List<ShellItem> = PrimaryTab.entries.map { ShellItem(it.label, it.icon, ShellTarget.Tab(it)) }
+    val admin = ShellItem("운영 · 감사", BJStockIcons.Admin, ShellTarget.Push(BJStockRoutes.ADMIN))
+    val settings = ShellItem("설정", BJStockIcons.Settings, ShellTarget.Push(BJStockRoutes.SETTINGS))
+    val devTools = ShellItem("개발자도구", BJStockIcons.DevTools, ShellTarget.DevTools)
+
+    val groups: List<ShellGroup> = listOf(
+        ShellGroup("주요", primary),
+        ShellGroup("운영", listOf(admin)),
+        ShellGroup("앱", listOf(settings, devTools)),
+    )
+
+    // NAV-CLEANUP-01, NAV-CLEANUP-02:
+    // database_info and the legacy dashboard are intentionally not promoted into the drawer / rail IA.
+    // They remain reachable from Settings for compatibility. Re-evaluate after physical UI validation.
+    val developerTools: List<ShellItem> = listOf(
+        ShellItem("KIS 연결", null, ShellTarget.Push(BJStockRoutes.KIS_SETTINGS)),
+        ShellItem("테마 관리", null, ShellTarget.Push(BJStockRoutes.THEMES)),
+        ShellItem("종목 마스터", null, ShellTarget.Push(BJStockRoutes.INSTRUMENT_MASTER)),
+        ShellItem("Market Data Test", null, ShellTarget.Push(BJStockRoutes.MARKET_DATA)),
+        ShellItem("Factor Test", null, ShellTarget.Push(BJStockRoutes.FACTOR_TEST)),
+        ShellItem("Strategy Lab", null, ShellTarget.Push(BJStockRoutes.STRATEGY_LAB)),
+        ShellItem("Paper Lab", null, ShellTarget.Push(BJStockRoutes.PAPER_LAB)),
+        ShellItem("Forward Test", null, ShellTarget.Push(BJStockRoutes.FORWARD_TEST)),
+        ShellItem("Run 비교", null, ShellTarget.Push(BJStockRoutes.COMPARE_RUNS)),
+        ShellItem("AI Advisor", null, ShellTarget.Push(BJStockRoutes.AI_ADVISOR)),
+    )
+}
+
+/** Medium / Expanded rail IA (docs/165 HD-NAV-09); sections are separated by dividers, with no overflow item. */
+object RailMenu {
+    val sections: List<List<ShellItem>> = listOf(
+        DrawerMenu.primary,
+        listOf(DrawerMenu.admin),
+        listOf(DrawerMenu.settings, DrawerMenu.devTools),
+    )
+}
+
+/** Drawer / rail item that represents [route]; developer-tool routes map to the Developer Tools group. */
+object ShellSelection {
+    fun targetFor(route: String?): ShellTarget? {
+        if (route == null) return null
+        PrimaryTab.entries.firstOrNull { it.route == route }?.let { return ShellTarget.Tab(it) }
+        return when {
+            route == BJStockRoutes.ADMIN || route == BJStockRoutes.SETTINGS -> ShellTarget.Push(route)
+            DrawerMenu.developerTools.any { it.target == ShellTarget.Push(route) } -> ShellTarget.DevTools
+            else -> null
+        }
+    }
+}
+
+// NAV-CLEANUP-04:
+// TabHubs and TabHubScreen are unreachable while every tab is dedicated; retained for compatibility.
+// Remove only in a separately approved navigation cleanup gate.
 /** Temporary tab content for UI-1: links to the existing screens until each tab is redesigned. */
 object TabHubs {
     /** Tabs with their own product screen; any other tab would use the temporary link hub. */
@@ -82,6 +162,9 @@ object StocksLinks {
     const val THEME_MANAGEMENT = BJStockRoutes.THEMES
 }
 
+// NAV-CLEANUP-03:
+// Settings retains developer-tool links as alternate entry points next to the drawer / rail Developer Tools group.
+// Remove duplicates only in a separately approved navigation cleanup gate.
 object SettingsMenu {
     val sections = listOf(
         NavSection(

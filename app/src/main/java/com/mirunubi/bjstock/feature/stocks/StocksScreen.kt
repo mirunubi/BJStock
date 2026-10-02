@@ -1,6 +1,5 @@
 package com.mirunubi.bjstock.feature.stocks
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,26 +52,25 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
+import com.mirunubi.bjstock.ui.navigation.LayerBackHandler
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
 import com.mirunubi.bjstock.ui.navigation.TabTopBar
 
 @Composable
 fun StocksScreen(
     onSelectTab: (PrimaryTab) -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenThemeManagement: () -> Unit,
     viewModel: StocksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.refreshThemes() }
     val layered = state.detail != null || state.themeBrowse != null
-    BackHandler(enabled = layered) { viewModel.back() }
+    LayerBackHandler(hasInScreenLayer = layered) { viewModel.back() }
 
     Scaffold(
         topBar = {
             TabTopBar(
                 title = PrimaryTab.STOCKS.label,
-                onOpenSettings = onOpenSettings,
                 onBack = if (layered) ({ viewModel.back() }) else null,
             )
         },
