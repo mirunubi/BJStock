@@ -171,7 +171,7 @@ Drawer prohibition applies to subordinate/detail state at all width classes (HD-
 | NAV-CLEANUP-06 | Material3 Adaptive / WindowSizeClass dependency deferred; NAV-1 uses local 600 / 840dp breakpoints. | `NavWidthClass.kt` |
 | NAV-CLEANUP-07 | Home adaptive 2-column layout. **Resolved on the feature branch by HOME-ADAPT-02** (§L). | `feature/home/HomeLayout.kt` |
 | NAV-CLEANUP-08 | Strategy List-Detail. **Resolved on the feature branch by STRATEGY-ADAPT-02** (§M). | `feature/strategy/StrategyLayout.kt` |
-| NAV-CLEANUP-09 | Admin List-Detail deferred. | docs only |
+| NAV-CLEANUP-09 | Admin adaptive layout. **Resolved on the feature branch by ADMIN-ADAPT-02** (§N). | `feature/admin/AdminLayout.kt` |
 | NAV-CLEANUP-10 | Fold posture (hinge / tabletop) handling deferred; needs androidx.window on the compile classpath. | docs only |
 
 ## J. Search instruction
@@ -230,4 +230,28 @@ The second separately-approved content gate after NAV-1, for the 전략 tab only
 - Highlight (approved HD-SA-03): in Expanded only, the open template or the open strategy is marked selected (border, container color, `selected` semantics). Only one family can be marked; Compact and Medium cards are unchanged.
 - Scroll: Compact and Medium keep one scroll. Expanded uses a non-scrolling row with one independent scroll per pane; the detail scroll restarts when the open item changes.
 - Back, the top-bar back arrow, the drawer prohibition, and the rail Developer Tools rule still follow `layered` (any open layer). Dialogs stay modal and unchanged. The NoticeBanner spans the full width above the panes.
+- Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).
+
+## N. 운영 · 감사 adaptive layout (ADMIN-ADAPT-02)
+
+The third separately-approved content gate after NAV-1, for the read-only 운영 · 감사 route only:
+
+| Width class | 운영 · 감사 layout |
+| --- | --- |
+| Compact | Single pane, unchanged: one scroll; the open operation detail replaces the sections |
+| Medium | Same as Compact (two panes beside the rail would each be narrower than a phone) |
+| Expanded | Two panes: 360dp left pane, 16dp gap, right pane fills the rest |
+
+| Expanded pane | Content |
+| --- | --- |
+| Left | 읽기 전용 안내 · 운영 상태 · 최근 실행 |
+| Right, no detail open | Audit · 오류 · 앱 정보 · 환경 |
+| Right, detail open | The existing operation detail (Loading / Failed / Loaded) |
+
+- `AdminLayout` (pure) owns `modeFor(NavWidthClass)`, the section order, the two pane groups, the right-pane choice, and the highlight. Reading the left pane then the right gives the single-pane order; no section is omitted or repeated. The screen reads the width class from `LocalNavChrome`; no breakpoint values live in `feature/admin`.
+- The detail is the existing `AdminUiState.detail` (`openOperation` / `closeDetail`): no new selection state, no auto-selection, and no empty-detail placeholder, since the right pane shows the root sections until an operation is opened. Errors and Audit keep their inline expansion and filter chips; they get no detail surface, and their `Operation #id` text stays plain text.
+- Highlight (approved HD-AA-02): in Expanded only, the open operation's row in 최근 실행 is marked selected (container color, `selected` semantics). If a refresh drops that operation from the recent 20, the detail stays open and no row is highlighted.
+- Top bar and Back (approved HD-AA-01, unchanged): "실행 상세" while a detail is open, otherwise "운영 · 감사"; Back and the back arrow close the detail first, then leave the route. 운영 · 감사 stays a subordinate route that is never drawer-capable.
+- Scroll: Compact and Medium keep one scroll. Expanded uses a non-scrolling row with one independent scroll per pane; the right pane's scroll restarts when it switches between the root sections and an operation, or between operations. The read-only notice scrolls with the left pane.
+- Data, sanitizing, query limits, and refresh are unchanged. The entry refresh is not keyed to the width class or the layout mode, so recomposing into another layout does not by itself add a refresh. Normal Activity recreation, including recreation caused by a configuration or window change, may run the existing entry refresh again; that lifecycle behavior predates ADMIN-ADAPT-02 and is unchanged by it.
 - Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).

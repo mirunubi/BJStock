@@ -4,9 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 
 /**
- * Shared width classes for navigation chrome and screen layout. The shell uses them to choose its chrome; each screen
- * may choose its own adaptive content layout from the same class (Home: Compact and Medium single column, Expanded two
- * columns, docs/165 §L). Other screens stay single-column until separately approved.
+ * Shared width classes for navigation chrome and screen layout. The shell uses them to choose its chrome; a screen may
+ * adopt a separately approved adaptive content layout from the same class:
+ * - Home: Compact and Medium single column, Expanded two columns (docs/165 §L).
+ * - Strategy: Compact and Medium single pane, Expanded list-detail (docs/165 §M).
+ * - 운영 · 감사: Compact and Medium single pane, Expanded two panes (docs/165 §N).
+ * Screens not separately approved keep their single-column layout at every width.
  */
 enum class NavWidthClass {
     COMPACT,

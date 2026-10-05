@@ -1,6 +1,7 @@
 package com.mirunubi.bjstock.feature.admin
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -31,10 +33,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mirunubi.bjstock.core.model.ForwardOperationStatus
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BackTopBar
+import com.mirunubi.bjstock.ui.navigation.LocalNavChrome
 
 @Composable
 fun AdminScreen(
@@ -62,20 +68,54 @@ fun AdminScreen(
             )
         },
     ) { innerPadding ->
+        val mode = AdminLayout.modeFor(LocalNavChrome.current.widthClass)
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            ScrollColumn {
-                if (detail != null) {
-                    DetailContent(detail)
-                } else {
-                    InfoBox(BJStockIcons.Lock, "읽기 전용 화면입니다. 실행이나 설정을 변경하지 않습니다.")
-                    StatusSection(state.status, viewModel::refresh)
-                    OperationsSection(state.operations, viewModel::refresh, viewModel::openOperation)
-                    AuditSection(state, viewModel)
-                    ErrorsSection(state, viewModel)
-                    EnvironmentSection(state.environment, viewModel::refresh)
+            when (mode) {
+                AdminLayoutMode.SINGLE_PANE -> ScrollColumn {
+                    if (detail != null) {
+                        DetailContent(detail)
+                    } else {
+                        AdminLayout.singlePane.forEach { AdminSectionContent(it, state, viewModel) }
+                    }
+                }
+                AdminLayoutMode.TWO_PANE -> {
+                    val selectedId = AdminLayout.selectedOperationId(mode, detail)
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        PaneColumn(Modifier.width(AdminLayout.LEFT_PANE_WIDTH_DP.dp)) {
+                            AdminLayout.left.forEach { AdminSectionContent(it, state, viewModel, selectedId) }
+                        }
+                        key(AdminLayout.rightPaneKey(detail)) {
+                            PaneColumn(Modifier.weight(1f)) {
+                                when (val pane = AdminLayout.rightPane(detail)) {
+                                    is AdminRightPane.Detail -> DetailContent(pane.detail)
+                                    AdminRightPane.Root -> AdminLayout.rightRoot.forEach { AdminSectionContent(it, state, viewModel) }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AdminSectionContent(
+    section: AdminSection,
+    state: AdminUiState,
+    viewModel: AdminViewModel,
+    selectedOperationId: Long? = null,
+) {
+    when (section) {
+        AdminSection.INFO -> InfoBox(BJStockIcons.Lock, "읽기 전용 화면입니다. 실행이나 설정을 변경하지 않습니다.")
+        AdminSection.STATUS -> StatusSection(state.status, viewModel::refresh)
+        AdminSection.OPERATIONS -> OperationsSection(state.operations, viewModel::refresh, viewModel::openOperation, selectedOperationId)
+        AdminSection.AUDIT -> AuditSection(state, viewModel)
+        AdminSection.ERRORS -> ErrorsSection(state, viewModel)
+        AdminSection.ENVIRONMENT -> EnvironmentSection(state.environment, viewModel::refresh)
     }
 }
 
@@ -112,13 +152,21 @@ private fun OperationsSection(
     section: SectionState<List<OperationRow>>,
     onReload: () -> Unit,
     onOpen: (Long) -> Unit,
+    selectedId: Long? = null,
 ) {
     SectionCard("최근 실행") {
         SectionBody(section, onReload) { rows ->
             rows.forEachIndexed { index, row ->
                 if (index > 0) HorizontalDivider()
+                val modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onOpen(row.id) }
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onOpen(row.id) },
+                    if (row.id == selectedId) {
+                        modifier
+                            .semantics { selected = true }
+                            .background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.small)
+                    } else {
+                        modifier
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -355,6 +403,20 @@ private fun ScrollColumn(content: @Composable () -> Unit) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        content()
+    }
+}
+
+/** One pane of the two-pane layout, scrolled on its own; the surrounding row does not scroll. */
+@Composable
+private fun PaneColumn(modifier: Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         content()
