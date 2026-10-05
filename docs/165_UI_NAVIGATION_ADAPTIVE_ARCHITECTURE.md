@@ -5,10 +5,10 @@
 | Document status | **NAV-1 IMPLEMENTED ON FEATURE BRANCH** |
 | Merge status | **NOT MERGED TO MAIN** (`feature/ui-strategy-admin-demo`) |
 | Physical UI | **NOT YET VERIFIED** |
-| Scope | Navigation chrome only: drawer, bottom bar, rail, top-level top bar. |
+| Scope | Navigation chrome only: drawer, bottom bar, rail, top-level top bar. Home content adaptation (HOME-ADAPT-02): §L. |
 | Related | docs/151 (UI/UX baseline, §3 navigation) |
 
-This document records the NAV-1 adaptive navigation shell and its human-approved decisions. It does not change Room / PostgreSQL schema, runtime, providers, scheduler, strategy engine, or any screen's content.
+This document records the NAV-1 adaptive navigation shell and its human-approved decisions. It does not change Room / PostgreSQL schema, runtime, providers, scheduler, or strategy engine. The original NAV-1 scope did not change any screen's content; later, separately approved adaptive screen-layout sections may extend content layout. HOME-ADAPT-02 (§L) changes the Home layout only; Home data and business semantics remain unchanged.
 
 ---
 
@@ -169,7 +169,7 @@ Drawer prohibition applies to subordinate/detail state at all width classes (HD-
 | NAV-CLEANUP-04 | Unreachable `TabHubs` / `TabHubScreen` retained. | `BJStockDestinations.kt` (`TabHubs`) |
 | NAV-CLEANUP-05 | Legacy developer screens keep private `TopAppBar`s (not unified with `BackTopBar`). | `BJStockChrome.kt` (`BackTopBar`) |
 | NAV-CLEANUP-06 | Material3 Adaptive / WindowSizeClass dependency deferred; NAV-1 uses local 600 / 840dp breakpoints. | `NavWidthClass.kt` |
-| NAV-CLEANUP-07 | Home adaptive 2-column layout deferred. | docs only |
+| NAV-CLEANUP-07 | Home adaptive 2-column layout. **Resolved on the feature branch by HOME-ADAPT-02** (§L). | `feature/home/HomeLayout.kt` |
 | NAV-CLEANUP-08 | Strategy List-Detail deferred. | docs only |
 | NAV-CLEANUP-09 | Admin List-Detail deferred. | docs only |
 | NAV-CLEANUP-10 | Fold posture (hinge / tabletop) handling deferred; needs androidx.window on the compile classpath. | docs only |
@@ -190,3 +190,24 @@ Remove a marker only in the gate that resolves that cleanup item.
 - No runtime, provider, scheduler, or strategy-engine changes.
 - No business logic, persistence, or new dependency.
 - Screen content unchanged; the five top-level screens and TabHub lost only the now-unused `onOpenSettings` parameter (gear removed per HD-NAV-07).
+
+## L. Home adaptive layout (HOME-ADAPT-02)
+
+HD-NAV-13 ("All screen content stays single-column") and §E ("screens need no width logic") describe NAV-1's scope. HOME-ADAPT-02 is the first gate after NAV-1 to adapt screen content, and only for Home:
+
+| Width class | Home layout |
+| --- | --- |
+| Compact | Phase 3 single column, unchanged |
+| Medium | Phase 3 single column, unchanged (two columns would be about 205dp inside each card at 600dp) |
+| Expanded | Two columns |
+
+| Expanded column | Sections (canonical order kept inside each column) |
+| --- | --- |
+| Left — 계좌 / 거래 | 모의자산 · 실행 중 전략 · 보유현황 · 최근 주문 · 체결 |
+| Right — 판단 / 운영 | 최근 전략 판단 · 최근 처리일 신호 · 자동운영 · 운영 경고 · 최근 오류 · 최근 Audit |
+
+- `HomeLayout` (pure) owns the slot order, the two groups, and `modeFor(NavWidthClass)`. Home reads the width class from `LocalNavChrome`, the same value the shell uses, so there is no second breakpoint system.
+- One outer vertical scroll holds a `Row` of two top-aligned, equally weighted columns: no cross-column row-height coupling, no independent scroll regions. Each column is a semantics traversal group, so TalkBack reads the left group, then the right.
+- Same `HomeViewModel` / `HomeActivityViewModel` state, same section composables, same links and retries; presenters, read models, ViewModels, queries, and DAOs are unchanged.
+- Core failure (approved M-1 decision): the left 모의자산 card keeps the global message, the disclosure, and the only core retry. Because 최근 전략 판단 / 자동운영 / 운영 경고 are then missing from the right column, it repeats the existing `HomePresenter.CORE_SECTIONS_UNAVAILABLE` line once at its top: no second retry button, no placeholder cards, no "normal" wording. 최근 처리일 신호 / 최근 오류 / 최근 Audit keep rendering.
+- Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).

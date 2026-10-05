@@ -3,7 +3,11 @@ package com.mirunubi.bjstock.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 
-/** Navigation chrome width classes. They choose the navigation chrome only; screen content stays single-column. */
+/**
+ * Shared width classes for navigation chrome and screen layout. The shell uses them to choose its chrome; each screen
+ * may choose its own adaptive content layout from the same class (Home: Compact and Medium single column, Expanded two
+ * columns, docs/165 §L). Other screens stay single-column until separately approved.
+ */
 enum class NavWidthClass {
     COMPACT,
     MEDIUM,

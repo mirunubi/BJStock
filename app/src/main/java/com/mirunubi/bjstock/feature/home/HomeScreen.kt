@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +31,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mirunubi.bjstock.feature.admin.SectionState
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
+import com.mirunubi.bjstock.ui.navigation.LocalNavChrome
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
 import com.mirunubi.bjstock.ui.navigation.TabTopBar
 
@@ -86,9 +90,9 @@ private fun HomeContent(
     onRetryActivity: () -> Unit,
     openLink: (HomeDestination) -> Unit,
 ) {
-    val content = core as? HomeUiState.Content
-    val section: @Composable (HomeActivitySection) -> Unit = { which ->
-        ActivitySection(which, activity.section(which), onRetryActivity, openLink)
+    val mode = HomeLayout.modeFor(LocalNavChrome.current.widthClass)
+    val slot: @Composable (HomeSlot) -> Unit = { which ->
+        HomeSlotContent(which, core, activity, onRetryCore, onRetryActivity, openLink)
     }
     Column(
         modifier = Modifier
@@ -97,24 +101,64 @@ private fun HomeContent(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        when (core) {
-            HomeUiState.Loading -> HomeCard(title = "모의자산") { LoadingLine("로딩 중") }
-            is HomeUiState.Error -> HomeCard(title = "모의자산") {
+        when (mode) {
+            HomeLayoutMode.SINGLE_COLUMN -> HomeLayout.singleColumn.forEach { slot(it) }
+            HomeLayoutMode.TWO_COLUMN -> Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                HomeColumn {
+                    HomeLayout.left.forEach { slot(it) }
+                }
+                HomeColumn {
+                    HomeLayout.rightColumnCoreNotice(core)?.let { StatusLine(icon = true, isError = true, text = it) }
+                    HomeLayout.right.forEach { slot(it) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.HomeColumn(content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier.weight(1f).semantics { isTraversalGroup = true },
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        content()
+    }
+}
+
+/** Core slots emit nothing unless the core load succeeded; the 모의자산 card carries the loading / failure state for them. */
+@Composable
+private fun HomeSlotContent(
+    slot: HomeSlot,
+    core: HomeUiState,
+    activity: HomeActivityState,
+    onRetryCore: () -> Unit,
+    onRetryActivity: () -> Unit,
+    openLink: (HomeDestination) -> Unit,
+) {
+    val content = core as? HomeUiState.Content
+    when (slot) {
+        HomeSlot.PORTFOLIO -> when (core) {
+            HomeUiState.Loading -> HomeCard(title = HomeSlot.PORTFOLIO.title) { LoadingLine("로딩 중") }
+            is HomeUiState.Error -> HomeCard(title = HomeSlot.PORTFOLIO.title) {
                 StatusLine(icon = true, isError = true, text = core.message)
                 Text(HomePresenter.CORE_SECTIONS_UNAVAILABLE, style = MaterialTheme.typography.bodyLarge)
                 Button(onClick = onRetryCore, modifier = Modifier.heightIn(min = 48.dp)) { Text("다시 시도") }
             }
             is HomeUiState.Content -> PortfolioSection(core.portfolio)
         }
-        section(HomeActivitySection.RUNS)
-        content?.let { DecisionSection(it.decision) }
-        section(HomeActivitySection.SIGNALS)
-        content?.let { HoldingsSection(it.holdings) }
-        section(HomeActivitySection.TRADES)
-        content?.let { AutoSection(it.auto) { openLink(HomeDestination.ADMIN) } }
-        content?.let { AlertsSection(it.alerts) }
-        section(HomeActivitySection.ERRORS)
-        section(HomeActivitySection.AUDIT)
+        HomeSlot.DECISION -> content?.let { DecisionSection(it.decision) }
+        HomeSlot.HOLDINGS -> content?.let { HoldingsSection(it.holdings) }
+        HomeSlot.AUTO -> content?.let { AutoSection(it.auto) { openLink(HomeDestination.ADMIN) } }
+        HomeSlot.ALERTS -> content?.let { AlertsSection(it.alerts) }
+        HomeSlot.RUNS, HomeSlot.SIGNALS, HomeSlot.TRADES, HomeSlot.ERRORS, HomeSlot.AUDIT -> {
+            val section = checkNotNull(slot.activity)
+            ActivitySection(section, activity.section(section), onRetryActivity, openLink)
+        }
     }
 }
 
@@ -177,7 +221,7 @@ private fun LoadingLine(text: String) {
 
 @Composable
 private fun PortfolioSection(card: PortfolioCard) {
-    HomeCard(title = "모의자산") {
+    HomeCard(title = HomeSlot.PORTFOLIO.title) {
         when (card) {
             PortfolioCard.NoRun -> EmptyText(HomePresenter.NO_RUN)
             is PortfolioCard.Summary -> {
