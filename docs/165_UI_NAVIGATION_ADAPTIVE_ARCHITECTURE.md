@@ -255,3 +255,29 @@ The third separately-approved content gate after NAV-1, for the read-only 운영
 - Scroll: Compact and Medium keep one scroll. Expanded uses a non-scrolling row with one independent scroll per pane; the right pane's scroll restarts when it switches between the root sections and an operation, or between operations. The read-only notice scrolls with the left pane.
 - Data, sanitizing, query limits, and refresh are unchanged. The entry refresh is not keyed to the width class or the layout mode, so recomposing into another layout does not by itself add a refresh. Normal Activity recreation, including recreation caused by a configuration or window change, may run the existing entry refresh again; that lifecycle behavior predates ADMIN-ADAPT-02 and is unchanged by it.
 - Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).
+
+## O. Paper Trading Adaptive Layout (PAPER-ADAPT-02)
+
+The fourth separately-approved content gate after NAV-1, for the 모의투자 primary tab only:
+
+| Width class | 모의투자 layout |
+| --- | --- |
+| Compact | Single column, unchanged: notice · 모의투자 목록 · 자동운영 · selected Run detail · 최근 실행 기록 in one scroll |
+| Medium | Same as Compact (a list-detail split beside the rail would make each pane narrower than a phone) |
+| Expanded | Notice full width on top; below it a 360dp left pane, 16dp gap, right pane fills the rest |
+
+| Expanded area | Content |
+| --- | --- |
+| Full width | The existing dismissible notice, only while there is one |
+| Left | 모의투자 목록 (with 새 모의투자) · 자동운영 (with 지금 실행) · 최근 실행 기록 |
+| Right, no Run | Blank (approved HD-PA-01): no placeholder and no new wording; the Run list already shows the empty state |
+| Right, Run selected | The existing Run detail (Loading / Failed with 다시 시도 / Loaded) with every existing write control |
+
+- `PaperLayout` (pure) owns `modeFor(NavWidthClass)`, the single-pane order, the full-width / left / right groups, the right-pane choice, and the right-pane key. Notice, then the left pane, then the right pane cover every single-pane section exactly once (approved HD-PA-02). The screen reads the width class from `LocalNavChrome`; no breakpoint values live in `feature/paper`.
+- Selection is unchanged: the existing `selectedRunId`, `selectRun`, and `defaultSelection(runs)` drive both layouts; no new or duplicate selection state. The selected Run keeps its existing primary border in the list; no new highlight style.
+- 자동운영 and 최근 실행 기록 stay global (not filtered by the selected Run). Dialogs stay modal with a single instance for both layouts.
+- Scroll: Compact and Medium keep one scroll. Expanded uses a non-scrolling row with one independent scroll per pane; the right pane's scroll restarts when the selected Run changes.
+- Back is unchanged: the detail is inline in both layouts, so no Back handler, back arrow, or route is added. 모의투자 stays a drawer-capable primary tab.
+- Orders, executions, positions, cash ledger, snapshots, Run identity, policies, the forward runtime, WorkManager, and the database are unchanged; no real KIS trading.
+- No new NAV-CLEANUP item; NAV-CLEANUP-10 stays deferred.
+- Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).

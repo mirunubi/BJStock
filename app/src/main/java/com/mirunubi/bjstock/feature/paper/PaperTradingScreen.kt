@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -37,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,6 +55,7 @@ import com.mirunubi.bjstock.core.model.OrderSide
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
+import com.mirunubi.bjstock.ui.navigation.LocalNavChrome
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
 import com.mirunubi.bjstock.ui.navigation.TabTopBar
 
@@ -67,26 +70,64 @@ fun PaperTradingScreen(
         topBar = { TabTopBar(title = PrimaryTab.PAPER_TRADING.label) },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.PAPER_TRADING, onSelect = onSelectTab) },
     ) { innerPadding ->
+        val mode = PaperLayout.modeFor(LocalNavChrome.current.widthClass)
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            ScrollColumn {
-                state.notice?.let { NoticeBanner(it, viewModel::dismissNotice) }
-                RunListSection(state, viewModel)
-                AutomationSection(state.automation, state.busy, viewModel)
-                when (val detail = state.detail) {
-                    DetailState.None -> Unit
-                    DetailState.Loading -> LoadingLine("불러오는 중")
-                    is DetailState.Failed -> {
-                        WarningLine(detail.message)
-                        OutlinedButton(onClick = viewModel::refresh) { Text("다시 시도") }
-                    }
-                    is DetailState.Loaded -> RunDetail(detail.view, state, viewModel)
+            when (mode) {
+                PaperLayoutMode.SINGLE_PANE -> ScrollColumn {
+                    PaperLayout.singlePane.forEach { PaperSectionContent(it, state, viewModel) }
                 }
-                OperationsSection(state.automation)
+                PaperLayoutMode.LIST_DETAIL -> Column(Modifier.fillMaxSize()) {
+                    if (state.notice != null) {
+                        PaperLayout.fullWidth.forEach { section ->
+                            Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) { PaperSectionContent(section, state, viewModel) }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        PaneColumn(Modifier.width(PaperLayout.LEFT_PANE_WIDTH_DP.dp)) {
+                            PaperLayout.left.forEach { PaperSectionContent(it, state, viewModel) }
+                        }
+                        key(PaperLayout.rightPaneKey(state.selectedRunId)) {
+                            PaneColumn(Modifier.weight(1f)) {
+                                when (PaperLayout.rightPane(state.detail)) {
+                                    PaperRightPane.Blank -> Unit
+                                    is PaperRightPane.Detail -> PaperLayout.right.forEach { PaperSectionContent(it, state, viewModel) }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     Dialogs(state, viewModel)
+}
+
+@Composable
+private fun PaperSectionContent(section: PaperSection, state: PaperTradingUiState, viewModel: PaperTradingViewModel) {
+    when (section) {
+        PaperSection.NOTICE -> state.notice?.let { NoticeBanner(it, viewModel::dismissNotice) }
+        PaperSection.RUN_LIST -> RunListSection(state, viewModel)
+        PaperSection.AUTOMATION -> AutomationSection(state.automation, state.busy, viewModel)
+        PaperSection.DETAIL -> DetailSection(state, viewModel)
+        PaperSection.RECENT_OPERATIONS -> OperationsSection(state.automation)
+    }
+}
+
+@Composable
+private fun DetailSection(state: PaperTradingUiState, viewModel: PaperTradingViewModel) {
+    when (val detail = state.detail) {
+        DetailState.None -> Unit
+        DetailState.Loading -> LoadingLine("불러오는 중")
+        is DetailState.Failed -> {
+            WarningLine(detail.message)
+            OutlinedButton(onClick = viewModel::refresh) { Text("다시 시도") }
+        }
+        is DetailState.Loaded -> RunDetail(detail.view, state, viewModel)
+    }
 }
 
 // region Run list
@@ -638,6 +679,20 @@ private fun ScrollColumn(content: @Composable () -> Unit) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        content()
+    }
+}
+
+/** One pane of the list-detail layout, scrolled on its own; the surrounding row does not scroll. */
+@Composable
+private fun PaneColumn(modifier: Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         content()
