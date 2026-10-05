@@ -170,7 +170,7 @@ Drawer prohibition applies to subordinate/detail state at all width classes (HD-
 | NAV-CLEANUP-05 | Legacy developer screens keep private `TopAppBar`s (not unified with `BackTopBar`). | `BJStockChrome.kt` (`BackTopBar`) |
 | NAV-CLEANUP-06 | Material3 Adaptive / WindowSizeClass dependency deferred; NAV-1 uses local 600 / 840dp breakpoints. | `NavWidthClass.kt` |
 | NAV-CLEANUP-07 | Home adaptive 2-column layout. **Resolved on the feature branch by HOME-ADAPT-02** (§L). | `feature/home/HomeLayout.kt` |
-| NAV-CLEANUP-08 | Strategy List-Detail deferred. | docs only |
+| NAV-CLEANUP-08 | Strategy List-Detail. **Resolved on the feature branch by STRATEGY-ADAPT-02** (§M). | `feature/strategy/StrategyLayout.kt` |
 | NAV-CLEANUP-09 | Admin List-Detail deferred. | docs only |
 | NAV-CLEANUP-10 | Fold posture (hinge / tabletop) handling deferred; needs androidx.window on the compile classpath. | docs only |
 
@@ -210,4 +210,24 @@ HD-NAV-13 ("All screen content stays single-column") and §E ("screens need no w
 - One outer vertical scroll holds a `Row` of two top-aligned, equally weighted columns: no cross-column row-height coupling, no independent scroll regions. Each column is a semantics traversal group, so TalkBack reads the left group, then the right.
 - Same `HomeViewModel` / `HomeActivityViewModel` state, same section composables, same links and retries; presenters, read models, ViewModels, queries, and DAOs are unchanged.
 - Core failure (approved M-1 decision): the left 모의자산 card keeps the global message, the disclosure, and the only core retry. Because 최근 전략 판단 / 자동운영 / 운영 경고 are then missing from the right column, it repeats the existing `HomePresenter.CORE_SECTIONS_UNAVAILABLE` line once at its top: no second retry button, no placeholder cards, no "normal" wording. 최근 처리일 신호 / 최근 오류 / 최근 Audit keep rendering.
+- Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).
+
+## M. Strategy adaptive layout (STRATEGY-ADAPT-02)
+
+The second separately-approved content gate after NAV-1, for the 전략 tab only:
+
+| Width class | Strategy layout |
+| --- | --- |
+| Compact | Single pane, unchanged: one scroll; root shows 전략 템플릿 (미리보기) then 전략 목록; an open layer replaces the root |
+| Medium | Same as Compact (beside the rail, a 360dp master would leave about 110dp for the detail at 600dp) |
+| Expanded | List-detail: 360dp master pane, 16dp gap, detail pane fills the rest |
+
+- `StrategyLayout` (pure) owns `modeFor(NavWidthClass)`, the detail resolver, the master highlight, and the empty-detail text. The screen reads the width class from `LocalNavChrome`; no breakpoint values live in `feature/strategy`.
+- Expanded master: 전략 템플릿 (미리보기) above 전략 목록. The two lists stay separate; the preview keeps its demo frame, 미리보기 / 예시 / 미저장 badges, demo banner, and boundary note.
+- Expanded detail, in priority order: template preview editor, then version, then strategy, otherwise "왼쪽에서 미리보기 템플릿 또는 전략을 선택하세요." Nothing is auto-selected. The preview editor keeps its disabled, locked 전략 버전 만들기 button.
+- Exclusive open: opening a template or 새 템플릿 first closes the open strategy / version layers; opening a strategy or version, or starting 새 전략, first closes the open template. Only the open family is closed, so the two families are never open together and Compact (where the master is visible only with nothing open) behaves exactly as before. Built on the existing open / close / back calls; no ViewModel, persistence, or navigation change.
+- Unsaved switching (approved HD-SA-01): selecting another master item replaces the open detail, as Back does today; there is no dirty prompt. Template edits are in-memory preview only; real-strategy drafts keep their existing save / discard rules.
+- Highlight (approved HD-SA-03): in Expanded only, the open template or the open strategy is marked selected (border, container color, `selected` semantics). Only one family can be marked; Compact and Medium cards are unchanged.
+- Scroll: Compact and Medium keep one scroll. Expanded uses a non-scrolling row with one independent scroll per pane; the detail scroll restarts when the open item changes.
+- Back, the top-bar back arrow, the drawer prohibition, and the rail Developer Tools rule still follow `layered` (any open layer). Dialogs stay modal and unchanged. The NoticeBanner spans the full width above the panes.
 - Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).

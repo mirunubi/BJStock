@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -33,6 +34,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -42,9 +45,20 @@ import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewPresenter a
 
 // region List section (top of the 전략 tab)
 
+/**
+ * [onOpen] / [onCreate] let the 전략 tab close the real strategy layers first; [selectedId] and [showMessage] are for
+ * the list-detail layout only. The defaults are the single-pane behavior.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TemplatePreviewSection(state: TemplatePreviewUiState, viewModel: TemplatePreviewViewModel) {
+fun TemplatePreviewSection(
+    state: TemplatePreviewUiState,
+    viewModel: TemplatePreviewViewModel,
+    onOpen: (Long) -> Unit = viewModel::open,
+    onCreate: () -> Unit = viewModel::create,
+    selectedId: Long? = null,
+    showMessage: Boolean = true,
+) {
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
         border = BorderStroke(2.dp, MaterialTheme.colorScheme.tertiary),
@@ -54,17 +68,18 @@ fun TemplatePreviewSection(state: TemplatePreviewUiState, viewModel: TemplatePre
                 Icon(BJStockIcons.Strategy, contentDescription = null, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(P.SECTION_TITLE, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = viewModel::create, modifier = Modifier.heightIn(min = 48.dp)) { Text("새 템플릿") }
+                OutlinedButton(onClick = onCreate, modifier = Modifier.heightIn(min = 48.dp)) { Text("새 템플릿") }
             }
             DemoBanner()
-            state.message?.let { MessageLine(it, viewModel::clearMessage) }
+            if (showMessage) state.message?.let { MessageLine(it, viewModel::clearMessage) }
             if (state.cards.isEmpty()) {
                 Text(P.LIST_EMPTY, style = MaterialTheme.typography.bodyLarge)
             } else {
                 state.cards.forEach { card ->
                     TemplateCardItem(
                         card = card,
-                        onOpen = { viewModel.open(card.id) },
+                        selected = card.id == selectedId,
+                        onOpen = { onOpen(card.id) },
                         onDuplicate = { viewModel.duplicate(card.id) },
                         onRename = { viewModel.requestRename(card.id) },
                         onDelete = { viewModel.requestDelete(card.id) },
@@ -81,12 +96,22 @@ fun TemplatePreviewSection(state: TemplatePreviewUiState, viewModel: TemplatePre
 @Composable
 private fun TemplateCardItem(
     card: TemplateCard,
+    selected: Boolean,
     onOpen: () -> Unit,
     onDuplicate: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    OutlinedCard(Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(onClick = onOpen)) {
+    val modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(onClick = onOpen)
+    OutlinedCard(
+        modifier = if (selected) modifier.semantics { this.selected = true } else modifier,
+        colors = if (selected) {
+            CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        } else {
+            CardDefaults.outlinedCardColors()
+        },
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else CardDefaults.outlinedCardBorder(),
+    ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(card.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))

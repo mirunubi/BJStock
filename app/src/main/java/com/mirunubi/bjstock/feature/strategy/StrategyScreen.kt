@@ -1,5 +1,6 @@
 package com.mirunubi.bjstock.feature.strategy
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -37,10 +39,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -59,6 +65,7 @@ import com.mirunubi.bjstock.feature.strategy.template.TemplatePreviewViewModel
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
 import com.mirunubi.bjstock.ui.navigation.LayerBackHandler
+import com.mirunubi.bjstock.ui.navigation.LocalNavChrome
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
 import com.mirunubi.bjstock.ui.navigation.TabTopBar
 
@@ -84,18 +91,62 @@ fun StrategyScreen(
         },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.STRATEGY, onSelect = onSelectTab) },
     ) { innerPadding ->
+        val mode = StrategyLayout.modeFor(LocalNavChrome.current.widthClass)
+        val detail = StrategyLayout.detailOf(preview.selectedId, state.version, state.strategy)
+        val families = remember(viewModel, previewViewModel) { StrategyFamilies(viewModel, previewViewModel) }
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            ScrollColumn {
-                state.notice?.let { NoticeBanner(it, viewModel::dismissNotice) }
-                val version = state.version
-                val strategy = state.strategy
-                when {
-                    previewOpen -> TemplatePreviewDetail(preview, previewViewModel)
-                    version != null -> VersionContent(version, state.busy, viewModel)
-                    strategy != null -> StrategyContent(strategy, state.busy, viewModel)
-                    else -> {
-                        TemplatePreviewSection(preview, previewViewModel)
-                        ListContent(state.list, viewModel)
+            when (mode) {
+                StrategyLayoutMode.SINGLE_PANE -> ScrollColumn {
+                    state.notice?.let { NoticeBanner(it, viewModel::dismissNotice) }
+                    when (detail) {
+                        is StrategyDetail.Template -> TemplatePreviewDetail(preview, previewViewModel)
+                        is StrategyDetail.Version -> VersionContent(detail.layer, state.busy, viewModel)
+                        is StrategyDetail.Strategy -> StrategyContent(detail.panel, state.busy, viewModel)
+                        StrategyDetail.None -> {
+                            TemplatePreviewSection(preview, previewViewModel)
+                            ListContent(state.list, viewModel)
+                        }
+                    }
+                }
+                StrategyLayoutMode.LIST_DETAIL -> {
+                    val selection = StrategyLayout.masterSelection(mode, preview.selectedId, state.strategy)
+                    Column(Modifier.fillMaxSize()) {
+                        state.notice?.let {
+                            Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) { NoticeBanner(it, viewModel::dismissNotice) }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            PaneColumn(Modifier.width(StrategyLayout.MASTER_PANE_WIDTH_DP.dp)) {
+                                TemplatePreviewSection(
+                                    state = preview,
+                                    viewModel = previewViewModel,
+                                    onOpen = families::openTemplate,
+                                    onCreate = families::createTemplate,
+                                    selectedId = selection.templateId,
+                                    showMessage = detail !is StrategyDetail.Template,
+                                )
+                                ListContent(
+                                    list = state.list,
+                                    viewModel = viewModel,
+                                    onOpen = families::openStrategy,
+                                    onCreate = families::showCreateStrategy,
+                                    selectedId = selection.strategyId,
+                                )
+                            }
+                            key(StrategyLayout.detailKey(detail)) {
+                                PaneColumn(Modifier.weight(1f)) {
+                                    when (detail) {
+                                        is StrategyDetail.Template -> TemplatePreviewDetail(preview, previewViewModel)
+                                        is StrategyDetail.Version -> VersionContent(detail.layer, state.busy, viewModel)
+                                        is StrategyDetail.Strategy ->
+                                            StrategyContent(detail.panel, state.busy, viewModel, onOpenVersion = families::openVersion)
+                                        StrategyDetail.None -> BodyText(StrategyLayout.EMPTY_DETAIL)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -127,10 +178,16 @@ fun StrategyScreen(
 // region Strategy list
 
 @Composable
-private fun ListContent(list: ListState, viewModel: StrategyViewModel) {
+private fun ListContent(
+    list: ListState,
+    viewModel: StrategyViewModel,
+    onOpen: (Long) -> Unit = viewModel::openStrategy,
+    onCreate: () -> Unit = viewModel::showCreateStrategy,
+    selectedId: Long? = null,
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("전략 목록", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Button(onClick = viewModel::showCreateStrategy, modifier = Modifier.heightIn(min = 48.dp)) { Text("새 전략") }
+        Button(onClick = onCreate, modifier = Modifier.heightIn(min = 48.dp)) { Text("새 전략") }
     }
     when (list) {
         ListState.Loading -> LoadingLine("불러오는 중")
@@ -142,14 +199,25 @@ private fun ListContent(list: ListState, viewModel: StrategyViewModel) {
             if (list.cards.isEmpty()) {
                 BodyText(StrategyPresenter.LIST_EMPTY)
             } else {
-                list.cards.forEach { card -> StrategyCardItem(card) { viewModel.openStrategy(card.strategyId) } }
+                list.cards.forEach { card ->
+                    StrategyCardItem(card, selected = card.strategyId == selectedId) { onOpen(card.strategyId) }
+                }
             }
     }
 }
 
 @Composable
-private fun StrategyCardItem(card: StrategyCard, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(onClick = onClick)) {
+private fun StrategyCardItem(card: StrategyCard, selected: Boolean, onClick: () -> Unit) {
+    val modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(onClick = onClick)
+    Card(
+        modifier = if (selected) modifier.semantics { this.selected = true } else modifier,
+        colors = if (selected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        },
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+    ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(card.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -166,7 +234,12 @@ private fun StrategyCardItem(card: StrategyCard, onClick: () -> Unit) {
 // region Strategy versions
 
 @Composable
-private fun StrategyContent(strategy: StrategyPanel, busy: Boolean, viewModel: StrategyViewModel) {
+private fun StrategyContent(
+    strategy: StrategyPanel,
+    busy: Boolean,
+    viewModel: StrategyViewModel,
+    onOpenVersion: (Long) -> Unit = viewModel::openVersion,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(strategy.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(strategy.code, style = MaterialTheme.typography.bodyMedium)
@@ -184,7 +257,7 @@ private fun StrategyContent(strategy: StrategyPanel, busy: Boolean, viewModel: S
             if (versions.rows.isEmpty()) {
                 BodyText(StrategyPresenter.VERSIONS_EMPTY)
             } else {
-                versions.rows.forEach { row -> VersionRowItem(row) { viewModel.openVersion(row.versionId) } }
+                versions.rows.forEach { row -> VersionRowItem(row) { onOpenVersion(row.versionId) } }
             }
     }
 }
@@ -752,6 +825,20 @@ private fun ScrollColumn(content: @Composable () -> Unit) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        content()
+    }
+}
+
+/** One pane of the list-detail layout, scrolled on its own; the surrounding row does not scroll. */
+@Composable
+private fun PaneColumn(modifier: Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         content()
