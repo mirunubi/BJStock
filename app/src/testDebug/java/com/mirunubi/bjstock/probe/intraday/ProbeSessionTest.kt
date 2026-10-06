@@ -61,6 +61,7 @@ class ProbeSessionTest {
             allowlist = ProbeWebSocketAllowlist(ProbeEndpoints.KIS_VIRTUAL),
             approvalKey = ProbeSecret(ProbeFixtures.FAKE_APPROVAL_KEY),
             recorder = recorder,
+            scrub = { it },
             clock = clock,
             scope = scope,
             tracker = StreamContinuityTracker(),
@@ -128,7 +129,11 @@ class ProbeSessionTest {
         assertEquals("1", failure["pingpong_count_this_connection"]!!.jsonPrimitive.content)
         assertTrue(failure.containsKey("connection_duration_nanos"))
         assertTrue(failure.containsKey("since_last_pingpong_nanos"))
-        assertFalse(failure.toString().contains("reset"))
+        // WS-CONNECT-02: the bounded message is recorded; this fake failure carried no response.
+        assertEquals("reset", failure["error_message"]!!.jsonPrimitive.content)
+        assertEquals("false", failure["response_present"]!!.jsonPrimitive.content)
+        assertFalse(failure.containsKey("response_code"))
+        assertEquals("1", failure["attempt"]!!.jsonPrimitive.content)
 
         val text = ProbeFixtures.readAll(temp.root)
         ProbeFixtures.ALL_SECRETS.forEach { assertFalse("leaked $it", text.contains(it)) }

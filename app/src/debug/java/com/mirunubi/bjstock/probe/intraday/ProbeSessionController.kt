@@ -348,6 +348,7 @@ class ProbeSessionController(
             allowlist = ProbeWebSocketAllowlist(pass.endpoints),
             approvalKey = approvalKey,
             recorder = session.recorder,
+            scrub = session.scrubber::scrub,
             clock = clock,
             scope = scope,
             tracker = session.tracker,
@@ -545,7 +546,7 @@ class ProbeSessionController(
         traffic: JsonObject,
         thermal: JsonObject,
     ): JsonObject = buildJsonObject {
-        put("evidence_schema_version", 2)
+        put("evidence_schema_version", 3)
         put("session_id", sessionId)
         put("gate", "Phase 12-B2")
         put("app", appInfo)

@@ -38,6 +38,8 @@ class ProbeStreamSession(
     private val allowlist: ProbeWebSocketAllowlist,
     private val approvalKey: ProbeSecret,
     private val recorder: ProbeRecorder,
+    /** The session's [SecretScrubber.scrub], applied to failure messages before they are truncated. */
+    private val scrub: (String) -> String,
     private val clock: ProbeClock,
     private val scope: CoroutineScope,
     private val tracker: StreamContinuityTracker,
@@ -96,7 +98,7 @@ class ProbeStreamSession(
             attempt
         }
         recorder.record(ProbeEventType.WS_CONNECTING, buildJsonObject { put("attempt", currentAttempt) })
-        val newCallbacks = Callbacks()
+        val newCallbacks = Callbacks(currentAttempt, clock.elapsedRealtimeNanos())
         synchronized(lock) {
             if (!running) return
             callbacks = newCallbacks
@@ -210,7 +212,7 @@ class ProbeStreamSession(
             type,
             buildJsonObject {
                 fields.forEach { (key, value) -> put(key, value) }
-                error?.let { put("error_class", it.javaClass.simpleName) }
+                error?.let { ProbeThrowableTelemetry.fields(it, scrub).forEach { (key, value) -> put(key, value) } }
                 callbacks.connectionTiming(this, now)
             },
         )
@@ -234,7 +236,8 @@ class ProbeStreamSession(
     private fun allowlistDenial(error: Throwable): ProbeAllowlistDeniedException? =
         generateSequence(error) { it.cause }.take(MAX_CAUSE_DEPTH).filterIsInstance<ProbeAllowlistDeniedException>().firstOrNull()
 
-    private inner class Callbacks : ProbeSocketCallbacks {
+    /** One instance per connect attempt; [connectAttempt] is the number its `WS_CONNECTING` event recorded. */
+    private inner class Callbacks(val connectAttempt: Int, private val startedAtNanos: Long) : ProbeSocketCallbacks {
         @Volatile
         var active = true
         var target: ProbeSocket? = null
@@ -280,7 +283,29 @@ class ProbeStreamSession(
         override fun onClosed(code: Int) =
             onConnectionLost(this, ProbeEventType.WS_DISCONNECTED, null, buildJsonObject { put("close_code", code) })
 
-        override fun onFailure(error: Throwable) = onConnectionLost(this, ProbeEventType.WS_FAILURE, error, buildJsonObject { })
+        override fun onFailure(error: Throwable) = onFailure(error, null)
+
+        override fun onFailure(error: Throwable, responseCode: Int?) = onConnectionLost(
+            this,
+            ProbeEventType.WS_FAILURE,
+            error,
+            buildJsonObject {
+                put("response_present", responseCode != null)
+                responseCode?.let { put("response_code", it) }
+            },
+        )
+
+        override fun onConnectStage(stage: ProbeConnectStage, fields: JsonObject) {
+            if (!active) return
+            recorder.record(
+                stage.eventType,
+                buildJsonObject {
+                    fields.forEach { (key, value) -> put(key, value) }
+                    put("attempt", connectAttempt)
+                    put("since_attempt_start_nanos", clock.elapsedRealtimeNanos() - startedAtNanos)
+                },
+            )
+        }
 
         fun notePingPong(nowNanos: Long) = synchronized(lock) {
             pingPongCount++
@@ -288,6 +313,8 @@ class ProbeStreamSession(
         }
 
         fun connectionTiming(builder: JsonObjectBuilder, nowNanos: Long) = synchronized(lock) {
+            builder.put("attempt", connectAttempt)
+            builder.put("since_attempt_start_nanos", nowNanos - startedAtNanos)
             builder.put("connection_opened", openedAtNanos != null)
             openedAtNanos?.let { builder.put("connection_duration_nanos", nowNanos - it) }
             builder.put("pingpong_count_this_connection", pingPongCount)

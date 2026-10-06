@@ -268,6 +268,11 @@ class ProbeGateAndAllowlistTest {
                     override fun onMessage(webSocket: WebSocket, text: String) {
                         serverMessages.add(text)
                     }
+
+                    // MockWebServer shutdown blocks on a server socket that received close but never answered it.
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                        webSocket.close(1000, null)
+                    }
                 }),
             )
             server.start()

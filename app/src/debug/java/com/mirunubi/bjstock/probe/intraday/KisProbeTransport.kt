@@ -45,6 +45,12 @@ interface ProbeSocketCallbacks {
     fun onText(text: String)
     fun onClosed(code: Int)
     fun onFailure(error: Throwable)
+
+    /** [responseCode] is the HTTP status of the response OkHttp passed to `onFailure`, if any; nothing else of it is read. */
+    fun onFailure(error: Throwable, responseCode: Int?) = onFailure(error)
+
+    /** WS-CONNECT-02 telemetry for the attempt these callbacks belong to. */
+    fun onConnectStage(stage: ProbeConnectStage, fields: JsonObject) = Unit
 }
 
 interface ProbeNetwork {
@@ -127,8 +133,13 @@ class KisProbeTransport internal constructor(
         }
     }
 
+    /** Each attempt gets its own telemetry Dns and stage interceptor; every other client setting is inherited unchanged. */
     override fun connect(callbacks: ProbeSocketCallbacks): ProbeSocket {
-        val socket = wsClient.newWebSocket(
+        val attemptClient = wsClient.newBuilder()
+            .dns(ProbeTelemetryDns(wsClient.dns, callbacks))
+            .addInterceptor(ProbeConnectStageInterceptor(callbacks))
+            .build()
+        val socket = attemptClient.newWebSocket(
             Request.Builder().url(endpoints.wsUrl).build(),
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) = callbacks.onOpen()
@@ -137,7 +148,8 @@ class KisProbeTransport internal constructor(
                     webSocket.close(1000, null)
                 }
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = callbacks.onClosed(code)
-                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = callbacks.onFailure(t)
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) =
+                    callbacks.onFailure(t, response?.code)
             },
         )
         return object : ProbeSocket {

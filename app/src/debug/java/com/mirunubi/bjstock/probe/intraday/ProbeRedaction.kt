@@ -31,6 +31,12 @@ object ProbeRedaction {
 
     fun isForbiddenKey(key: String): Boolean =
         key.lowercase().replace('-', '_') in FORBIDDEN_KEYS
+
+    /** Free text that names any forbidden key at all is withheld whole, even after scrubbing. */
+    fun mentionsForbiddenKey(text: String): Boolean {
+        val normalized = text.lowercase().replace('-', '_')
+        return FORBIDDEN_KEYS.any { normalized.contains(it) }
+    }
 }
 
 /**

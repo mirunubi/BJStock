@@ -51,7 +51,7 @@
   - A per-session `SecretScrubber` filters every evidence line.
   - There is no logging interceptor and no Logcat output.
   - The subscription message (which contains the approval key) is sent on the socket only.
-  - Errors record class names and probe-defined codes only; exception messages are never stored or displayed.
+  - Errors record class names and probe-defined codes only; exception messages are never displayed. Exception: since WS-CONNECT-02 (§11), a WebSocket connection-loss event stores scrubbed, length-bounded messages of the failure, its cause chain and its suppressed exceptions.
 - **Token custody:** a REST token is needed only when the optional minute-bar observation is enabled. A stored VIRTUAL token is reused when it is valid for more than 5 minutes. Otherwise a new token is held in memory only and never persisted.
 
 ## 3. Foreground service
@@ -176,3 +176,50 @@ This observation proves nothing yet about `specialUse` FGS, screen-off runtime, 
 - `gradlew.bat :app:assembleDebug`: build succeeded. The APK was not installed.
 - `git diff --check`: clean, including all untracked probe files.
 - Merged debug manifest contains the probe activity, the service, the four permissions and the network security config. The merged release manifest contains none of them.
+
+## 11. WS-CONNECT-02 — bounded WebSocket connection-stage telemetry (telemetry only)
+
+- **Reason.** The B2 physical smoke recorded 10 initial WebSocket connect failures. The evidence contained only `error_class=IOException`. DNS success was observed for 10 of 11 attempts (attempts 1 and 3–11); no DNS lookup line was logged for attempt 2, which may have used a cached result. Where a DNS success was observed, the failure followed it by about 100–220 ms. WS-CONNECT-01 (read-only) could not classify the failure further. The root cause remains **UNKNOWN**.
+- **No behavioral authority.** This change adds observation only. These are unchanged:
+  - the endpoint, allowlist, timeouts, ping interval and `retryOnConnectionFailure`;
+  - the backoff schedule (1, 2, 5, 10, then 30 s, no jitter, no limit, reset on open);
+  - approval and approval-key reuse, subscription timing and payload, and the parser;
+  - the FGS, KIS REST, the database and `app/src/main`.
+  - Every hook calls its delegate exactly once, returns its exact result or rethrows its exact exception, and drops its own telemetry failures. Tests pin each of these points.
+- **B2 result not rewritten.** The B2 classification (PASS — UNATTENDED WITH LIMITATIONS) stands as recorded. This telemetry only serves a later, separately authorized run.
+- **Hooks.** `KisProbeTransport.connect` builds a per-attempt client with `wsClient.newBuilder()`, which shares the dispatcher and connection pool. On that client:
+  - a DNS wrapper (`ProbeTelemetryDns`) delegates to the original DNS;
+  - an application interceptor (`ProbeConnectStageInterceptor`) sits after the endpoint allowlist interceptor;
+  - the listener's `onFailure` now also passes the response status.
+- **OkHttp 4.12 limitation (verified in bytecode).**
+  - For WebSocket calls, `RealCall` skips network interceptors.
+  - `RealWebSocket.connect` replaces the EventListener with `EventListener.NONE`.
+  - As a result, the TCP connection, the remote IP:port and the TCP/upgrade boundary are **not observable**. The stage events record `tcp_connection_observable=false` rather than guess.
+  - This corrects the WS-CONNECT-01 suggestion to use a network interceptor.
+  - The application interceptor sees the whole upgrade call, including OkHttp's internal route retries.
+- **New events.** Every new event carries `attempt` (the session's connect-attempt number) and `since_attempt_start_nanos` (monotonic). `WS_FAILURE` and `WS_DISCONNECTED` now carry the same two fields.
+
+| Event | Fields |
+|---|---|
+| `WS_DNS_START` | `host_is_provider_endpoint`; `host` only when it is the fixed VIRTUAL WebSocket host |
+| `WS_DNS_END` | `result`, `elapsed_nanos`; on success `address_count`, `ipv4_count`, `ipv6_count` (never a literal address); on failure `error_class` |
+| `WS_CONNECT_STAGE_START` | `tcp_connection_observable=false` |
+| `WS_UPGRADE_RESPONSE` | `elapsed_nanos`, `response_code` |
+| `WS_CONNECT_STAGE_FAILURE` | `elapsed_nanos`, `error_class` |
+| `WS_FAILURE` (added fields) | `error_message`; `cause_N_class` / `cause_N_message` (up to 7 causes, identity-based cycle stop, `cause_chain_truncated`); `suppressed_count`, `suppressed_N_class` / `suppressed_N_message` (up to 3); `response_present`, and `response_code` only when a response exists |
+
+- **Security boundary.**
+  - Never recorded: the app key, app secret, approval key, access token, any Authorization or Bearer value, request or response headers or bodies, and the subscription JSON.
+  - Each message is first passed through the session `SecretScrubber`. The credentials and approval key are registered before the WebSocket connects.
+  - A message that names any `ProbeRedaction.FORBIDDEN_KEYS` entry is withheld whole.
+  - A message longer than 160 characters is truncated after scrubbing.
+  - The evidence store scrubs every line again at write time.
+  - Response telemetry is limited to `response_present` and `response_code`.
+  - No stack traces, no Logcat output, and no logging interceptor.
+- `evidence_schema_version` is 3.
+- **Verification (no device, no provider call, no install).**
+  - Probe package: 97 tests, 0 failures, 5 consecutive runs.
+  - `:app:testDebugUnitTest`: 834 tests, 0 failures, 1 pre-existing skip.
+  - `:app:assembleDebug`: succeeded, with build output redirected outside the repository so the reviewed B2 APK was not overwritten.
+  - A real MockWebServer test shows the probe client sends the same upgrade request line and headers as a plain OkHttp client, except the random `Sec-WebSocket-Key`.
+  - A peer close before any response surfaces as `IOException` "unexpected end of stream" with no response.
