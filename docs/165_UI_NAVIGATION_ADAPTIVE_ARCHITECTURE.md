@@ -75,7 +75,7 @@ No bottom bar. The rail (`RailMenu.sections`) shows, top to bottom, with divider
 Rail rule (HD-NAV-14 with HD-NAV-08): **NavigationRail may remain visible on subordinate screens, but any Rail action that would require the ModalNavigationDrawer is unavailable while the current screen/layer is subordinate.**
 
 - On a drawer-capable top-level root (see §H), the rail's 개발자도구 item opens the same modal drawer directly on its Developer Tools page, so the grouping is identical to Compact.
-- On any other state (Settings, 운영 · 감사, legacy tools, `database_info`, `dashboard`, Stocks detail / theme browse, Strategy detail / version / template preview), the 개발자도구 item is shown **disabled**. It is disabled rather than hidden: the rail keeps a stable layout and the result is deterministic. All other rail items stay enabled. Settings › 개발자 도구 remains the alternate path.
+- On any other state (Settings, 운영 · 감사, legacy tools, `database_info`, `dashboard`, Stocks detail / theme browse, Strategy detail / version / template preview, 성과 모의투자 비교), the 개발자도구 item is shown **disabled**. It is disabled rather than hidden: the rail keeps a stable layout and the result is deterministic. All other rail items stay enabled. Settings › 개발자 도구 remains the alternate path.
 
 Top-level top bars show the title only (no hamburger, no gear). The rail column scrolls if the window is short (e.g. a phone in landscape); this is not a "More" overflow. The rail pads the start inset itself and the content area consumes it, so screens do not apply the start inset twice.
 
@@ -133,7 +133,7 @@ The group is a drawer page (`DrawerPage.DEV_TOOLS`), not a NavHost destination. 
 | --- | --- | --- |
 | 1 | Drawer open on Developer Tools | return to drawer root |
 | 2 | Drawer open on root | close drawer |
-| 3 | Screen in-screen layer open (Stocks detail / theme browse, Strategy strategy / version / template preview, Admin detail) | the screen's layer back handler closes the layer (`LayerBackHandler` in Stocks / Strategy, the existing `BackHandler` in Admin) |
+| 3 | Screen in-screen layer open (Stocks detail / theme browse, Strategy strategy / version / template preview, 성과 모의투자 비교, Admin detail) | the screen's layer back handler closes the layer (`LayerBackHandler` in Stocks / Strategy / 성과, the existing `BackHandler` in Admin) |
 | 4 | Pushed subordinate destination | `popBackStack()` |
 | 5 | Top-level destination | existing tab behaviour (to 홈, then leave the app) |
 
@@ -143,7 +143,7 @@ Material3 1.4.0's `ModalNavigationDrawer` registers no back handler itself, and 
 
 - **Drawer priority is state-driven.** `BackPriority` (in `BJStockDrawer.kt`) expresses the table above as state; a level wins because every lower level is disabled, never because its callback was registered later.
 - **The NavHost subtree is disabled while the drawer is open.** The shell wraps its `content()` (the single NavHost and every screen) in a child back dispatcher, `rememberNavigationEventDispatcherOwner(enabled = BackPriority.contentBackEnabled(drawerOpen))`, provided through `LocalNavigationEventDispatcherOwner` (navigationevent-compose 1.0.0, already on the classpath through activity-compose 1.13; no dependency added). This also covers NavHost's own internal back handler, which the app cannot gate directly. The drawer handler lives on the Activity dispatcher with `enabled = BackPriority.drawerHandlerEnabled(drawerOpen)`.
-- **Screen-level BackHandlers are disabled while the drawer is open.** Stocks and Strategy use `LayerBackHandler`, enabled by `BackPriority.layerHandlerEnabled(hasInScreenLayer, drawerOpen)`, reading the read-only `drawerOpen` from `LocalNavChrome`. Screens never see the mutable `DrawerState`. Admin's detail handler is unchanged: Admin is never drawer-capable, and the disabled subtree covers it anyway.
+- **Screen-level BackHandlers are disabled while the drawer is open.** Stocks, Strategy, and 성과 use `LayerBackHandler`, enabled by `BackPriority.layerHandlerEnabled(hasInScreenLayer, drawerOpen)`, reading the read-only `drawerOpen` from `LocalNavChrome`. Screens never see the mutable `DrawerState`. Admin's detail handler is unchanged: Admin is never drawer-capable, and the disabled subtree covers it anyway.
 - **The drawer closes automatically if `DrawerAccess` becomes false** while it is open (`DrawerAccess.mustClose`): an in-screen layer opens, or the route changes to Settings, 운영 · 감사, or a legacy screen.
 - **No lifecycle or callback-registration-order dependency is required.** There is no lifecycle-keyed re-registration; `BackPriorityDispatchTest` verifies on the real dispatcher that the drawer wins whether it registered before or after NavHost and screen handlers. Within the enabled NavHost subtree, a screen layer handler taking precedence over NavHost's pop (rows 3 vs 4–5) is the standard Navigation-Compose contract and is unchanged by NAV-1.
 
@@ -152,7 +152,8 @@ Material3 1.4.0's `ModalNavigationDrawer` registers no back handler itself, and 
 Drawer prohibition applies to subordinate/detail state at all width classes (HD-NAV-08).
 
 - **Drawer-capable state** is defined in one place, `DrawerAccess.isDrawerCapable(route, hasInScreenLayer)`: the current route is a `PrimaryTab` route **and** that screen has no in-screen layer open.
-- The in-screen-layer signal has a single source: the `onBack` that Stocks and Strategy already pass to `TabTopBar` only while a layer is open (the same value that makes the back arrow win over the hamburger). `TabTopBar` reports it to the shell keyed by its back-stack entry, so a screen transition cannot overwrite another entry's state.
+- The in-screen-layer signal has a single source: the `onBack` that Stocks, Strategy, and 성과 pass to `TabTopBar` only while a layer is open (the same value that makes the back arrow win over the hamburger). `TabTopBar` reports it to the shell keyed by its back-stack entry, so a screen transition cannot overwrite another entry's state.
+- 성과 모의투자 비교 (`comparison.open`) is an in-screen layer (approved HD-PN-01, HD-PN-02; PERF-NAV-02). While it is open, system Back and the top-bar back arrow both call the existing `closeComparison()` and stay on 성과; the next Back follows the existing top-level behaviour. The title stays 성과, and the in-content 닫기 button and the comparison UI are unchanged. Closing resets only the comparison picks, message, and result; the selected Run and its detail are kept.
 - The shell's single `openDrawer` refuses to open the drawer unless the current state is drawer-capable, so no path (hamburger or rail) can open the drawer over a subordinate or detail screen.
 - The hamburger exists only in `TabTopBar`, which only the five top-level screens (and the unreachable TabHub) use.
 - `TabTopBar` resolves its leading icon with `TopBarNavIcon.resolve`: an in-screen layer's back arrow always wins over the hamburger; the two are never shown together, and the drawer cannot be opened from a detail layer.

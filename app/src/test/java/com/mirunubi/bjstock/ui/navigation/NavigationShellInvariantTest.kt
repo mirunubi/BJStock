@@ -114,6 +114,24 @@ class NavigationShellInvariantTest {
     }
 
     @Test
+    fun performanceComparison_isAnInScreenLayer_closedOnlyByTheExistingCloseAction() {
+        val performance = File(mainRoot, "feature/performance/PerformanceScreen.kt").readText()
+        assertTrue(performance.contains("val layered = state.comparison.open"))
+        assertTrue(performance.contains("LayerBackHandler(hasInScreenLayer = layered) { viewModel.closeComparison() }"))
+        assertTrue(performance.contains("onBack = if (layered) viewModel::closeComparison else null"))
+        assertTrue(performance.contains("TextButton(onClick = viewModel::closeComparison"))
+        assertEquals(1, Regex("""title = PrimaryTab\.PERFORMANCE\.label""").findAll(performance).count())
+        listOf("navigate(", "popBackStack(", "navigateToTab(", "BJStockRoutes").forEach {
+            assertFalse(it, performance.contains(it))
+        }
+        File(mainRoot, "feature/performance").listFiles().orEmpty().filter { it.extension == "kt" }.forEach { file ->
+            assertFalse(file.name, Regex("""(?<![A-Za-z])BackHandler\(""").containsMatchIn(file.readText()))
+        }
+        val activity = File(mainRoot, "MainActivity.kt").readText()
+        assertEquals(20, Regex("""composable\(""").findAll(activity).count())
+    }
+
+    @Test
     fun settingsGear_isRemovedFromTheTopLevelTopBar() {
         val chrome = File(navDir, "BJStockChrome.kt").readText()
         val tabTopBar = chrome.substringAfter("fun TabTopBar(").substringBefore("fun BackTopBar(")

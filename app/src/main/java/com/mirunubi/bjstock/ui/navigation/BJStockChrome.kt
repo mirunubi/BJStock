@@ -51,7 +51,7 @@ enum class TopBarNavIcon {
     }
 }
 
-/** Back handler for a screen's in-screen layer (Stocks detail, Strategy detail / template); off while the drawer is open. */
+/** Back handler for a screen's in-screen layer (Stocks detail, Strategy detail / template, 성과 comparison); off while the drawer is open. */
 @Composable
 fun LayerBackHandler(hasInScreenLayer: Boolean, onBack: () -> Unit) {
     val drawerOpen = LocalNavChrome.current.drawerOpen

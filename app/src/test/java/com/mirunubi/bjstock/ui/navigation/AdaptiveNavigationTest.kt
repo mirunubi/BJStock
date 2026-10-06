@@ -268,6 +268,31 @@ class AdaptiveNavigationTest {
     }
 
     @Test
+    fun performanceComparisonLayer_followsTheSharedLayerRules() {
+        val route = PrimaryTab.PERFORMANCE.route
+
+        assertEquals(BackLevel.NAV_HOST, BackPriority.resolve(drawerOpen = false, page = DrawerPage.ROOT, hasInScreenLayer = false))
+        assertFalse(BackPriority.layerHandlerEnabled(hasInScreenLayer = false, drawerOpen = false))
+        assertTrue(DrawerAccess.isDrawerCapable(route, hasInScreenLayer = false))
+        assertEquals(TopBarNavIcon.MENU, TopBarNavIcon.resolve(hasBack = false, drawerAvailable = true))
+        assertTrue(DrawerAccess.railItemEnabled(ShellTarget.DevTools, drawerCapable = true))
+
+        assertEquals(BackLevel.SCREEN_LAYER, BackPriority.resolve(drawerOpen = false, page = DrawerPage.ROOT, hasInScreenLayer = true))
+        assertTrue(BackPriority.layerHandlerEnabled(hasInScreenLayer = true, drawerOpen = false))
+        assertEquals(BackLevel.DRAWER_ROOT, BackPriority.resolve(drawerOpen = true, page = DrawerPage.ROOT, hasInScreenLayer = true))
+        assertFalse(BackPriority.layerHandlerEnabled(hasInScreenLayer = true, drawerOpen = true))
+
+        val capable = DrawerAccess.isDrawerCapable(route, hasInScreenLayer = true)
+        assertFalse(capable)
+        assertTrue(DrawerAccess.mustClose(drawerOpen = true, drawerCapable = capable))
+        assertEquals(TopBarNavIcon.BACK, TopBarNavIcon.resolve(hasBack = true, drawerAvailable = true))
+        assertFalse(DrawerAccess.railItemEnabled(ShellTarget.DevTools, capable))
+        RailMenu.sections.flatten().filter { it.target != ShellTarget.DevTools }.forEach { item ->
+            assertTrue(item.label, DrawerAccess.railItemEnabled(item.target, capable))
+        }
+    }
+
+    @Test
     fun topBar_backArrowWinsOverHamburger_andNeverShowsBoth() {
         assertEquals(TopBarNavIcon.BACK, TopBarNavIcon.resolve(hasBack = true, drawerAvailable = true))
         assertEquals(TopBarNavIcon.BACK, TopBarNavIcon.resolve(hasBack = true, drawerAvailable = false))

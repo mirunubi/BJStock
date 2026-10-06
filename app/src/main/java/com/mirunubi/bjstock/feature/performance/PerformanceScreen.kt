@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
+import com.mirunubi.bjstock.ui.navigation.LayerBackHandler
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
 import com.mirunubi.bjstock.ui.navigation.TabTopBar
 
@@ -57,9 +58,16 @@ fun PerformanceScreen(
     viewModel: PerformanceViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val layered = state.comparison.open
+    LayerBackHandler(hasInScreenLayer = layered) { viewModel.closeComparison() }
 
     Scaffold(
-        topBar = { TabTopBar(title = PrimaryTab.PERFORMANCE.label) },
+        topBar = {
+            TabTopBar(
+                title = PrimaryTab.PERFORMANCE.label,
+                onBack = if (layered) viewModel::closeComparison else null,
+            )
+        },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.PERFORMANCE, onSelect = onSelectTab) },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {

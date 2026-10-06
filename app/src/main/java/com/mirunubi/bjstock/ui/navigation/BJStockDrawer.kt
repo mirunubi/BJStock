@@ -30,7 +30,8 @@ enum class DrawerBack { SHOW_ROOT, CLOSE }
 
 /**
  * Whether the drawer may be opened (docs/165 HD-NAV-08, HD-NAV-14), at every width class: only on a top-level
- * root, i.e. a [PrimaryTab] route whose screen has no in-screen layer (Stocks detail, Strategy detail / template).
+ * root, i.e. a [PrimaryTab] route whose screen has no in-screen layer (Stocks detail, Strategy detail / template,
+ * 성과 comparison).
  */
 object DrawerAccess {
     fun isDrawerCapable(route: String?, hasInScreenLayer: Boolean): Boolean =
@@ -61,7 +62,7 @@ object BackPriority {
     /** Back dispatch for the whole NavHost subtree (NavHost's own handler and every screen handler). */
     fun contentBackEnabled(drawerOpen: Boolean): Boolean = !drawerOpen
 
-    /** A screen's in-screen layer handler (Stocks, Strategy). */
+    /** A screen's in-screen layer handler (Stocks, Strategy, 성과). */
     fun layerHandlerEnabled(hasInScreenLayer: Boolean, drawerOpen: Boolean): Boolean = hasInScreenLayer && !drawerOpen
 }
 
