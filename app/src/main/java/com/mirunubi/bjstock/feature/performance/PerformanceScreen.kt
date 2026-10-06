@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -49,6 +51,7 @@ import com.mirunubi.bjstock.core.model.RunStatus
 import com.mirunubi.bjstock.ui.icons.BJStockIcons
 import com.mirunubi.bjstock.ui.navigation.BJStockBottomBar
 import com.mirunubi.bjstock.ui.navigation.LayerBackHandler
+import com.mirunubi.bjstock.ui.navigation.LocalNavChrome
 import com.mirunubi.bjstock.ui.navigation.PrimaryTab
 import com.mirunubi.bjstock.ui.navigation.TabTopBar
 
@@ -70,24 +73,44 @@ fun PerformanceScreen(
         },
         bottomBar = { BJStockBottomBar(selected = PrimaryTab.PERFORMANCE, onSelect = onSelectTab) },
     ) { innerPadding ->
+        val mode = PerformanceLayout.modeFor(LocalNavChrome.current.widthClass)
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            ScrollColumn {
-                if (state.comparison.open) {
-                    ComparisonSection(state, viewModel)
-                } else {
-                    RunSelectorSection(state, viewModel)
-                    when (val detail = state.detail) {
-                        PerformanceDetailState.None -> Unit
-                        PerformanceDetailState.Loading -> LoadingLine("불러오는 중")
-                        is PerformanceDetailState.Failed -> {
-                            WarningLine(detail.message)
-                            OutlinedButton(onClick = viewModel::refresh) { Text("다시 시도") }
+            when {
+                mode == PerformanceLayoutMode.SINGLE_PANE -> ScrollColumn {
+                    if (state.comparison.open) {
+                        ComparisonSection(state, viewModel)
+                    } else {
+                        PerformanceLayout.singlePane.forEach { PerformanceSectionContent(it, state, viewModel) }
+                    }
+                }
+                layered -> ScrollColumn { ComparisonSection(state, viewModel) }
+                else -> Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    PaneColumn(Modifier.width(PerformanceLayout.LEFT_PANE_WIDTH_DP.dp)) {
+                        PerformanceLayout.left.forEach { PerformanceSectionContent(it, state, viewModel) }
+                    }
+                    key(PerformanceLayout.rightPaneKey(state.selectedRunId)) {
+                        PaneColumn(Modifier.weight(1f)) {
+                            when (PerformanceLayout.rightPane(state.detail)) {
+                                PerformanceRightPane.Blank -> Unit
+                                is PerformanceRightPane.Detail ->
+                                    PerformanceLayout.right.forEach { PerformanceSectionContent(it, state, viewModel) }
+                            }
                         }
-                        is PerformanceDetailState.Loaded -> Detail(detail.view)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PerformanceSectionContent(section: PerformanceSection, state: PerformanceUiState, viewModel: PerformanceViewModel) {
+    when (section) {
+        PerformanceSection.RUN_SELECTOR -> RunSelectorSection(state, viewModel)
+        PerformanceSection.DETAIL -> DetailSection(state, viewModel)
     }
 }
 
@@ -145,6 +168,19 @@ private fun RunRowItem(row: PerformanceRunRow, selected: Boolean, onClick: () ->
 // endregion
 
 // region Detail
+
+@Composable
+private fun DetailSection(state: PerformanceUiState, viewModel: PerformanceViewModel) {
+    when (val detail = state.detail) {
+        PerformanceDetailState.None -> Unit
+        PerformanceDetailState.Loading -> LoadingLine("불러오는 중")
+        is PerformanceDetailState.Failed -> {
+            WarningLine(detail.message)
+            OutlinedButton(onClick = viewModel::refresh) { Text("다시 시도") }
+        }
+        is PerformanceDetailState.Loaded -> Detail(detail.view)
+    }
+}
 
 @Composable
 private fun Detail(view: PerformanceDetailView) {
@@ -455,6 +491,20 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             content()
         }
+    }
+}
+
+/** One independently scrolling pane of the list-detail layout; the row around it supplies the horizontal padding. */
+@Composable
+private fun PaneColumn(modifier: Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        content()
     }
 }
 

@@ -282,3 +282,31 @@ The fourth separately-approved content gate after NAV-1, for the 모의투자 pr
 - Orders, executions, positions, cash ledger, snapshots, Run identity, policies, the forward runtime, WorkManager, and the database are unchanged; no real KIS trading.
 - No new NAV-CLEANUP item; NAV-CLEANUP-10 stays deferred.
 - Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).
+
+## P. Performance Adaptive Layout (PERF-ADAPT-02)
+
+The fifth separately-approved content gate after NAV-1, for the 성과 primary tab only:
+
+| Width class | 성과 layout |
+| --- | --- |
+| Compact | Single column, unchanged: 모의투자 선택 (with 모의투자 비교) · selected Run detail in one scroll |
+| Medium | Same as Compact (a list-detail split beside the rail would make each pane narrower than a phone) |
+| Expanded | A 360dp left pane, 16dp gap, right pane fills the rest |
+| Expanded, comparison open | The existing 모의투자 비교 section full width in one scroll, replacing both panes |
+
+| Expanded area | Content |
+| --- | --- |
+| Left | 모의투자 선택 with the 모의투자 비교 button in its header (approved HD-PF-03) |
+| Right, no detail | Blank (approved HD-PF-01): no placeholder and no new wording; the Run selector already shows the empty, loading, or failed list |
+| Right, Run selected | The existing Run detail (Loading / Failed with 다시 시도 / Loaded cards and chart) |
+| Comparison | The existing comparison section full width, no width cap and no redesign (approved HD-PF-02) |
+
+- `PerformanceLayout` (pure) owns `modeFor(NavWidthClass)`, the single-pane order, the left / right groups, the right-pane choice, and the right-pane key. The left and right panes cover every single-pane section exactly once. The screen reads the width class from `LocalNavChrome`; no breakpoint values live in `feature/performance`.
+- Selection is unchanged: the existing `selectedRunId`, `selectRun`, and `defaultSelection(runs)` drive both layouts; no new or duplicate selection state. The selected Run keeps its existing highlight in the list.
+- Card contents, labels, metrics, the equity chart, comparison selection, and loading / error semantics are unchanged; the Compact and Medium branch renders the same sections in the same order.
+- Scroll: Compact and Medium keep one scroll. Expanded uses a non-scrolling row with one independent scroll per pane; the right pane's scroll restarts when the selected Run changes.
+- Accepted limitation: in Expanded, opening the comparison replaces the panes, so closing it restarts both pane scroll positions at the top. Selection and the loaded detail are kept.
+- Back is unchanged from PERF-NAV-02: the open comparison is the only in-screen layer. `LayerBackHandler` and the `TabTopBar` back arrow close it through `closeComparison`, as does the existing in-section close action. While it is open the drawer stays blocked and the rail DevTools entry stays disabled, exactly as before. No route, `NavHost`, or raw Back handler is added.
+- `PerformanceViewModel`, `PerformancePresenter`, the data source, analytics, Room, and the forward runtime are unchanged; the layout adds no data reads. No real KIS trading.
+- No new NAV-CLEANUP item; NAV-CLEANUP-10 stays deferred.
+- Physical / rendered validation of the Expanded layout is deferred with the rest of the feature branch (after B2 Smoke).

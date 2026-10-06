@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalConfiguration
  * - Strategy: Compact and Medium single pane, Expanded list-detail (docs/165 §M).
  * - 운영 · 감사: Compact and Medium single pane, Expanded two panes (docs/165 §N).
  * - 모의투자: Compact and Medium single column, Expanded Run list-detail (docs/165 §O).
+ * - 성과: Compact and Medium single column, Expanded Run list-detail with full-width comparison (docs/165 §P).
  * Screens not separately approved keep their single-column layout at every width.
  */
 enum class NavWidthClass {
