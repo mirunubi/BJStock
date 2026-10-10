@@ -119,11 +119,39 @@ fun BackTopBar(title: String, onBack: () -> Unit) {
     )
 }
 
-/** Tab switch without stacking duplicates: back from any tab returns to Home, back on Home leaves the app. */
+/**
+ * Tab switch without stacking duplicates: back from any tab returns to Home, back on Home leaves the app.
+ * Home always lands on its root (HD-NAV-T1): the non-inclusive pop also maps the saved stack to the start destination,
+ * so restoring on Home would bring back a destination pushed above it. Other tabs keep their saved-stack restore.
+ * A stack owned by Home is popped without saving (HD-NAV-T1-02): Home never restores it, so a saved copy would only
+ * retain unreachable back-stack entries and their ViewModels.
+ */
 fun NavController.navigateToTab(tab: PrimaryTab) {
+    val ownedByHome = stackOwner() == PrimaryTab.HOME
     navigate(tab.route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo(graph.findStartDestination().id) { saveState = !ownedByHome }
         launchSingleTop = true
-        restoreState = true
+        restoreState = tab != PrimaryTab.HOME
     }
+}
+
+/**
+ * The tab owning the current back stack. [navigateToTab] always pops to the start destination (Home) first, so the
+ * stack is Home, at most one other tab, then pushed destinations: that tab owns them, or Home does when there is none.
+ * Null when more than one other tab is on the stack, which [navigateToTab] never produces.
+ */
+private fun NavController.stackOwner(): PrimaryTab? {
+    val tabs = PrimaryTab.entries.filter { it != PrimaryTab.HOME && hasBackStackEntry(it.route) }
+    return when (tabs.size) {
+        0 -> PrimaryTab.HOME
+        1 -> tabs.single()
+        else -> null
+    }
+}
+
+private fun NavController.hasBackStackEntry(route: String): Boolean = try {
+    getBackStackEntry(route)
+    true
+} catch (notOnStack: IllegalArgumentException) {
+    false
 }

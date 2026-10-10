@@ -17,7 +17,7 @@ This document records the NAV-1 adaptive navigation shell and its human-approved
 1. **Narrow-screen cleanup.** Five bottom tabs plus a Settings gear and a deep Settings › 개발자 도구 list crowded the phone layout. Compact screens now show three bottom tabs and move the full IA into a hamburger drawer.
 2. **Foundation for Fold / tablet.** Medium and Expanded widths show a navigation rail instead of a bottom bar, so later gates can add adaptive content (2-column, list-detail) without reworking navigation again.
 
-## B. Human decisions (HD-NAV-01 – HD-NAV-14)
+## B. Human decisions (HD-NAV-01 – HD-NAV-14, HD-NAV-T1, HD-NAV-T1-02)
 
 | ID | Decision |
 | --- | --- |
@@ -35,6 +35,8 @@ This document records the NAV-1 adaptive navigation shell and its human-approved
 | HD-NAV-12 | Settings developer links remain as **alternate entry points** in NAV-1. |
 | HD-NAV-13 | NAV-1 changes navigation chrome only. All screen content stays single-column; width changes never change business state. |
 | HD-NAV-14 | The Medium / Expanded NavigationRail **may remain visible on subordinate screens**: it is global wide-screen navigation chrome, not the same interaction surface as the Compact hamburger drawer. HD-NAV-08 stays unchanged and global: subordinate / detail screens must not expose or open the drawer at any width. |
+| HD-NAV-T1 | 홈 top-level reselect / navigation always returns to the **홈 root** and does not restore a pushed subordinate destination above 홈 (`navigateToTab(HOME)` pops to start without `restoreState`). Other top-level tabs keep saved-stack restore behaviour. |
+| HD-NAV-T1-02 | A subordinate destination owned directly by 홈 (pushed above 홈, no other tab beneath it) is **discarded rather than saved** when leaving it for 홈 or any other tab, so no unreachable saved back-stack entries or ViewModels accumulate. Ownership is the stack's single non-홈 tab, else 홈. A subordinate owned by another tab stays saved with that tab and is restored when the tab is selected again. |
 
 ## C. Compact IA (width < 600dp)
 
