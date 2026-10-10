@@ -5,10 +5,10 @@
 | Document status | **NAV-1 IMPLEMENTED ON FEATURE BRANCH** |
 | Merge status | **NOT MERGED TO MAIN** (`feature/ui-strategy-admin-demo`) |
 | Physical UI | **NOT YET VERIFIED** |
-| Scope | Navigation chrome only: drawer, bottom bar, rail, top-level top bar. Home content adaptation (HOME-ADAPT-02): §L. |
+| Scope | Navigation chrome: drawer, bottom bar, rail, top-level top bar. Adaptive screen layouts: §L Home (HOME-ADAPT-02), §M Strategy (STRATEGY-ADAPT-02), §N 운영 · 감사 (ADMIN-ADAPT-02), §O Paper Trading (PAPER-ADAPT-02), §P Performance (PERF-ADAPT-02). |
 | Related | docs/151 (UI/UX baseline, §3 navigation) |
 
-This document records the NAV-1 adaptive navigation shell and its human-approved decisions. It does not change Room / PostgreSQL schema, runtime, providers, scheduler, or strategy engine. The original NAV-1 scope did not change any screen's content; later, separately approved adaptive screen-layout sections may extend content layout. HOME-ADAPT-02 (§L) changes the Home layout only; Home data and business semantics remain unchanged.
+This document records the NAV-1 adaptive navigation shell and its human-approved decisions. It does not change Room / PostgreSQL schema, runtime, providers, scheduler, or strategy engine. The original NAV-1 scope did not change any screen's content; later, separately approved adaptive screen-layout sections extend content layout: §L Home, §M Strategy, §N 운영 · 감사, §O Paper Trading, §P Performance. Each changes its screen's layout only; data and business semantics remain unchanged.
 
 ---
 
