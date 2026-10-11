@@ -560,6 +560,28 @@ This document authorizes **none** of the following:
 
 No code. ImplementationAuthority: NONE.
 
+### 27.1 UI Integration Note (2026-10-11)
+
+§26 and §27 above, and the header's "authorizes no … Compose UI" wording, are kept unchanged as the authorization state at the time they were written.
+
+As of the UI integration at main merge commit `a2031deed497ae1ac793bbd744b2ccd3db193972` (`feature/ui-strategy-admin-demo` at `69bd205`), the Human authorizes a **non-persistent Strategy Template Preview UI** (전략 템플릿 (미리보기), docs/165 §M). The authorization is limited to demo / preview behavior:
+
+- displaying the template preview;
+- in-memory demo templates;
+- read-only instrument lookup and read-only theme lookup;
+- a disabled, locked create action (전략 버전 만들기).
+
+It does **not** authorize:
+
+- persistence (no Template Room entity, schema, or migration);
+- StrategyVersion creation;
+- template activation;
+- snapshot creation;
+- Run creation;
+- runtime execution (signal logic; take-profit, stop-loss, or time-exit execution).
+
+This note supersedes only the prior "no preview UI authorized" state, and only from this integration point onward. It is not retroactive authorization. Every other §27 item stays unauthorized, and ImplementationAuthority for the strategy and its Template runtime remains NONE.
+
 ---
 
 PAPER TRADING ONLY. No real brokerage order capability. KIS `/trading/` remains forbidden. ImplementationAuthority: NONE.

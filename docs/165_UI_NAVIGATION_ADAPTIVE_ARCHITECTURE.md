@@ -2,11 +2,11 @@
 
 | Item | Value |
 | --- | --- |
-| Document status | **NAV-1 IMPLEMENTED ON FEATURE BRANCH** |
-| Merge status | **NOT MERGED TO MAIN** (`feature/ui-strategy-admin-demo`) |
+| Document status | **NAV-1 IMPLEMENTED — MERGED TO MAIN** |
+| Merge status | **MERGED TO MAIN** — merge commit `a2031deed497ae1ac793bbd744b2ccd3db193972` (from `feature/ui-strategy-admin-demo` at `69bd205`) |
 | Physical UI | **NOT YET VERIFIED** |
 | Scope | Navigation chrome: drawer, bottom bar, rail, top-level top bar. Adaptive screen layouts: §L Home (HOME-ADAPT-02), §M Strategy (STRATEGY-ADAPT-02), §N 운영 · 감사 (ADMIN-ADAPT-02), §O Paper Trading (PAPER-ADAPT-02), §P Performance (PERF-ADAPT-02). |
-| Related | docs/151 (UI/UX baseline, §3 navigation) |
+| Related | docs/151 (UI/UX baseline, §3 navigation, §21.8 implementation note); docs/164 §19–27 (Strategy Template requirement). The §M Strategy Template Preview (전략 템플릿 (미리보기)) is the non-persistent demo / preview realization of the docs/164 §26 form concept, authorized only as such by the docs/164 §27.1 integration note: no persistence, StrategyVersion creation, activation, snapshot creation, Run creation, or runtime execution. |
 
 This document records the NAV-1 adaptive navigation shell and its human-approved decisions. It does not change Room / PostgreSQL schema, runtime, providers, scheduler, or strategy engine. The original NAV-1 scope did not change any screen's content; later, separately approved adaptive screen-layout sections extend content layout: §L Home, §M Strategy, §N 운영 · 감사, §O Paper Trading, §P Performance. Each changes its screen's layout only; data and business semantics remain unchanged.
 

@@ -3,7 +3,7 @@
 | Item | Value |
 | --- | --- |
 | Document status | **DRAFT — Human Review Required** |
-| Implementation | **PARTIAL** — UI-1 navigation shell IMPLEMENTED; all five tabs are product screens; Home, Stocks, Strategy, and Paper Trading screens PARTIAL (first versions); Performance screen IMPLEMENTED (first version, physical visual check pending); see §21 |
+| Implementation | **PARTIAL** — UI-1 navigation shell IMPLEMENTED, its chrome since replaced by the NAV-1 adaptive navigation (bottom tabs 홈 / 전략 / 모의투자 + drawer; rail on wider screens; main merge `a2031de`; physical UI NOT YET VERIFIED; §21.8, docs/165); all five primary destinations are product screens; Home, Stocks, Strategy, and Paper Trading screens PARTIAL (first versions); Performance screen IMPLEMENTED (first version, physical visual check pending); see §21 |
 | Scope | Future MVP / real-use UI structure. |
 | Phase context | Phase 11 — Documentation Interlude (not a Phase 11 gate) |
 
@@ -54,7 +54,9 @@ The canonical English identifier remains available in drill-down / diagnostics v
 
 ## 3. Primary navigation
 
-Future bottom navigation — exactly five items:
+> **Superseded for the current implementation by NAV-1 (§21.8, docs/165).** The five-item bottom bar and top-right 설정 below are the original design target, kept as historical rationale. The current UI keeps the same five primary destinations but shows only **홈 / 전략 / 모의투자** in the compact bottom bar; 종목, 성과, 운영 · 감사, 설정, and 개발자도구 are reached from the hamburger drawer (a navigation rail on Medium / Expanded widths), and the top-right 설정 gear is removed.
+
+Future bottom navigation (original design target, historical) — exactly five items:
 
 1. 홈
 2. 종목
@@ -498,7 +500,9 @@ If a UI need appears to require a domain change, it is raised as a separate gate
 
 ## 21. Implementation notes
 
-### 21.1 UI-1 navigation shell (IMPLEMENTED)
+### 21.1 UI-1 navigation shell (IMPLEMENTED; chrome superseded by NAV-1, §21.8)
+
+> Historical UI-1 state. The five-item bottom bar and the top-right 설정 gear described here were replaced by NAV-1 (§21.8). The "settings gear" and "bottom bar with … selected" chrome mentioned in §21.4–§21.7 is likewise the pre-NAV-1 chrome; the screen content described there is unchanged.
 
 - Start destination `home`. Bottom navigation: 홈 / 종목 / 전략 / 모의투자 / 성과 (`PrimaryTab`, Korean label + icon). Tab switches pop to Home with saved state and `launchSingleTop`, so tabs never stack; back from a tab returns to Home, back on Home leaves the app.
 - 설정 is the top-right gear on every tab root, not a sixth tab.
@@ -517,7 +521,7 @@ Cards: 모의자산 (total paper asset, cumulative return / profit), 최근 전�
 
 ### 21.4 UI-4 Stocks + Themes consolidation (PARTIAL — Stocks screen)
 
-The 종목 tab is a stock-analysis screen (`StocksScreen`, `StocksViewModel`, `StocksPresenter`, read-only `StocksDataSource`) inside the normal chrome (title 종목, settings gear, bottom bar with 종목 selected). It is not an order screen: no order book, order buttons, or account actions.
+The 종목 tab is a stock-analysis screen (`StocksScreen`, `StocksViewModel`, `StocksPresenter`, read-only `StocksDataSource`) inside the normal chrome (title 종목, pre-NAV-1 settings gear and bottom bar with 종목 selected). It is not an order screen: no order book, order buttons, or account actions.
 
 - **Search**: "종목명 또는 종목코드 검색" over active instruments only (`InstrumentDao.searchActive`, symbol or name, partial match; inactive instruments never appear). Rows show name and `005930 · KOSPI` / `KOSDAQ`; no database ids. Searching, no-result, and failure states are explicit.
 - **Initial state**: guidance "종목명이나 종목코드를 검색해 보세요.", active themes as quick-access chips, and 테마 관리. No stock is preselected and no recent-stock history is invented.
@@ -535,7 +539,7 @@ Existing developer screens (Market Data Test, Instrument Master, Themes, Factor 
 
 ### 21.5 UI-5 Strategy UX consolidation (PARTIAL — Strategy screen)
 
-The 전략 tab is a strategy management screen (`StrategyScreen`, `StrategyViewModel`, `StrategyPresenter`, `StrategyDataSource`) inside the normal chrome (title 전략, settings gear, bottom bar with 전략 selected). Hierarchy with progressive disclosure: 전략 목록 → 버전 → version detail (판단 기준, 팩터 가중치, 신호 규칙, 판단 미리보기); back closes the top layer. All writes delegate to the existing `StrategyVersionService`; no domain rule was changed or duplicated as a second source of truth.
+The 전략 tab is a strategy management screen (`StrategyScreen`, `StrategyViewModel`, `StrategyPresenter`, `StrategyDataSource`) inside the normal chrome (title 전략, pre-NAV-1 settings gear and bottom bar with 전략 selected). Hierarchy with progressive disclosure: 전략 목록 → 버전 → version detail (판단 기준, 팩터 가중치, 신호 규칙, 판단 미리보기); back closes the top layer. All writes delegate to the existing `StrategyVersionService`; no domain rule was changed or duplicated as a second source of truth.
 
 - **Strategy list**: cards with the strategy name, `strategy_code` as secondary text, version count, and status summary (`사용중 2개 · 작성중 1개`). **Multiple ACTIVE versions are supported**: every ACTIVE version is shown as 사용중 and none is labelled "현재 버전" (the domain has no such concept).
 - **Statuses**: `DRAFT` 작성중 / `ACTIVE` 사용중 / `RETIRED` 종료, each with text and an icon (pencil / check / block); color is secondary. Versions are listed highest number first.
@@ -555,7 +559,7 @@ Existing Strategy Lab (`StrategyLabScreen`, `StrategyLabViewModel`, route `strat
 
 ### 21.6 UI-6 Paper Trading / Forward Test UX consolidation (PARTIAL — Paper Trading screen)
 
-The 모의투자 tab is the operating screen for paper Runs (`PaperTradingScreen`, `PaperTradingViewModel`, `PaperTradingPresenter`, `PaperTradingDataSource`) inside the normal chrome (title 모의투자, settings gear, bottom bar with 모의투자 selected). It consolidates the Run list, the selected Run's account / holdings / orders / policy / universe, Auto, and operation history. It is paper trading only: no real brokerage order path exists or was added, and the data source depends on no KIS class.
+The 모의투자 tab is the operating screen for paper Runs (`PaperTradingScreen`, `PaperTradingViewModel`, `PaperTradingPresenter`, `PaperTradingDataSource`) inside the normal chrome (title 모의투자, pre-NAV-1 settings gear and bottom bar with 모의투자 selected). It consolidates the Run list, the selected Run's account / holdings / orders / policy / universe, Auto, and operation history. It is paper trading only: no real brokerage order path exists or was added, and the data source depends on no KIS class.
 
 - **No execution on open**: opening the tab, selecting a Run, and refreshing only read (Runs, `PerformanceAnalyticsService` summaries, positions, executions, policy, universe, cycles, `TradeAuditLogService`, `ForwardTestScheduler.status`, `ForwardOperationDao.findRecent`). They never call `runManualNow`, `retryFailedCycle`, KIS, the paper engine, Run creation, `markReady`, or `setAutoEnabled`. A scheduled Worker dispatched by Android is independent of the screen.
 - **Run list**: every Run, none filtered. Name, strategy + version (`기본 모멘텀 전략 V2`), status, `2026.09.18부터`, and an asset summary (total paper asset and return, or `초기자금 … · 평가 전`). Order: RUNNING, READY, PAUSED, DRAFT, COMPLETED, CANCELLED, then highest id. The first Run is selected by default; no database id is primary text.
@@ -583,7 +587,7 @@ Existing Forward Test Dashboard (`ForwardTestDashboardScreen`, `ForwardTestViewM
 
 ### 21.7 UI-7 Performance dashboard (IMPLEMENTED — Performance screen, first version)
 
-The 성과 tab is a read-only analysis screen for paper Run results (`PerformanceScreen`, `PerformanceViewModel`, `PerformancePresenter`, `PerformanceDataSource`) inside the normal chrome (title 성과, settings gear, bottom bar with 성과 selected). It answers how much a Run gained or lost, its maximum drawdown, how assets moved by date, monthly results, virtual trade results, strategy decision / virtual fill counts, and how Runs differ. Developer Tools are not needed for any of it.
+The 성과 tab is a read-only analysis screen for paper Run results (`PerformanceScreen`, `PerformanceViewModel`, `PerformancePresenter`, `PerformanceDataSource`) inside the normal chrome (title 성과, pre-NAV-1 settings gear and bottom bar with 성과 selected). It answers how much a Run gained or lost, its maximum drawdown, how assets moved by date, monthly results, virtual trade results, strategy decision / virtual fill counts, and how Runs differ. Developer Tools are not needed for any of it.
 
 - **Read-only by structure**: `PerformanceDataSource` has only read functions (`runs`, `detail`, `compare`) backed by `PerformanceAnalyticsService` and `PerformanceAnalyticsRepository`, which never write and never call the network. Its only dependencies are those two classes: no KIS, scheduler, Worker, coordinator, or paper-engine class. Opening, selecting, refreshing, and comparing create no snapshot, evaluation, order, execution, cash-ledger row, or position change, execute no Forward Test, and touch no Auto setting (a Room test checks every table's row count before / after).
 - **No duplicated finance**: every figure (total asset, cumulative profit / return, MDD, CAGR, daily / monthly returns, trade statistics, signal and fill counts) is exactly what the analytics layer returns; the presenter only formats it. MDD is the summary's `maxDrawdown`, not recomputed.
@@ -604,3 +608,13 @@ Cross-screen consistency in the same gate (presentation only): product Run statu
 Existing Forward Test Dashboard (`forward_test`) and Compare Runs (`compare_runs`) are unchanged and stay under 설정 > 개발자 도구; the 성과 tab no longer links to them.
 
 Physical scheduler: the delayed-recovery verification of the 2026-10-01 07:00 slot (`auto:2026-10-01:0700:KST`) is **PASS — DELAYED RECOVERY**. The Phase 11 B10 read-only snapshot verification (2026-10-01, about 22:15 KST) found attempt 3 SUCCEEDED at 13:22:30 KST with no manual or retry operation and no duplicates. The delayed-recovery path was verified, but unattended 07:00 execution was not accepted; the later dedicated 2026-10-02 test failed (**FAIL — UNATTENDED 07:00**, `docs/163` §2.3). No scheduler, Worker, or retry behavior was changed.
+
+### 21.8 NAV-1 adaptive navigation and UI integration (MERGED TO MAIN — physical UI NOT YET VERIFIED)
+
+Merged from `feature/ui-strategy-admin-demo` (`69bd205`) at main merge commit `a2031deed497ae1ac793bbd744b2ccd3db193972` (2026-10-11). The full design and the Human decisions (HD-NAV-01 – HD-NAV-14, HD-NAV-T1, HD-NAV-T1-02) are in [docs/165](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md); this section only summarizes.
+
+- **Adaptive navigation**: a single NavHost. Compact widths (< 600dp) show hamburger + title on top-level screens and a three-item bottom bar **홈 / 전략 / 모의투자**; the drawer holds 주요 (홈, 종목, 전략, 모의투자, 성과), 운영 (운영 · 감사), and 앱 (설정, 개발자도구 as a second depth). Medium / Expanded widths (≥ 600dp) show a navigation rail instead of a bottom bar. The five primary destinations are unchanged; 종목 and 성과 are reached from the drawer or rail, and the top-right 설정 gear is removed. Settings › 개발자 도구 remains an alternate path. Adaptive layouts for 홈, 전략, 운영 · 감사, 모의투자, and 성과 change layout only, not data or business semantics (docs/165 §L–§P).
+- **Home root behavior**: selecting or reselecting 홈 always returns to the 홈 root (HD-NAV-T1). A subordinate destination owned by 홈 is discarded rather than saved when leaving it (HD-NAV-T1-02), so no unreachable back-stack entries or ViewModels accumulate. Other tabs keep saved-stack restore.
+- **운영 · 감사**: a read-only screen (drawer 운영 group, or the rail) showing scheduler status, recent operations and their detail, audit, errors, app info, and environment (KIS credential presence only). It writes nothing, schedules or retries nothing, does not change Auto, and calls no provider.
+- **Strategy Template Preview** (전략 템플릿 (미리보기), 전략 tab): a non-persistent demo / preview only, authorized from this integration point onward by the `docs/164` §27.1 integration note. In-memory demo templates, read-only instrument and theme lookups, and a disabled, locked 전략 버전 만들기 button. No persistence, StrategyVersion creation, activation, snapshot creation, Run creation, or runtime execution.
+- **Validation**: automated unit / Compose / navigation tests passed on the merged tree (1171 executed, 0 failed, 1 environment-gated skip). **Physical UI: NOT YET VERIFIED** — pending a physical smoke test of the candidate APK; no physical-device UI result is claimed.

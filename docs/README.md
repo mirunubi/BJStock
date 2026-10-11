@@ -84,6 +84,7 @@ Reliability / UI:
 
 - [150 Operational Reliability Standard](150_OPERATIONAL_RELIABILITY_STANDARD.md)
 - [151 UI/UX Design Baseline](151_BJSTOCK_UI_UX_DESIGN.md)
+- [165 UI Navigation / Adaptive Architecture](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md): NAV-1 adaptive navigation and adaptive screen layouts (physical UI not yet verified)
 
 Intraday / Security / Strategy Requirements:
 
@@ -109,6 +110,7 @@ Intraday / Security / Strategy Requirements:
 - [150 Operational Reliability Standard](150_OPERATIONAL_RELIABILITY_STANDARD.md)
 - [160 Intraday Multi-Factor Model Architecture](160_INTRADAY_MULTI_FACTOR_MODEL_ARCHITECTURE.md)
 - [163 Security / Audit / Failure-Containment Architecture](163_SECURITY_AUDIT_FAILURE_CONTAINMENT_ARCHITECTURE.md)
+- [165 UI Navigation / Adaptive Architecture](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md)
 
 ## 5. Validation / Historical
 
@@ -130,12 +132,10 @@ See [030 Development Plan](030_DEVELOPMENT_PLAN.md) for the roadmap.
 
 ## 7. Pending Branches
 
-- `feature/ui-strategy-admin-demo` at `69bd205`: FROZEN / NOT MERGED TO MAIN. It adds `docs/165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md` on that branch only; main has no `docs/165`.
+- `feature/ui-strategy-admin-demo` at `69bd205`: MERGED INTO MAIN as merge commit `a2031deed497ae1ac793bbd744b2ccd3db193972` (2026-10-11). It adds [docs/165](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md). Physical UI: NOT YET VERIFIED.
 
 `docs/strategy-template-requirement` (`31266d1`) is not pending: its docs/164 change is on main as `d0d5fa9`. The branch remains only as integration provenance.
 
 ## 8. Known Documentation Follow-ups
 
-Open documentation follow-ups:
-
-- UI branch `docs/165`: reconcile with main if and when the branch is merged.
+There are no open documentation follow-ups. The `docs/165` reconciliation after the UI merge is complete (docs/150, docs/151 §21.8, docs/164 §27.1, docs/165 header).
