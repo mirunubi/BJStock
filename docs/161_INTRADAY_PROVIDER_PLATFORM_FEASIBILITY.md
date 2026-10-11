@@ -1,5 +1,6 @@
 # 161 Intraday Provider + Platform Feasibility
 
+- Historical record: Phase 12-B1 snapshot as of 2026-10-02. Status lines below are not updated; current Phase 12 status is in the [docs/162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) header.
 - Document Status: APPROVED — Human 12-B1 Feasibility Research Approved
 - Human Approval Date: 2026-10-02
 - Gate: Phase 12-B1

@@ -8,7 +8,7 @@ Status:
 
 ```text
 BUILD / UNIT VERIFIED
-RUNTIME DEFERRED — physical device pending
+PHYSICAL DEVICE VALIDATED — Phase 10 (2026-09-29)
 ```
 
 ## Read-Only Scope
@@ -209,12 +209,15 @@ Phase 3-B stops at Network → Domain → UI.
 
 Wrong mapping must not accumulate a false history. Persistence is Phase 3-C.
 
-## Runtime Deferred
+## Runtime Verification
 
-Actual KIS current-price and daily calls, Keystore token issuance, and Settings/Market UI on a physical device remain:
+Phase 10 (2026-09-29) verified on one physical device, for 005930 only:
 
-```text
-DEFERRED — physical device pending
-```
+- Token issuance with Keystore-backed credentials
+- Adjusted daily-bar request
+- Current-price request from the Market Data UI; the response was not persisted
+- Read-only guard held: 0 `/trading/` calls
 
-They will be verified together with Phase 2.1 and Phase 3-A when a device is connected.
+KIS rate limiting (`EGW00201`) was observed during the daily-bar requests; the bounded retry from `6af22b9` recovered it.
+
+Coverage is limited to this tested case; it is not a general device or instrument claim.

@@ -8,7 +8,7 @@ Status:
 
 ```text
 BUILD / UNIT VERIFIED
-RUNTIME DEFERRED — physical device pending
+PHYSICAL DEVICE VALIDATED — Phase 10 (2026-09-29)
 ```
 
 ## Persistence Scope
@@ -127,12 +127,17 @@ Source stored on every KIS daily row:
 MarketDataSource.KIS = "KIS"
 ```
 
-## Runtime Deferred
+## Runtime Verification
 
-Actual KIS daily fetch into the on-device Room file remains:
+Phase 10 (2026-09-29) persisted adjusted daily bars for 005930 into the on-device Room database: 142 rows, on one physical device.
 
-```text
-DEFERRED — physical device pending
-```
+Re-sync was idempotent:
+
+- ids unchanged
+- dates unchanged
+- OHLCV unchanged
+- `created_at` unchanged
+- `collected_at` refreshed
+- 0 duplicates
 
 In-memory Room unit tests cover insert, duplicate, update, id stability, missing instrument, rollback, range, latest, and count.

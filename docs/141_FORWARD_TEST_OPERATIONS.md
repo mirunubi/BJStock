@@ -108,14 +108,22 @@ Non-retryable failures stay visible on the dashboard until fixed + Retry.
 4. Missing market dates process Monday → Tuesday → Wednesday ASC
 5. First FAILED date still blocks later dates
 
-## Physical Device Pending
+## Physical Device Status
 
-Until Phase 10 acceptance:
+Phase 10 (2026-09-29) validated on one physical device:
+
+- KIS credential storage and token reuse
+- adjusted daily-bar sync
+- Run Now forward-cycle catch-up by market date (the one missing market date, 2026-09-29)
+
+Not accepted:
 
 ```text
-Actual WorkManager wake-up (07:00 KST daily slot): DEFERRED
-Actual KIS daily automation: DEFERRED
-Actual offline catch-up on device: DEFERRED
+Unattended WorkManager wake-up (07:00 KST daily slot): UNPROVEN
+Worker-driven KIS daily automation: UNPROVEN
+Offline catch-up after days powered off / offline: NOT TESTED
 ```
+
+The 2026-10-01 07:00 slot (`auto:2026-10-01:0700:KST`) ran late: attempts 0–2 ended with `NETWORK_FAILURE`, and attempt 3 SUCCEEDED at 13:22 after app activity. Its delayed-recovery verification is **CLOSED — NOT VERIFIED**: the verification gate was never performed.
 
 Unit/Robolectric coverage validates orchestrator semantics offline via `LocalOnlyMarketDataGateway`.

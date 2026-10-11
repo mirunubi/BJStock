@@ -4,13 +4,13 @@ Phase 3-A adds KIS Open API authentication only.
 
 This phase does not call stock quotes, account APIs, or order APIs.
 
-Runtime verification on a physical device is deferred until a device is available.
+Runtime was verified on one physical device in Phase 10 (2026-09-29); see Runtime Verification below.
 
 Status:
 
 ```text
 BUILD / UNIT VERIFIED
-RUNTIME DEFERRED — physical device pending
+PHYSICAL DEVICE VALIDATED — Phase 10 (2026-09-29)
 ```
 
 ## KIS Environment
@@ -176,12 +176,15 @@ Delete removes App Key, App Secret, access token, and expiry for that environmen
 - App reinstall or a new device requires the user to enter App Key / App Secret again
 - Real KIS credentials are entered only on the device UI. They are not pasted into Cursor, Git, or docs
 
-## Runtime Verification Pending
+## Runtime Verification
 
-The following remain `DEFERRED — physical device pending`:
+Phase 10 (2026-09-29) verified on one physical device (Android 15 / API 35):
 
-- Actual Android Keystore encrypt/decrypt on device
-- Actual KIS token request against Open API
-- Actual Settings UI runtime
+- Android Keystore encrypt/decrypt and credential persistence
+- KIS token request against Open API
+- Cached-token reuse after force-stop
+- Settings UI runtime
 
-Phase 2.1 device runtime remains in the same deferred bucket. Neither is a build/unit failure.
+This is not a general device-compatibility claim.
+
+Phase 2.1 device install / launch was exercised as part of the same Phase 10 run.

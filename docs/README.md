@@ -136,11 +136,6 @@ See [030 Development Plan](030_DEVELOPMENT_PLAN.md) for the roadmap.
 
 ## 8. Known Documentation Follow-ups
 
-Small maintenance list, deferred to later gates:
+Open documentation follow-ups:
 
-- 080 / 081 / 082: runtime-deferred status wording.
-- 141: "Physical Device Pending" block.
-- 150: row 25 "later Phase 11 gates".
-- 151: physical-scheduler HOLD wording.
-- D-128 ([060](060_DECISION_LOG.md)): Human decision on the Auto Forward Test default.
 - UI branch `docs/165`: reconcile with main if and when the branch is merged.

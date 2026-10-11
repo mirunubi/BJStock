@@ -393,7 +393,7 @@ No dates are assigned.
 | UI-3 | Home dashboard | **PARTIAL** — first version (§21) |
 | UI-4 | Stocks + Themes consolidation | **PARTIAL** — Stocks screen (§21.4); stock-level strategy evaluation deferred |
 | UI-5 | Strategy UX consolidation | **PARTIAL** — Strategy screen (§21.5); 버전 종료 (retire) not exposed |
-| UI-6 | Paper Trading / Forward Test UX consolidation | **PARTIAL** — Paper Trading screen (§21.6); performance analytics live in the 성과 tab (UI-7); physical unattended scheduler acceptance HOLD |
+| UI-6 | Paper Trading / Forward Test UX consolidation | **PARTIAL** — Paper Trading screen (§21.6); performance analytics live in the 성과 tab (UI-7); physical unattended scheduler acceptance UNPROVEN |
 | UI-7 | Performance dashboard | **IMPLEMENTED** — Performance screen, first version (§21.7); physical-device visual check pending |
 | UI-8 | Settings + operational diagnostics | |
 | UI-9 | Physical-device usability review | |
@@ -577,7 +577,7 @@ The 모의투자 tab is the operating screen for paper Runs (`PaperTradingScreen
 
 Equity curve, MDD, monthly returns, win rate, and Run comparison are in the 성과 tab (§21.7).
 
-Run status labels are now unified across product screens (§18). Still open for human visual review: the operation status labels here (실행 중 / 완료 / 실행 차단 / 실패) differ from Home and §18 (실행중 / 정상 완료 / 실행 중단 / 오류). Physical unattended scheduler acceptance remains **HOLD**; this screen only displays the scheduler state.
+Run status labels are now unified across product screens (§18). Still open for human visual review: the operation status labels here (실행 중 / 완료 / 실행 차단 / 실패) differ from Home and §18 (실행중 / 정상 완료 / 실행 중단 / 오류). Physical unattended scheduler acceptance remains **UNPROVEN**; this screen only displays the scheduler state.
 
 Existing Forward Test Dashboard (`ForwardTestDashboardScreen`, `ForwardTestViewModel`, route `forward_test`) and Paper Trading Lab (`PaperTradingLabScreen`, `PaperTradingLabViewModel`, route `paper_lab`) are unchanged and stay under 설정 > 개발자 도구; the 모의투자 tab no longer links to them.
 
@@ -603,4 +603,4 @@ Cross-screen consistency in the same gate (presentation only): product Run statu
 
 Existing Forward Test Dashboard (`forward_test`) and Compare Runs (`compare_runs`) are unchanged and stay under 설정 > 개발자 도구; the 성과 tab no longer links to them.
 
-Physical scheduler: the delayed-recovery verification of the 2026-10-01 07:00 slot remains **HOLD** as a separate read-only gate that was not performed as part of this work; original unattended 07:00 acceptance remains unproven. No scheduler, Worker, or retry behavior was changed.
+Physical scheduler: the delayed-recovery verification of the 2026-10-01 07:00 slot (`auto:2026-10-01:0700:KST`) is **CLOSED — NOT VERIFIED** (Human decision). The archived Phase 11 snapshot is consistent with the expected outcome, but the verification gate itself was never performed, and closing Phase 11 for archive / cleanup does not retroactively prove it. Original unattended 07:00 acceptance remains **UNPROVEN**. No scheduler, Worker, or retry behavior was changed.
