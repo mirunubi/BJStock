@@ -200,4 +200,81 @@ class PerformanceViewModelTest {
         assertEquals(ComparisonState(), state.comparison)
         assertEquals(3L, state.selectedRunId)
     }
+
+    // region Comparison layer (PERF-NAV-02): system Back and the top-bar arrow both call closeComparison
+
+    @Test
+    fun comparisonLayer_isOpenOnlyWhileComparing() = runTest(dispatcher) {
+        open()
+        advanceUntilIdle()
+        assertFalse(state.comparison.open)
+
+        viewModel.openComparison()
+        assertTrue(state.comparison.open)
+
+        viewModel.closeComparison()
+        assertFalse(state.comparison.open)
+    }
+
+    @Test
+    fun closingTheComparisonLayer_keepsTheRootRunAndDetail_andOnlyResetsTheComparison() = runTest(dispatcher) {
+        open()
+        advanceUntilIdle()
+        viewModel.selectRun(1)
+        advanceUntilIdle()
+        val rootDetail = state.detail
+
+        viewModel.openComparison()
+        viewModel.toggleComparisonRun(3)
+        viewModel.toggleComparisonRun(2)
+        viewModel.compare()
+        advanceUntilIdle()
+        viewModel.toggleComparisonRun(4)
+        assertEquals(listOf(1L, 3L, 2L), state.comparison.selected)
+        assertEquals(PerformancePresenter.COMPARE_MAX_MESSAGE, state.comparison.message)
+        assertTrue(state.comparison.result is ComparisonResult.Loaded)
+        val reads = source.reads.toList()
+
+        viewModel.closeComparison()
+        advanceUntilIdle()
+
+        assertEquals(ComparisonState(), state.comparison)
+        assertEquals(1L, state.selectedRunId)
+        assertEquals(rootDetail, state.detail)
+        assertEquals(reads, source.reads)
+    }
+
+    @Test
+    fun reopeningTheComparisonLayer_seedsOnlyTheSelectedRun() = runTest(dispatcher) {
+        open()
+        advanceUntilIdle()
+        viewModel.openComparison()
+        viewModel.toggleComparisonRun(1)
+        viewModel.closeComparison()
+        viewModel.selectRun(4)
+        advanceUntilIdle()
+
+        viewModel.openComparison()
+
+        assertEquals(ComparisonState(open = true, selected = listOf(4L)), state.comparison)
+    }
+
+    @Test
+    fun aCompareStillInFlight_whenTheLayerCloses_doesNotResurrectAResult() = runTest(dispatcher) {
+        open()
+        advanceUntilIdle()
+        viewModel.openComparison()
+        viewModel.toggleComparisonRun(1)
+        viewModel.compare()
+        assertEquals(ComparisonResult.Loading, state.comparison.result)
+
+        viewModel.closeComparison()
+        advanceUntilIdle()
+
+        assertEquals(listOf(listOf(3L, 1L)), source.compared)
+        assertEquals(ComparisonState(), state.comparison)
+        assertEquals(3L, state.selectedRunId)
+    }
+
+    // endregion
 }

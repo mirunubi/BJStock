@@ -61,6 +61,25 @@ object BJStockIcons {
         icon("Back", "M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z")
     }
 
+    val Menu: ImageVector by lazy { icon("Menu", "M3,18h18v-2H3v2zM3,13h18v-2H3v2zM3,6v2h18V6H3z") }
+
+    val Admin: ImageVector by lazy {
+        icon(
+            "Admin",
+            "M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5l-9,-4z" +
+                "M10,17l-4,-4 1.41,-1.41L10,14.17l6.59,-6.59L18,9l-8,8z",
+        )
+    }
+
+    val DevTools: ImageVector by lazy {
+        icon(
+            "DevTools",
+            "M22.7,19l-9.1,-9.1c0.9,-2.3 0.4,-5 -1.5,-6.9 -2,-2 -5,-2.4 -7.4,-1.3L9,6 6,9 1.6,4.7" +
+                "C0.4,7.1 0.9,10.1 2.9,12.1c1.9,1.9 4.6,2.4 6.9,1.5l9.1,9.1c0.4,0.4 1,0.4 1.4,0l2.3,-2.3" +
+                "c0.5,-0.4 0.5,-1.1 0.1,-1.4z",
+        )
+    }
+
     val ChevronRight: ImageVector by lazy {
         icon("ChevronRight", "M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z")
     }

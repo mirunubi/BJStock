@@ -32,11 +32,10 @@ import com.mirunubi.bjstock.ui.navigation.TabTopBar
 fun TabHubScreen(
     tab: PrimaryTab,
     onSelectTab: (PrimaryTab) -> Unit,
-    onOpenSettings: () -> Unit,
     onNavigate: (String) -> Unit,
 ) {
     Scaffold(
-        topBar = { TabTopBar(title = tab.label, onOpenSettings = onOpenSettings) },
+        topBar = { TabTopBar(title = tab.label) },
         bottomBar = { BJStockBottomBar(selected = tab, onSelect = onSelectTab) },
     ) { innerPadding ->
         Column(

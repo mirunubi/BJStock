@@ -34,6 +34,18 @@ interface TradeAuditLogDao {
     )
     suspend fun findRecentByRun(strategyRunId: Long, limit: Int = 100): List<TradeAuditLogEntity>
 
+    @Query("SELECT * FROM trade_audit_logs ORDER BY created_at DESC, id DESC LIMIT :limit")
+    suspend fun findRecent(limit: Int = 100): List<TradeAuditLogEntity>
+
+    @Query(
+        """
+        SELECT * FROM trade_audit_logs
+        WHERE operation_id = :operationId
+        ORDER BY created_at ASC, id ASC
+        """,
+    )
+    suspend fun findByOperation(operationId: Long): List<TradeAuditLogEntity>
+
     @Query("SELECT COUNT(*) FROM trade_audit_logs")
     suspend fun countAll(): Int
 

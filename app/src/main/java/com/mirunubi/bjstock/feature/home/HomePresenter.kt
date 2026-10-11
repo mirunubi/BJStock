@@ -84,6 +84,15 @@ object HomePresenter {
     const val AUTO_NO_SLOT = "예약 정보 없음"
     const val LOAD_FAILED = "홈 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
 
+    const val DECISION_TITLE = "최근 전략 판단"
+    const val HOLDINGS_TITLE = "보유현황"
+    const val AUTO_TITLE = "자동운영"
+    const val ALERTS_TITLE = "운영 경고"
+
+    /** Core cards that are not rendered while the core load has failed; their absence must not read as "nothing to show". */
+    val CORE_DETAIL_SECTIONS = listOf(DECISION_TITLE, HOLDINGS_TITLE, AUTO_TITLE, ALERTS_TITLE)
+    val CORE_SECTIONS_UNAVAILABLE = "${CORE_DETAIL_SECTIONS.joinToString(" · ")}를 표시할 수 없습니다."
+
     private const val MAX_HOLDING_ROWS = 3
     private val FINANCIAL_INTEGRITY_CODES =
         setOf("LEDGER_MISMATCH", "EXECUTION_IDEMPOTENCY_CONFLICT", "FILLED_ORDER_WITHOUT_EXECUTION")
