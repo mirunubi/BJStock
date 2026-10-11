@@ -146,4 +146,4 @@ Next runtime gate: Stage B-1 BG-RECONNECT physical validation, only when Human r
 
 The "DEFERRED — physical device pending" lines in the Phase 2.1 – 9.1 entries record status at the time they were written. Phase 10 performed the physical-device end-to-end runtime acceptance; those entries were not individually re-marked.
 
-Auto Forward Test remains OFF by default (D-128); Human confirmed the default stays OFF. The reconsideration condition is unattended physical scheduler acceptance, which remains UNPROVEN.
+Auto Forward Test remains OFF by default (D-128); Human confirmed the default stays OFF. The reconsideration condition, unattended physical scheduler acceptance, is NOT SATISFIED: the 2026-10-01 delayed recovery was PASS — DELAYED RECOVERY, but the latest dedicated unattended 07:00 test (2026-10-02) was FAIL — UNATTENDED 07:00.

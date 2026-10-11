@@ -850,7 +850,7 @@ Compare facts: return, MDD, trade count, win rate, holding duration, fees / taxe
 
 ## 27. 15-Minute Orchestration
 
-CURRENT VERIFIED evidence: the DAILY 07:00 one-time WorkManager slot `auto:2026-10-01:0700:KST` first ran at 12:50:55 KST and succeeded on attempt 3 at 13:22:30 KST (Phase 11 B10 delayed-recovery verification). WorkManager gives earliest-eligible timing only (D-168). That is acceptable for a daily catch-up and **not** acceptable for 15-minute slots.
+CURRENT VERIFIED evidence: the DAILY 07:00 one-time WorkManager slot `auto:2026-10-01:0700:KST` first ran at 12:50:55 KST and succeeded on attempt 3 at 13:22:30 KST (Phase 11 B10 delayed-recovery verification). This applies only to delayed-recovery verification; it does not establish unattended 07:00 scheduler acceptance — the dedicated 2026-10-02 test was FAIL — UNATTENDED 07:00 (docs/163 §2.3). WorkManager gives earliest-eligible timing only (D-168). That is acceptable for a daily catch-up and **not** acceptable for 15-minute slots.
 
 | Criterion | A. Android foreground session runner | B. Always-on external host | C1. Exact alarm per slot (Android) | C2. External recorder + Android evaluator |
 | --- | --- | --- | --- | --- |

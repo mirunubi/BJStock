@@ -514,7 +514,7 @@ On run end_date, open positions are not force-liquidated; final snapshot marks t
 
 Forward Test auto scheduler default is OFF until physical-device acceptance.
 
-Human restatement: the reconsideration condition is unattended physical scheduler acceptance. That condition is UNPROVEN (Phase 10 did not cover the unattended scheduler), so the default remains OFF. Policy restatement only; no code change.
+Human restatement: the reconsideration condition is unattended physical scheduler acceptance. That condition is NOT SATISFIED: the latest dedicated unattended 07:00 test (2026-10-02) was FAIL — UNATTENDED 07:00. The 2026-10-01 delayed-recovery PASS does not satisfy this condition. The default remains OFF. Policy restatement only; no code change.
 
 ## D-129
 

@@ -119,11 +119,13 @@ Phase 10 (2026-09-29) validated on one physical device:
 Not accepted:
 
 ```text
-Unattended WorkManager wake-up (07:00 KST daily slot): UNPROVEN
-Worker-driven KIS daily automation: UNPROVEN
+Unattended 07:00 scheduler acceptance: FAIL — UNATTENDED 07:00 (dedicated test, 2026-10-02)
+Worker-driven KIS daily automation without user activity: NOT ACCEPTED
 Offline catch-up after days powered off / offline: NOT TESTED
 ```
 
-The 2026-10-01 07:00 slot (`auto:2026-10-01:0700:KST`) ran late: attempts 0–2 ended with `NETWORK_FAILURE`, and attempt 3 SUCCEEDED at 13:22 after app activity. Its delayed-recovery verification is **CLOSED — NOT VERIFIED**: the verification gate was never performed.
+Delayed recovery, 2026-10-01: **PASS — DELAYED RECOVERY**. The Phase 11 B10 read-only snapshot verification (performed 2026-10-01, about 22:15 KST) of logical slot `auto:2026-10-01:0700:KST` found 4 WORKER operations: the slot first ran at 12:50:55 KST, attempts 0–2 ended with `NETWORK_FAILURE`, and attempt 3 SUCCEEDED at 13:22:30 KST. The snapshot showed no manual or retry operation, all duplicate checks NONE, and the next slot `auto:2026-10-02:0700:KST` ENQUEUED. This PASS covers delayed recovery only; it does not establish unattended 07:00 acceptance.
+
+Unattended 07:00, 2026-10-02 (separate dedicated test): **FAIL — UNATTENDED 07:00**. The slot fired on time and the worker started automatically, but Android blocked background network access (`APP_BACKGROUND`); the attempt succeeded only after a human brought the app to the foreground (`docs/163` §2.3).
 
 Unit/Robolectric coverage validates orchestrator semantics offline via `LocalOnlyMarketDataGateway`.
