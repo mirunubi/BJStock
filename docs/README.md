@@ -84,7 +84,7 @@ Reliability / UI:
 
 - [150 Operational Reliability Standard](150_OPERATIONAL_RELIABILITY_STANDARD.md)
 - [151 UI/UX Design Baseline](151_BJSTOCK_UI_UX_DESIGN.md)
-- [165 UI Navigation / Adaptive Architecture](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md): NAV-1 adaptive navigation and adaptive screen layouts (physical UI not yet verified)
+- [165 UI Navigation / Adaptive Architecture](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md): NAV-1 adaptive navigation and adaptive screen layouts (physical UI smoke PASS 2026-10-11)
 
 Intraday / Security / Strategy Requirements:
 
@@ -132,7 +132,7 @@ See [030 Development Plan](030_DEVELOPMENT_PLAN.md) for the roadmap.
 
 ## 7. Pending Branches
 
-- `feature/ui-strategy-admin-demo` at `69bd205`: MERGED INTO MAIN as merge commit `a2031deed497ae1ac793bbd744b2ccd3db193972` (2026-10-11). It adds [docs/165](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md). Physical UI: NOT YET VERIFIED.
+- `feature/ui-strategy-admin-demo` at `69bd205`: MERGED INTO MAIN as merge commit `a2031deed497ae1ac793bbd744b2ccd3db193972` (2026-10-11). It adds [docs/165](165_UI_NAVIGATION_ADAPTIVE_ARCHITECTURE.md). Physical UI: PASS — 2026-10-11 physical smoke (UI usability only, Compact layout; [docs/151](151_BJSTOCK_UI_UX_DESIGN.md) §21.8).
 
 `docs/strategy-template-requirement` (`31266d1`) is not pending: its docs/164 change is on main as `d0d5fa9`. The branch remains only as integration provenance.
 

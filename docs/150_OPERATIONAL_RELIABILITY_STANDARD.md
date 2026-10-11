@@ -22,7 +22,7 @@ This standard is written to be **portable later to CatchMenu and other projects*
 | Legacy `REJECTED` / `CANCELLED` order audit reconciliation | Implemented — Room v11 / PostgreSQL `0013`, data-only (Gate 6.1, 20.6) |
 | Interrupted (orphan `RUNNING`) operation recovery on app start | Implemented — Gate 7A (20.8) |
 | Daily one-time Auto scheduler + `schedule_instance_id` | Implemented — Room v12 / PostgreSQL `0014` (Gate 7B, 20.9) |
-| Retention/archive, Operations UI | Read-only 운영 · 감사 screen **implemented on main** (UI merge `a2031de`, docs/165 §N; physical UI not yet verified): it displays scheduler status, recent operations, audit, and errors, and performs no write, scheduling, retry, Auto change, or provider call. Other Operations UI items in this standard (e.g. the 20.8.11 warning) are not claimed by this row. Retention/archive: **Not implemented on main** — no gate currently scheduled (Phase 11 closed) |
+| Retention/archive, Operations UI | Read-only 운영 · 감사 screen **implemented on main and physically smoke-verified** (UI merge `a2031de`, docs/165 §N; physical UI smoke PASS 2026-10-11, docs/151 §21.8; UI usability only): it displays scheduler status, recent operations, audit, and errors, and performs no write, scheduling, retry, Auto change, or provider call. Other Operations UI items in this standard (e.g. the 20.8.11 warning) are not claimed by this row. Retention/archive: **Not implemented on main** — no gate currently scheduled (Phase 11 closed) |
 
 The 18:00 Asia/Seoul cutoff, trading math, 7-day API error cleanup, and permanent trade audit are unchanged by Gates 5, 6, 6.1, 6.2, 7A, and 7B. Auto scheduling itself changed in Gate 7B (20.9).
 
