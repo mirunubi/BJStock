@@ -8,7 +8,7 @@
 - Final Finding Counts: BLOCKER 0, HIGH 0, MEDIUM 0, LOW 0, INFO 2
 - Architecture Baseline: edcc29c
 - ImplementationAuthority: NONE
-- Related: [docs/150](150_OPERATIONAL_RELIABILITY_STANDARD.md) (Operational Reliability Standard), [docs/160](160_INTRADAY_MULTI_FACTOR_MODEL_ARCHITECTURE.md) (Intraday architecture, HUMAN APPROVED), [docs/161](161_INTRADAY_PROVIDER_PLATFORM_FEASIBILITY.md) (12-B1 feasibility, HUMAN APPROVED), [docs/162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) (12-B2-A probe, DRAFT)
+- Related: [docs/150](150_OPERATIONAL_RELIABILITY_STANDARD.md) (Operational Reliability Standard), [docs/160](160_INTRADAY_MULTI_FACTOR_MODEL_ARCHITECTURE.md) (Intraday architecture, HUMAN APPROVED), [docs/161](161_INTRADAY_PROVIDER_PLATFORM_FEASIBILITY.md) (12-B1 feasibility, HUMAN APPROVED), [docs/162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) (12-B2-A probe)
 - Authoring Date: 2026-10-02
 
 **This approval authorizes architecture only.** It does **not** authorize: 12-S1 implementation; schema / migration work; runtime changes; physical Smoke; 12-C; strategy implementation; real trading.
@@ -29,9 +29,9 @@ PAPER TRADING ONLY. No real brokerage order capability. KIS `/trading/` remains 
 | 12-S1 ImplementationAuthority | NONE |
 | Physical Smoke authority | NOT granted by this document |
 | Strategy ImplementationAuthority | NONE |
-| Next runtime action | Phase 12-B2 bounded physical / provider Smoke (requires its own Human authorization) |
+| Next runtime action | Stage B-1 / BG-RECONNECT physical validation: **HOLD / NOT EXECUTED** (requires its own Human re-authorization) |
 | Next security implementation | 12-S1 only **after** the 12-B2 Smoke (HD-A0) **and** a separate Human authorization |
-| Phase 12-B2-A (probe implementation) | Implementation review complete; 12-B2 NOT PASS; physical / provider Smoke NOT STARTED (docs/162) |
+| Phase 12-B2-A (probe implementation) | Implementation review complete; probe committed (`c3da161`). B2 Human Gate: **CLOSED — PASS — UNATTENDED WITH LIMITATIONS**; scope and limitations in the docs/162 header |
 | 12-B2 bounded VIRTUAL cleartext Smoke | HUMAN ACKNOWLEDGED (bounded VIRTUAL Smoke only) |
 | Personal-phone Alpha cleartext | NOT APPROVED (HD-C10) |
 | Phase 12-C | NOT AUTHORIZED |

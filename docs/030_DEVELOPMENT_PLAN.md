@@ -111,16 +111,39 @@ Themes/watchlists, DAILY_CHANGE_PCT signal rules, trade audit timeline, and roll
 
 Status: complete for build / JVM-Robolectric verification. Runtime remains DEFERRED — physical device pending.
 
+### Phase 10 — Physical Device End-to-End Runtime Acceptance
+
+Install and run the app on a physical Android device and accept the end-to-end runtime.
+
+Status: COMPLETE / PASS (closeout baseline `9bbb220`).
+
+### Phase 11 — Operational Reliability
+
+Operational reliability, error handling, audit atomicity and the daily one-time Auto scheduler ([150](150_OPERATIONAL_RELIABILITY_STANDARD.md)).
+
+Status: CLOSED.
+
+### Phase 12 — Intraday Multi-Factor Strategy
+
+Intraday architecture, provider / platform feasibility, security architecture and an isolated on-device probe ([160](160_INTRADAY_MULTI_FACTOR_MODEL_ARCHITECTURE.md), [161](161_INTRADAY_PROVIDER_PLATFORM_FEASIBILITY.md), [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md), [163](163_SECURITY_AUDIT_FAILURE_CONTAINMENT_ARCHITECTURE.md)).
+
+Status: IN PROGRESS / PARTIAL.
+
+- B2 Human Gate: CLOSED — PASS — UNATTENDED WITH LIMITATIONS. Scope and limitations are summarized in the [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) header.
+- Stage B-1 / BG-RECONNECT: HOLD / NOT EXECUTED.
+
+Phase 12 is not complete. No intraday strategy runtime is implemented.
+
 ### Future — Live Trading
 
 Live broker orders are explicitly out of current scope.
 
 ## Current Phase
 
-Phase 9.1 — Themes, Signal Rules & Audit Logging is build/unit complete.
+Current: Phase 12 — runtime validation / reconnect follow-up.
 
-Next: Phase 10 — Physical Device End-to-End Runtime Acceptance (not started).
+Next runtime gate: Stage B-1 BG-RECONNECT physical validation, only when Human re-authorizes it. This plan grants no implementation or runtime authority.
 
-Do not enable Auto Forward Test by default until physical-device acceptance.
+The "DEFERRED — physical device pending" lines in the Phase 2.1 – 9.1 entries record status at the time they were written. Phase 10 performed the physical-device end-to-end runtime acceptance; those entries were not individually re-marked.
 
-Phase 2.1 remains DEFERRED — physical device pending, and is not treated as FAIL.
+Auto Forward Test remains OFF by default (D-128). Whether Phase 10 acceptance changes that default is a pending Human decision.

@@ -1,26 +1,35 @@
 # 162 — Intraday Isolated Probe Implementation (Phase 12-B2-A)
 
-- Status: DRAFT — Implementation Evidence Awaiting Physical Verification
-- Baseline: edcc29c (docs/161 approved). The probe code is uncommitted; see §7 for build provenance.
+- Status: CURRENT — Phase 12 validation / evidence record.
+- Baseline: edcc29c (docs/161 approved). Probe code committed in `c3da161`; WS-CONNECT-02 telemetry committed in `c9a5634` (§11). §7 keeps the original build-provenance rule.
 - Gate: 12-B2
 - Scope: debug-only isolated probe. VIRTUAL / KIS quotation / H0STCNT0 / venue J (KRX) / 005930 + 000660 / candidate FGS `specialUse`.
-- This document records implementation facts only. It claims no gate result. **12-B2: NOT PASS.**
-  - Option A: **POSSIBLY FEASIBLE — NEEDS PHYSICAL PROBE** (unproven).
-  - Android-local: **POSSIBLY FEASIBLE — NEEDS PHYSICAL PROBE** (unproven).
+- This document records implementation facts. Gate results come from Human gates. §0 – §10 were written before the probe commit and the B2 physical run; their "uncommitted", "NOT PASS" and "evidence pending" wording is historical. Current status:
+  - **B2 Human Gate: CLOSED — PASS — UNATTENDED WITH LIMITATIONS.**
+  - Approved scope: a TOP-started `specialUse` FGS with already-established socket continuity, under the recorded test conditions.
+  - Still NOT proven / NOT approved:
+    - deep Doze;
+    - unplugged, battery-only operation;
+    - starting the FGS from the background;
+    - opening or reconnecting a new socket while NOT TOP or with the screen off;
+    - the other limitations recorded by the B2 gate. The cause of the initial WebSocket connect failures is UNKNOWN (§11).
+  - **Stage B-1 / BG-RECONNECT: HOLD / NOT EXECUTED.**
+  - Option A: **POSSIBLY FEASIBLE — NOT EVALUATED** by B2 (no orders; strict-after rule not derived).
+  - Android-local: **POSSIBLY FEASIBLE** — not proven beyond the B2 approved scope.
 
 ## 0. Review and correction status
 
 | Step | Result |
 |---|---|
 | Independent implementation review (Claude Code) | NO SAFETY BLOCKER; delta correction required before any live device/provider run |
-| Delta correction F-1 … F-9 | Implemented, uncommitted (this revision) |
+| Delta correction F-1 … F-9 | Implemented (uncommitted at review time; committed in `c3da161`) |
 | F-10 (46 vs 47 fields) | Measurement rule only, see §5; parser unchanged |
 | Independent delta re-review (Claude Code) | PASS WITH FINDINGS — BLOCKER 0, HIGH 0, MEDIUM 0, LOW 2, INFO 1 |
 | B2A-D-F01 (start-failure message preserved) | **RESOLVED** (confirmed by the independent final LOW delta verification), see §4a |
 | B2A-D-F02 (terminal policy denial quiesces all probe network work) | **RESOLVED** (confirmed by the independent final LOW delta verification), see §4a |
 | B2A-D-F03 (rapid restart during service teardown) | **INFO — accepted/deferred**, see §4a |
 | Final LOW delta verification (independent) | **PASS** — completed. BLOCKER 0, HIGH 0, MEDIUM 0, LOW 0; remaining findings INFO only |
-| Phase 12-B2-A implementation review | **COMPLETE**. This does not change the gate: 12-B2 remains **NOT PASS** — physical / provider evidence still pending |
+| Phase 12-B2-A implementation review | **COMPLETE**. At review time 12-B2 was **NOT PASS** (physical / provider evidence pending). Superseded by the B2 Human Gate: **CLOSED — PASS — UNATTENDED WITH LIMITATIONS** (see header) |
 
 ## 1. Isolation
 
