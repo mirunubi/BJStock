@@ -126,7 +126,8 @@ These documents are evidence or historical records. Do not read them as current 
 - Phase 11: CLOSED. This is a Human cleanup decision; the detailed historical documents may not contain a formal closeout line.
 - Phase 12: IN PROGRESS / PARTIAL.
   - B2 Human Gate: CLOSED — PASS — UNATTENDED WITH LIMITATIONS (scope and limitations in the [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) header).
-  - Stage B-1 / BG-RECONNECT: PASS_UNATTENDED_WITH_LIMITATIONS (2026-10-12). A new socket opened while NOT TOP with the FGS alive and the screen ON; details and limitations are in [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) §12. Screen-off reconnect, deep Doze reconnect, Stage B-2 and background FGS start remain UNPROVEN.
+  - Stage B-1 / BG-RECONNECT: PASS_UNATTENDED_WITH_LIMITATIONS (2026-10-12). A new socket opened while NOT TOP with the FGS alive and the screen ON; details and limitations are in [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) §12.
+  - Stage B-2 / BG-RECONNECT: PASS_UNATTENDED_RECONNECT_WITH_LIMITATION (2026-10-12). An established socket lost to an Android-visible Wi-Fi interruption reconnected and resumed records while NOT TOP with the FGS alive and the screen ON; details and the initialization limitation are in [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) §13. Silent upstream outage recovery, screen-off reconnect and background FGS start remain UNPROVEN; deep Doze is DEFERRED.
 
 See [030 Development Plan](030_DEVELOPMENT_PLAN.md) for the roadmap.
 

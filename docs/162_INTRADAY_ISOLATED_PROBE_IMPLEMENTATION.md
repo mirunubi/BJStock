@@ -11,9 +11,11 @@
     - deep Doze;
     - unplugged, battery-only operation;
     - starting the FGS from the background;
-    - opening or reconnecting a socket with the screen off, or reconnecting after an established socket is lost (Stage B-2);
+    - opening or reconnecting a socket with the screen off;
+    - recovering from a silent upstream outage. Reconnecting after an established socket is lost is proven only for an Android-visible Wi-Fi loss with the screen ON (Stage B-2, §13);
     - the other limitations recorded by the B2 gate. The cause of the initial WebSocket connect failures is UNKNOWN (§11).
-  - **Stage B-1 / BG-RECONNECT: PASS_UNATTENDED_WITH_LIMITATIONS** (2026-10-12, Human accepted; §12). Proven: a new WebSocket connection opened after Home while BJStock was NOT TOP, with a TOP-started FGS alive and the screen ON. Screen-off reconnect, deep Doze reconnect, Stage B-2 and background FGS start remain UNPROVEN.
+  - **Stage B-1 / BG-RECONNECT: PASS_UNATTENDED_WITH_LIMITATIONS** (2026-10-12, Human accepted; §12). Proven: a new WebSocket connection opened after Home while BJStock was NOT TOP, with a TOP-started FGS alive and the screen ON. Screen-off reconnect, deep Doze reconnect and background FGS start remain UNPROVEN.
+  - **Stage B-2 / BG-RECONNECT: PASS_UNATTENDED_RECONNECT_WITH_LIMITATION** (2026-10-12, Human accepted; §13). Proven: an established WebSocket lost to an Android-visible Wi-Fi interruption was detected as failed, retried, reconnected after Wi-Fi restoration, re-subscribed and resumed records while BJStock stayed NOT TOP, before the foreground return. Silent upstream outage recovery, screen-off reconnect and background FGS start remain UNPROVEN; deep Doze continuity and reconnect are DEFERRED.
   - Option A: **POSSIBLY FEASIBLE — NOT EVALUATED** by B2 (no orders; strict-after rule not derived).
   - Android-local: **POSSIBLY FEASIBLE** — not proven beyond the B2 approved scope.
 
@@ -292,7 +294,91 @@ This observation proves nothing yet about `specialUse` FGS, screen-off runtime, 
 |---|---|
 | Screen-off reconnect | UNPROVEN |
 | Deep Doze reconnect | UNPROVEN |
-| Stage B-2 | UNPROVEN |
+| Stage B-2 | UNPROVEN at Stage B-1; later PASS_UNATTENDED_RECONNECT_WITH_LIMITATION (§13) |
 | Background FGS start | UNPROVEN |
 | Unattended 07:00 scheduler acceptance | NOT SATISFIED |
+| General provider reliability | NOT ESTABLISHED |
+
+## 13. Stage B-2 / BG-RECONNECT — established socket reconnected after Wi-Fi loss while NOT TOP (2026-10-12)
+
+- **Final status: PASS_UNATTENDED_RECONNECT_WITH_LIMITATION** (Human accepted, 2026-10-12). Run: PH12-BG-RECONNECT-B2-EXECUTION. Stage B-2 only; no source change, build or install.
+- **Device and build.**
+  - Samsung SM-F711N (Galaxy Z Flip3), Android 15 / API 35. USB plugged in, Battery Saver OFF. Wi-Fi was the only network; there is no SIM, so mobile data could not take over.
+  - Installed APK SHA-256 `3fa7ce667bdaacfed5f058f8000371d7bbe12a8db58260af4b5911a9e3434c70`, the same build as Stage B-1 (§12). Main at run time: `25e0830`.
+- **Accepted session:** `…20261012T022626Z_88766482`. Scope: VIRTUAL, `H0STCNT0`, venue J, 005930 + 000660, REST minute-bar observation off.
+- **Evidence:** archived outside the repository at `D:\ProjectArchive\BJStock\Phase12\PH12-BG-RECONNECT-B2\b2_capture\`; it is not copied here. No secret values are recorded, and the Logcat capture was secret-filtered.
+- **Core result.** An established WebSocket was:
+  1. lost after an Android-visible Wi-Fi interruption;
+  2. detected as failed;
+  3. followed by reconnect scheduling and retries;
+  4. reconnected after Wi-Fi restoration;
+  5. re-subscribed;
+  6. followed by resumed records;
+
+  all while BJStock remained NOT TOP and before the foreground return.
+- **Ordering** (KST, 2026-10-12):
+
+| Event | Time |
+|---|---|
+| `SESSION_START` / `FGS_START` | 11:26:26.064 |
+| First `WS_CONNECTING` | 11:26:27.019 |
+| Home (launcher resumed) | 11:26:27.078 |
+| NOT TOP (probe Activity lost top-resumed state) | 11:26:27.080 |
+| Initial HTTP 101 (`WS_UPGRADE_RESPONSE`) | 11:26:27.158 |
+| Initial `WS_CONNECTED` | 11:26:27.161 |
+| Initial `WS_SUBSCRIBE_SENT` | 11:26:27.163 / 11:26:27.164 |
+| Initial first `WS_RECORD` | 11:26:27.344 |
+| Wi-Fi disable (adb command) | 11:27:47.505 – 11:27:47.828 |
+| `NETWORK_LOST` | 11:27:47.999 |
+| Socket failure (`WS_FAILURE`) | 11:27:48.121 |
+| Wi-Fi enable (adb command) | 11:28:17.635 – 11:28:17.884 |
+| `NETWORK_AVAILABLE` | 11:28:21.041 |
+| Network validated | 11:28:21.431 (probe); 11:28:21.728 (sampler) |
+| New HTTP 101 | 11:29:36.647 |
+| New `WS_CONNECTED` | 11:29:36.650 |
+| Re-subscribe (`WS_SUBSCRIBE_SENT`) | 11:29:36.658 / 11:29:36.660 |
+| First post-reconnect `WS_RECORD` | 11:29:37.170 (005930) / 11:29:37.332 (000660) |
+| Foreground return | 11:33:39.117 |
+| `SESSION_STOP` | 11:33:44.186 |
+
+- **Initialization limitation: B2_INITIALIZATION_LIMITATION.**
+  - The first `WS_CONNECTING` occurred 59 ms before Home, while the probe Activity was still TOP. HTTP 101 and `WS_CONNECTED` occurred after Home.
+  - This session must **not** be reused as Stage B-1 proof. Stage B-1 was proven separately (§12).
+  - The reconnect judged by Stage B-2 occurred more than 3 minutes after Home, while BJStock was firmly NOT TOP. This limitation does not make Stage B-2 INVALID.
+- **Pre-drop stability.** The initial connection was stable for about 80 seconds, with 729 records before the Wi-Fi disable and no prior socket failure.
+- **Network loss and reconnect.**
+  - `NETWORK_LOST` was recorded, and the established socket was aborted: `SocketException` "Software caused connection abort", `connection_opened=true`.
+  - The reconnect loop stayed active. There were 7 reconnect attempts after the drop.
+  - During the outage the attempts failed at DNS (`UnknownHostException`).
+  - After the restore, two attempts failed with DNS success and `IOException` "unexpected end of stream" with `EOFException` and no HTTP response.
+  - Attempt 8 succeeded.
+- **Post-reconnect result.**
+  - A new `WS_CONNECTED` was followed by resent subscriptions, and `first_after_reconnect` was marked for both symbols.
+  - 2,590 records arrived after the reconnect and before the foreground return.
+  - The 3-minute stability observation passed. There was no immediate disconnect loop.
+- **Background state** (continuous sampler from Home to the foreground return, plus snapshots before the drop, during the outage, after the restore and after the reconnect):
+  - the launcher was TOP and BJStock was NOT TOP;
+  - procState was FGS, and `IntradayProbeService` was foreground and alive;
+  - netpolicy `blocked` included `APP_BACKGROUND`; the effective blocked reasons were NONE;
+  - the screen was Awake throughout;
+  - there was no foreground rescue before the reconnect.
+- **Scheduler separation.** No BJStock job was active or pending at any snapshot, and the app log shows no WorkManager activity. The next job stayed 2026-10-13 07:00. No Auto change, Run Now or scheduler mutation.
+- **Failure interpretation.**
+  - The two post-restore failed attempts occurred with validated Wi-Fi, effective blocked reasons NONE, DNS success, and the same "unexpected end of stream" / `EOFException` / no-response signature seen in Stage B-1 (§12) and WS-CONNECT-02 (§11).
+  - Therefore no Android background failure and no reconnect-logic failure was established, and provider / connection-layer behavior is consistent with the evidence. The root cause remains **UNKNOWN**. No KIS server root cause is claimed.
+- **Temporary device setting.**
+  - `stay_on_while_plugged_in` went 0 → 2 → 0. It was restored after the run.
+  - `screen_off_timeout` stayed 600000 ms.
+  - Wi-Fi was restored ON and validated.
+  - No device-setting change remains.
+- **Scope boundary:**
+
+| Item | Status |
+|---|---|
+| Android-visible Wi-Fi loss reconnect (screen ON, NOT TOP, TOP-started FGS) | PROVEN |
+| Silent upstream outage recovery | UNPROVEN |
+| Screen-off reconnect | UNPROVEN |
+| Deep Doze continuity | DEFERRED |
+| Deep Doze reconnect | DEFERRED |
+| Background FGS start | UNPROVEN |
 | General provider reliability | NOT ESTABLISHED |
