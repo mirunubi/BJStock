@@ -29,7 +29,7 @@ PAPER TRADING ONLY. No real brokerage order capability. KIS `/trading/` remains 
 | 12-S1 ImplementationAuthority | NONE |
 | Physical Smoke authority | NOT granted by this document |
 | Strategy ImplementationAuthority | NONE |
-| Next runtime action | Stage B-1 / BG-RECONNECT physical validation: **HOLD / NOT EXECUTED** (requires its own Human re-authorization) |
+| Next runtime action | Stage B-1 / BG-RECONNECT physical validation: **PASS_UNATTENDED_WITH_LIMITATIONS** (2026-10-12, Human accepted; docs/162 §12). No further runtime action is authorized. Stage B-2, screen-off / Doze reconnect and background FGS start remain UNPROVEN and each requires its own Human authorization |
 | Next security implementation | 12-S1 only **after** the 12-B2 Smoke (HD-A0) **and** a separate Human authorization |
 | Phase 12-B2-A (probe implementation) | Implementation review complete; probe committed (`c3da161`). B2 Human Gate: **CLOSED — PASS — UNATTENDED WITH LIMITATIONS**; scope and limitations in the docs/162 header |
 | 12-B2 bounded VIRTUAL cleartext Smoke | HUMAN ACKNOWLEDGED (bounded VIRTUAL Smoke only) |

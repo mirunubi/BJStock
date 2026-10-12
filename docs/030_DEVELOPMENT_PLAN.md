@@ -130,7 +130,7 @@ Intraday architecture, provider / platform feasibility, security architecture an
 Status: IN PROGRESS / PARTIAL.
 
 - B2 Human Gate: CLOSED — PASS — UNATTENDED WITH LIMITATIONS. Scope and limitations are summarized in the [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) header.
-- Stage B-1 / BG-RECONNECT: HOLD / NOT EXECUTED.
+- Stage B-1 / BG-RECONNECT: PASS_UNATTENDED_WITH_LIMITATIONS (2026-10-12, Human accepted). A new WebSocket connection opened while BJStock was NOT TOP, with the FGS alive and the screen ON. Details, limitations and the evidence boundary are in [162](162_INTRADAY_ISOLATED_PROBE_IMPLEMENTATION.md) §12. Screen-off reconnect, deep Doze reconnect, Stage B-2 and background FGS start remain UNPROVEN.
 
 Phase 12 is not complete. No intraday strategy runtime is implemented.
 
@@ -142,7 +142,7 @@ Live broker orders are explicitly out of current scope.
 
 Current: Phase 12 — runtime validation / reconnect follow-up.
 
-Next runtime gate: Stage B-1 BG-RECONNECT physical validation, only when Human re-authorizes it. This plan grants no implementation or runtime authority.
+Stage B-1 BG-RECONNECT physical validation is complete (PASS_UNATTENDED_WITH_LIMITATIONS, 2026-10-12). No further runtime gate is authorized. Stage B-2, screen-off / Doze reconnect and background FGS start each require their own Human authorization. This plan grants no implementation or runtime authority.
 
 The "DEFERRED — physical device pending" lines in the Phase 2.1 – 9.1 entries record status at the time they were written. Phase 10 performed the physical-device end-to-end runtime acceptance; those entries were not individually re-marked.
 

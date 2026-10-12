@@ -11,9 +11,9 @@
     - deep Doze;
     - unplugged, battery-only operation;
     - starting the FGS from the background;
-    - opening or reconnecting a new socket while NOT TOP or with the screen off;
+    - opening or reconnecting a socket with the screen off, or reconnecting after an established socket is lost (Stage B-2);
     - the other limitations recorded by the B2 gate. The cause of the initial WebSocket connect failures is UNKNOWN (§11).
-  - **Stage B-1 / BG-RECONNECT: HOLD / NOT EXECUTED.**
+  - **Stage B-1 / BG-RECONNECT: PASS_UNATTENDED_WITH_LIMITATIONS** (2026-10-12, Human accepted; §12). Proven: a new WebSocket connection opened after Home while BJStock was NOT TOP, with a TOP-started FGS alive and the screen ON. Screen-off reconnect, deep Doze reconnect, Stage B-2 and background FGS start remain UNPROVEN.
   - Option A: **POSSIBLY FEASIBLE — NOT EVALUATED** by B2 (no orders; strict-after rule not derived).
   - Android-local: **POSSIBLY FEASIBLE** — not proven beyond the B2 approved scope.
 
@@ -232,3 +232,67 @@ This observation proves nothing yet about `specialUse` FGS, screen-off runtime, 
   - `:app:assembleDebug`: succeeded, with build output redirected outside the repository so the reviewed B2 APK was not overwritten.
   - A real MockWebServer test shows the probe client sends the same upgrade request line and headers as a plain OkHttp client, except the random `Sec-WebSocket-Key`.
   - A peer close before any response surfaces as `IOException` "unexpected end of stream" with no response.
+
+## 12. Stage B-1 / BG-RECONNECT — new socket opened while NOT TOP (2026-10-12)
+
+- **Final status: PASS_UNATTENDED_WITH_LIMITATIONS** (Human accepted, 2026-10-12). Run: PH12-BG-RECONNECT-02. Stage B-1 only; no source change, build or install.
+- **Device and build.**
+  - Samsung SM-F711N (Galaxy Z Flip3), Android 15 / API 35.
+  - Installed APK SHA-256 `3fa7ce667bdaacfed5f058f8000371d7bbe12a8db58260af4b5911a9e3434c70`, the UI-integration candidate built from merge `a2031de`. The probe source is unchanged since `c9a5634`. Main at run time: `51b1f15`.
+- **Accepted session:** `…004550Z_7b4ad0b5`. Scope: VIRTUAL, `H0STCNT0`, venue J, 005930 + 000660, REST minute-bar observation off.
+- **Evidence:** archived outside the repository at `D:\ProjectArchive\BJStock\Phase12\PH12-BG-RECONNECT-02\b1_capture\`; it is not copied here. No secret values are recorded, and the Logcat capture was secret-filtered.
+- **Ordering** (KST, 2026-10-12):
+
+| Event | Time |
+|---|---|
+| `SESSION_START` | 09:45:50.025 |
+| `FGS_START` | 09:45:50.029 |
+| Home (launcher resumed) | 09:45:50.960 |
+| NOT TOP (probe Activity lost top-resumed state) | 09:45:50.962; sampler confirmation 09:45:51.366 |
+| First `WS_CONNECTING` | 09:45:51.555 |
+| HTTP 101 (`WS_UPGRADE_RESPONSE`) | 09:46:00.192 |
+| `WS_CONNECTED` | 09:46:00.195 |
+| `WS_SUBSCRIBE_SENT` | 09:46:00.197 / 09:46:00.198 |
+| First `WS_RECORD` | 09:46:00.359 |
+| Foreground return | 09:58:14.785 |
+| `SESSION_STOP` | 09:58:29.403 |
+
+- **Interpretation.** A new WebSocket connection was initiated after Home while BJStock was NOT TOP and the foreground service was alive. This is **not** existing-socket continuity evidence, which is what the B2 approved scope covers.
+- **Background state** (snapshots at T0 09:45:51.366, T+1 09:46:51.551 / 09:46:54.472, T+5 09:50:57.915 and T+10 09:55:50.199):
+  - the launcher was TOP and BJStock was NOT TOP;
+  - procState was FGS, and `IntradayProbeService` was foreground and running;
+  - netpolicy `blocked` included `APP_BACKGROUND`; the effective blocked reasons were NONE;
+  - the screen was ON for the connection and for almost the entire 10-minute observation;
+  - USB was plugged in and Battery Saver was OFF.
+- **Scheduler separation.**
+  - No BJStock job was active or pending at any snapshot, and the app log shows no WorkManager activity.
+  - The next job stayed 2026-10-13 07:00.
+  - No Auto change, Run Now or scheduler mutation.
+- **Connection result.**
+  - 4 attempts. Attempts 1–3 failed. Attempt 4 got HTTP 101 and reached `WS_CONNECTED`.
+  - Records: 21,893 before the foreground return; 22,564 in total.
+  - No disconnect after the successful connection. `ws_reconnects` = 3.
+  - Attempts 1–3 are **not** Android background failures (see the failure interpretation below).
+- **Failure interpretation.**
+  - The foreground and background failure signatures were consistent.
+  - DNS succeeded.
+  - The failures were predominantly `IOException` "unexpected end of stream" with `EOFException` and no HTTP response.
+  - netpolicy effective remained NONE.
+  - Therefore no Android-background-specific failure was established, and provider / connection-layer behavior is consistent with the evidence. The root cause remains **UNKNOWN**. No KIS server root cause is claimed.
+- **Limitations.**
+  - **LIMITATION-1: NON_BLOCKING_TIMING_LIMITATION.** The device's normal 10-minute screen timeout started the transition to Dozing right around the exact T+10 boundary. This is non-blocking because the new connection and the record flow were already established and observed while the screen was awake. The actual screen-off happened after the T+10 boundary.
+  - **LIMITATION-2:** Launcher touch events were not fully captured. No BJStock foreground rescue occurred before success.
+  - **LIMITATION-3:** The evidence bundle does not contain the terminal database / operation snapshot for the 2026-10-12 07:00 slot. Scheduler separation during the B-1 session itself was verified.
+- **Earlier sessions the same morning.** Neither contaminates the accepted session. Both were stopped before it started, and session 2 never connected.
+  - Session 1 (`…003657Z_f20d23ea`): **INVALID**. Socket attempts began while BJStock was TOP, and later foreground actions contaminated the run.
+  - Session 2 (`…004326Z_b40b8af5`): **FOREGROUND_FAILURE_ONLY**. All attempts occurred while TOP, and no connection succeeded.
+- **Not proven by Stage B-1** (unchanged):
+
+| Item | Status |
+|---|---|
+| Screen-off reconnect | UNPROVEN |
+| Deep Doze reconnect | UNPROVEN |
+| Stage B-2 | UNPROVEN |
+| Background FGS start | UNPROVEN |
+| Unattended 07:00 scheduler acceptance | NOT SATISFIED |
+| General provider reliability | NOT ESTABLISHED |
